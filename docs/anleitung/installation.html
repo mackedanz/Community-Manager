@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Community-Hangar installieren – Schritt für Schritt</title>
+<style>
+  /* Druckvorlage A4: helle Seite, Screenshots der (dunklen) App als gerahmte Abbildungen */
+  :root {
+    --ink: #1c2330;
+    --muted: #5b6475;
+    --line: #d9dee7;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --warn-soft: #fff6e5;
+    --warn: #9a6400;
+    --body: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: "Cascadia Mono", Consolas, monospace;
+  }
+  @page { size: A4; margin: 18mm 17mm 18mm 17mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 10.5pt/1.5 var(--body); color: var(--ink); background: #fff; }
+  h1 { font-size: 24pt; line-height: 1.15; margin: 0 0 4pt; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 15pt; margin: 22pt 0 6pt; padding-top: 8pt; border-top: 2px solid var(--ink);
+    break-after: avoid; text-wrap: balance;
+  }
+  h2 .no { color: var(--accent); margin-right: 6pt; font-variant-numeric: tabular-nums; }
+  h3 { font-size: 11.5pt; margin: 14pt 0 4pt; break-after: avoid; }
+  p { margin: 0 0 6pt; max-width: 68ch; }
+  ul, ol { margin: 0 0 8pt; padding-left: 16pt; }
+  li { margin-bottom: 3pt; }
+  b { font-weight: 600; }
+  code, kbd {
+    font-family: var(--mono); font-size: 9pt; background: #f1f3f7; border: 1px solid var(--line);
+    border-radius: 3px; padding: 0 3pt;
+  }
+  .lead { font-size: 11.5pt; color: var(--muted); max-width: 62ch; }
+  .meta { font-size: 9pt; color: var(--muted); margin-top: 6pt; }
+  figure { margin: 8pt 0 12pt; break-inside: avoid; }
+  figure img { display: block; max-width: 100%; border: 1px solid #2a2f3a; border-radius: 4px; }
+  figure.half img { max-width: 72%; }
+  figure.small img { max-width: 48%; }
+  figure.narrow img { max-width: 55%; }
+  figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 3pt; }
+  .note, .warn {
+    border-radius: 4px; padding: 7pt 9pt; margin: 8pt 0; font-size: 9.5pt; break-inside: avoid;
+  }
+  .note { background: var(--accent-soft); border-left: 3px solid var(--accent); }
+  .warn { background: var(--warn-soft); border-left: 3px solid var(--warn); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
+  .toc { columns: 2; column-gap: 18pt; font-size: 10pt; padding-left: 14pt; margin-top: 10pt; }
+  .bookmark {
+    display: inline-flex; align-items: center; gap: 6pt; background: #6b4f4b; color: #fff;
+    padding: 5pt 10pt; border-radius: 4px; font-size: 10pt;
+  }
+  .bookmark span { background: #3a2c2a; border-radius: 3px; padding: 1pt 6pt; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; margin: 6pt 0 10pt; }
+  th, td { text-align: left; vertical-align: top; padding: 4pt 6pt; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: #f6f7fa; }
+  .pb { break-before: page; }
+  .keep { break-inside: avoid; }
+  pre.file {
+    font: 8.5pt/1.45 var(--mono); background: #f1f3f7; border: 1px solid var(--line);
+    padding: 8pt 10pt; border-radius: 4px; white-space: pre-wrap; word-break: break-all; break-inside: avoid;
+  }
+  figure.tall img { max-height: 400pt; width: auto; max-width: 100%; }
+  .steps { counter-reset: s; list-style: none; padding-left: 0; }
+  .steps > li { counter-increment: s; position: relative; padding-left: 26pt; margin-bottom: 8pt; }
+  .steps > li::before {
+    content: counter(s); position: absolute; left: 0; top: 0; width: 18pt; height: 18pt; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 9pt; text-align: center; line-height: 18pt;
+  }
+  .row { display: flex; gap: 10pt; align-items: flex-start; }
+  .row figure { flex: 1; margin: 6pt 0 10pt; }
+  .row figure img { max-width: 100%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Community-Hangar installieren</h1>
+  <p class="lead">Schritt für Schritt mit Bildern: eine eigene Instanz auf einem eigenen Server aufbauen, mit Discord-Anmeldung,
+  Onboarding-Bot und dem ersten RSI-Sync. Du brauchst keine Programmierkenntnisse, aber du solltest auf einem Linux-Server
+  Befehle eingeben können. Zeitaufwand: etwa 45 Minuten.</p>
+  <p class="meta">Stand: 07.10.2026 · Die Bilder stammen von einer echten Neuinstallation (Orga „SpaceTrotter“,
+  Adresse <code>expg.mcdance.de</code>). Persönliche Angaben, Kennungen und Geheimnisse sind geschwärzt.
+  Überall, wo <code>expg.mcdance.de</code> steht, setzt du deine eigene Adresse ein.</p>
+  <ol class="toc">
+    <li>Was du vorher brauchst</li>
+    <li>Discord-Anwendung anlegen</li>
+    <li>Dateien auf den Server legen</li>
+    <li>Einstellungen eintragen (.env)</li>
+    <li>HTTPS einrichten (Reverse-Proxy)</li>
+    <li>Starten und prüfen</li>
+    <li>Endpunkt bei Discord eintragen</li>
+    <li>Befehle registrieren</li>
+    <li>Bot auf den Server einladen</li>
+    <li>Orga einrichten</li>
+    <li>Anmelden</li>
+    <li>Ersten RSI-Sync machen</li>
+    <li>Betrieb und Updates</li>
+    <li>Betrieb absichern</li>
+    <li>Wenn etwas nicht klappt</li>
+  </ol>
+</header>
+
+<h2><span class="no">1</span>Was du vorher brauchst</h2>
+<table>
+  <tr><th style="width:30%">Was</th><th>Hinweis</th></tr>
+  <tr><td>Ein <b>Linux-Server</b> oder eine VM (auch ein Container)</td><td>Mindestens 1 GB RAM und 5 GB Platz. Docker muss laufen (Version 24 oder neuer, mit dem Befehl <code>docker compose</code>).</td></tr>
+  <tr><td>Eine <b>Domain</b> oder Subdomain</td><td>Zum Beispiel <code>hangar.example.de</code>. Sie muss per DNS auf deinen Server bzw. deinen Reverse-Proxy zeigen. Discord verlangt HTTPS.</td></tr>
+  <tr><td>Ein <b>Discord-Konto</b> mit Admin-Rechten</td><td>Auf dem Server, der die Orga werden soll („Administrator“ oder „Server verwalten“).</td></tr>
+  <tr><td>Zugriff auf das <b>Discord Developer Portal</b></td><td>Kostenlos, mit demselben Konto: <code>https://discord.com/developers/applications</code></td></tr>
+</table>
+<p>Nichts davon kostet etwas. Das Docker-Image ist öffentlich und kommt von <code>ghcr.io/mackedanz/community-hangar-1</code>.</p>
+
+<div class="note"><b>Deutsches oder englisches Portal.</b> Das Developer Portal ist je nach Spracheinstellung deutsch oder englisch.
+Die Namen in diesem Heft sind deutsch, die englischen stehen daneben:
+<table>
+  <tr><th>Deutsch</th><th>Englisch</th></tr>
+  <tr><td>App erstellen</td><td>New Application</td></tr>
+  <tr><td>Allgemeine Informationen</td><td>General Information</td></tr>
+  <tr><td>Anwendungs-ID · Öffentlicher Schlüssel</td><td>Application ID · Public Key</td></tr>
+  <tr><td>Geheimen Schlüssel zurücksetzen</td><td>Reset Secret</td></tr>
+  <tr><td>Weiterleitungen</td><td>Redirects</td></tr>
+  <tr><td>Token zurücksetzen · Öffentlicher Bot</td><td>Reset Token · Public Bot</td></tr>
+  <tr><td>Interaktions-Endpunkt-URL</td><td>Interactions Endpoint URL</td></tr>
+  <tr><td>Installations-Link · Gildeninstallation</td><td>Install Link · Guild Install</td></tr>
+</table></div>
+<div class="warn"><b>Merke dir in jedem Schritt:</b> Auf den Seiten des Developer Portals erscheint nach jeder Änderung unten eine Leiste
+„Achtung, du hast nicht gespeicherte Änderungen!“. Erst nach einem Klick auf <b>„Änderungen speichern“</b> gilt die Änderung.</div>
+
+<h2 class="pb"><span class="no">2</span>Discord-Anwendung anlegen</h2>
+<p>Gehe auf <code>https://discord.com/developers/applications</code> und melde dich an. Während dieses Teils sammelst du
+vier Werte in einer Textdatei auf deinem Rechner. Du trägst sie später in die <code>.env</code> auf dem Server ein.</p>
+<table>
+  <tr><th>Wert</th><th>Woher</th><th>Geheim?</th></tr>
+  <tr><td><code>AUTH_DISCORD_ID</code></td><td>Allgemeine Informationen → Anwendungs-ID</td><td>nein</td></tr>
+  <tr><td><code>DISCORD_PUBLIC_KEY</code></td><td>Allgemeine Informationen → Öffentlicher Schlüssel</td><td>nein</td></tr>
+  <tr><td><code>AUTH_DISCORD_SECRET</code></td><td>OAuth2 → Geheimer Client-Schlüssel</td><td><b>ja</b></td></tr>
+  <tr><td><code>DISCORD_BOT_TOKEN</code></td><td>Bot → Token</td><td><b>ja</b></td></tr>
+</table>
+<p>Geheime Werte gehören nur in die <code>.env</code> auf dem Server. Nicht in Chats, E-Mails, Bilder oder ein Repository.</p>
+
+<h3>2.1 Anwendung erstellen</h3>
+<figure class="small"><img src="bilder/s23.png" alt="Im Developer Portal auf „App erstellen“ klicken."><figcaption>Im Developer Portal auf „App erstellen“ klicken.</figcaption></figure>
+<p>Trage einen Namen ein, zum Beispiel <b>Community-Hangar</b>. Der Name erscheint später als Name des Bots und bei der Anmeldung. Setze den Haken bei den
+Nutzungsbedingungen (das bestätigst du selbst) und klicke auf <b>Erstellen</b>.</p>
+<figure class="small"><img src="bilder/s24.png" alt="Name eintragen, Bedingungen bestätigen, „Erstellen“."><figcaption>Name eintragen, Bedingungen bestätigen, „Erstellen“.</figcaption></figure>
+
+<h3>2.2 Anwendungs-ID und Öffentlichen Schlüssel kopieren</h3>
+<p>Es öffnet sich die Seite <b>Allgemeine Informationen</b>. Kopiere mit den Knöpfen <b>Kopieren</b> die <b>Anwendungs-ID</b> und den <b>Öffentlichen Schlüssel</b>
+in deine Textdatei. Das Feld „Interaktions-Endpunkt-URL“ bleibt noch leer, es kommt erst in Schritt 7 dran.</p>
+<figure><img src="bilder/s55.jpg" alt="Allgemeine Informationen: Anwendungs-ID und Öffentlicher Schlüssel (hier geschwärzt)."><figcaption>Allgemeine Informationen: Anwendungs-ID und Öffentlicher Schlüssel (hier geschwärzt).</figcaption></figure>
+
+<h3>2.3 OAuth2: Geheimnis und Redirect</h3>
+<p>Öffne im Menü links <b>OAuth2</b>.</p>
+<figure class="small"><img src="bilder/s26.png" alt="Menü links: OAuth2."><figcaption>Menü links: OAuth2.</figcaption></figure>
+<figure><img src="bilder/s27.jpg" alt="Die Seite OAuth2: oben „Client-Informationen“, darunter „Weiterleitungen“. Der URL-Generator weiter unten wird nicht gebraucht."><figcaption>Die Seite OAuth2: oben „Client-Informationen“, darunter „Weiterleitungen“. Der URL-Generator weiter unten wird nicht gebraucht.</figcaption></figure>
+<ol class="steps">
+  <li>Klicke auf <b>„Geheimen Schlüssel zurücksetzen“</b>, bestätige und kopiere den Schlüssel <b>sofort</b> in deine Textdatei. Er wird nur einmal angezeigt. Das ist <code>AUTH_DISCORD_SECRET</code>.</li>
+  <li>Klicke unter „Weiterleitungen“ auf <b>„Redirect hinzufügen“</b> und trage ein: <code>https://expg.mcdance.de/api/auth/callback/discord</code>.
+  Die Adresse muss exakt so lauten, ohne Leerzeichen und ohne Schrägstrich am Ende. Statt <code>expg.mcdance.de</code> steht deine Adresse.</li>
+  <li>Klicke unten auf <b>„Änderungen speichern“</b>.</li>
+</ol>
+<figure><img src="bilder/s28.jpg" alt="Auf „Geheimen Schlüssel zurücksetzen“ klicken, den Schlüssel kopieren und in einer Textdatei zwischenspeichern."><figcaption>Auf „Geheimen Schlüssel zurücksetzen“ klicken, den Schlüssel kopieren und in einer Textdatei zwischenspeichern.</figcaption></figure>
+<figure><img src="bilder/s29.jpg" alt="Die Redirect-Adresse eintragen. Die Vorschläge des Browsers unter dem Feld nicht anklicken (Esc drücken)."><figcaption>Die Redirect-Adresse eintragen. Die Vorschläge des Browsers unter dem Feld nicht anklicken (Esc drücken).</figcaption></figure>
+<figure><img src="bilder/s30.jpg" alt="Nicht vergessen: Änderungen speichern."><figcaption>Nicht vergessen: Änderungen speichern.</figcaption></figure>
+
+<h3>2.4 Installation: Install Link auf „Keine“</h3>
+<p>Bei einem <b>privaten Bot</b> verlangt Discord, dass es keinen Standard-Einladungslink gibt. Stelle das deshalb <b>vor</b> den Bot-Einstellungen ein.
+Sonst meldet das Portal beim Speichern des privaten Bots: <i>„Private Anwendungen können keinen Standard-Autorisierungslink haben“</i>.</p>
+<figure class="tall"><img src="bilder/s35.png" alt="Menü links: Installation."><figcaption>Menü links: Installation.</figcaption></figure>
+<ol class="steps">
+  <li>Wähle im Dropdown <b>„Installations-Link“</b> den Eintrag <b>„Keine“</b> (statt „Von Discord bereitgestellter Link“).</li>
+  <li>Nimm den Haken bei <b>Nutzerinstallation</b> heraus. Es bleibt nur die <b>Gildeninstallation</b>: Der Bot soll nur auf Servern laufen.</li>
+  <li>Speichere unten mit <b>„Änderungen speichern“</b>.</li>
+</ol>
+<figure><img src="bilder/s36.jpg" alt="Installation: Das Dropdown „Installations-Link“ auf „Keine“ stellen, nur Gildeninstallation angehakt lassen (hier vor der Änderung)."><figcaption>Installation: Das Dropdown „Installations-Link“ auf „Keine“ stellen, nur Gildeninstallation angehakt lassen (hier vor der Änderung).</figcaption></figure>
+<figure><img src="bilder/s37.png" alt="Speichern nicht vergessen."><figcaption>Speichern nicht vergessen.</figcaption></figure>
+
+<h3>2.5 Bot: Token, Intent und privat schalten</h3>
+<figure class="small"><img src="bilder/s31.png" alt="Menü links: Bot."><figcaption>Menü links: Bot.</figcaption></figure>
+<ol class="steps">
+  <li>Klicke auf <b>„Token zurücksetzen“</b>, bestätige und kopiere den Token <b>sofort</b> in deine Textdatei. Er wird nur einmal angezeigt. Das ist <code>DISCORD_BOT_TOKEN</code>.</li>
+  <li>Scrolle zu <b>Öffentlicher Bot</b> und schalte ihn <b>aus</b> (grau). Dann kann nur du den Bot auf Server einladen.</li>
+  <li>Scrolle zu <b>Privileged Gateway Intents</b> und schalte den <b>Server Members Intent</b> <b>ein</b> (blau). Ohne ihn kann der Bot die Mitgliederliste nicht lesen.
+  <b>Message Content Intent</b> und <b>Presence Intent</b> bleiben aus.</li>
+  <li>Speichere unten mit <b>„Änderungen speichern“</b>.</li>
+</ol>
+<figure><img src="bilder/s32.jpg" alt="Bot: „Token zurücksetzen“ klicken und den Token sofort in die Textdatei kopieren."><figcaption>Bot: „Token zurücksetzen“ klicken und den Token sofort in die Textdatei kopieren.</figcaption></figure>
+<figure><img src="bilder/s39.jpg" alt="„Öffentlicher Bot“ ausschalten (auf dem Bild ist der Schalter noch an, der rote Kreis markiert ihn)."><figcaption>„Öffentlicher Bot“ ausschalten (auf dem Bild ist der Schalter noch an, der rote Kreis markiert ihn).</figcaption></figure>
+<figure><img src="bilder/s33.png" alt="Server Members Intent einschalten (hier noch aus). Der Hinweis zur Überprüfung ab 10.000 Nutzern betrifft euch nicht."><figcaption>Server Members Intent einschalten (hier noch aus). Der Hinweis zur Überprüfung ab 10.000 Nutzern betrifft euch nicht.</figcaption></figure>
+<figure><img src="bilder/s40.png" alt="Änderungen speichern."><figcaption>Änderungen speichern.</figcaption></figure>
+<div class="note">Der <b>Benutzername</b> des Bots steht auf der Seite Bot und ist vom Namen der Anwendung getrennt. Er erscheint in Discord; prüfe die Schreibweise, bevor du speicherst.</div>
+
+<h3>2.6 Deine Discord-ID und die Server-ID</h3>
+<p>Zwei weitere Zahlen brauchst du aus Discord selbst. Schalte dazu in Discord unter <b>Einstellungen → Erweitert</b> den <b>Entwicklermodus</b> ein.</p>
+<ul>
+  <li><b>Deine Discord-ID</b> (<code>SERVER_ADMIN_DISCORD_ID</code>, damit erhältst du Zugang zum Bereich „Server-Admin“): Rechtsklick auf dein Profil → <i>Nutzer-ID kopieren</i>.</li>
+  <li><b>Die Server-ID</b> deines Discord-Servers (<code>ONBOARDING_GUILD_IDS</code>, nur dieser Server darf eine Orga anlegen): Rechtsklick auf den Server → <i>Server-ID kopieren</i>.</li>
+</ul>
+
+<h2 class="pb"><span class="no">3</span>Dateien auf den Server legen</h2>
+<p>Melde dich auf deinem Server an (wie das geht, weißt du selbst am besten) und gib die folgenden Befehle der Reihe nach ein.</p>
+<h3>Befehl 1: Ordner anlegen und hineinwechseln</h3>
+<pre class="file">mkdir -p ~/community-hangar &amp;&amp; cd ~/community-hangar</pre>
+<ul>
+  <li><code>mkdir -p ~/community-hangar</code> legt den Ordner <code>community-hangar</code> in deinem Benutzerverzeichnis an. <code>-p</code> verhindert einen Fehler, falls es ihn schon gibt.</li>
+  <li><code>&amp;&amp;</code> führt den nächsten Befehl nur aus, wenn der erste geklappt hat.</li>
+  <li><code>cd ~/community-hangar</code> wechselt in diesen Ordner. Alle weiteren Befehle laufen dort.</li>
+</ul>
+<h3>Befehl 2: Docker-Compose-Datei herunterladen</h3>
+<pre class="file">curl -O https://raw.githubusercontent.com/mackedanz/community-hangar-1/main/docker-compose.yml</pre>
+<p><code>curl</code> lädt eine Datei aus dem Internet, <code>-O</code> speichert sie unter ihrem Namen. Die Datei beschreibt, welche Container Docker startet (die App und die Datenbank) und welche Daten sie behalten.
+Fehlt <code>curl</code> („command not found“), installiere es mit <code>sudo apt install curl</code>.</p>
+<h3>Befehl 3: Vorlage für die Einstellungen herunterladen</h3>
+<pre class="file">curl -o .env https://raw.githubusercontent.com/mackedanz/community-hangar-1/main/.env.docker.example</pre>
+<p><code>-o .env</code> (kleines o) speichert die Vorlage unter dem Namen <code>.env</code>. Diese Datei enthält später deine Einstellungen und Geheimnisse. Sie beginnt mit einem Punkt und ist deshalb
+unsichtbar; <code>ls -la</code> zeigt sie.</p>
+<figure><img src="bilder/s41.jpg" alt="So sollte es aussehen: Die beiden Fortschrittstabellen von curl sind normal. Am Ende stehen .env und docker-compose.yml im Ordner."><figcaption>So sollte es aussehen: Die beiden Fortschrittstabellen von curl sind normal. Am Ende stehen .env und docker-compose.yml im Ordner.</figcaption></figure>
+
+<h2 class="pb"><span class="no">4</span>Einstellungen eintragen (.env)</h2>
+<pre class="file">nano .env</pre>
+<figure class="small"><img src="bilder/s42.png" alt="Die Datei mit dem Texteditor nano öffnen."><figcaption>Die Datei mit dem Texteditor nano öffnen.</figcaption></figure>
+<figure><img src="bilder/s43.jpg" alt="Die Vorlage. Die Umlaute sehen im Terminal kaputt aus („f r“): Das ist nur die Darstellung und kein Fehler."><figcaption>Die Vorlage. Die Umlaute sehen im Terminal kaputt aus („f r“): Das ist nur die Darstellung und kein Fehler.</figcaption></figure>
+<p>Vier Zeilen sind in der Vorlage <b>auskommentiert</b> (<code>#</code> am Anfang): <code>DISCORD_PUBLIC_KEY</code>, <code>DISCORD_BOT_TOKEN</code>, <code>LOGIN_REQUIRES_ALLOWLIST</code> und <code>ONBOARDING_GUILD_IDS</code>.
+Entferne dort das <code>#</code>, sonst werden sie ignoriert.</p>
+<figure><img src="bilder/s44.jpg" alt="So sieht die Vorlage aus, wenn die Zeilen aktiviert sind. Jetzt trägst du deine Werte ein."><figcaption>So sieht die Vorlage aus, wenn die Zeilen aktiviert sind. Jetzt trägst du deine Werte ein.</figcaption></figure>
+<table>
+  <tr><th>Zeile</th><th>Wert</th></tr>
+  <tr><td><code>DOMAIN=</code></td><td>deine Adresse ohne <code>https://</code>, z. B. <code>expg.mcdance.de</code></td></tr>
+  <tr><td><code>AUTH_DISCORD_ID=</code></td><td>Anwendungs-ID</td></tr>
+  <tr><td><code>AUTH_DISCORD_SECRET=</code></td><td>Geheimer Client-Schlüssel</td></tr>
+  <tr><td><code>DB_PASSWORD=</code></td><td>frei wählbar, lang und zufällig. Erzeugen mit: <code>openssl rand -base64 24 | tr -d '/+='</code></td></tr>
+  <tr><td><code>SERVER_ADMIN_DISCORD_ID=</code></td><td>deine Discord-ID</td></tr>
+  <tr><td><code>DISCORD_PUBLIC_KEY=</code></td><td>Öffentlicher Schlüssel</td></tr>
+  <tr><td><code>DISCORD_BOT_TOKEN=</code></td><td>Bot-Token</td></tr>
+  <tr><td><code>LOGIN_REQUIRES_ALLOWLIST=</code></td><td><code>1</code>: Nur wer auf der Zugangsliste des Bots steht (oder Server-Admin ist), darf sich anmelden</td></tr>
+  <tr><td><code>ONBOARDING_GUILD_IDS=</code></td><td>Server-ID deines Discord-Servers</td></tr>
+</table>
+<p>Tipps zu nano: Mit den <b>Pfeiltasten</b> navigieren, die Maus funktioniert nicht. Zum Einfügen aus der Zwischenablage je nach Terminal Rechtsklick oder <kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>V</kbd>.
+Werte stehen direkt hinter dem <code>=</code>, <b>ohne Leerzeichen und ohne Anführungszeichen</b>. Speichern mit <kbd>Strg</kbd>+<kbd>O</kbd> und Enter, beenden mit <kbd>Strg</kbd>+<kbd>X</kbd>.</p>
+<figure><img src="bilder/s45.jpg" alt="Die ausgefüllte Datei (Geheimnisse und Kennungen sind hier geschwärzt)."><figcaption>Die ausgefüllte Datei (Geheimnisse und Kennungen sind hier geschwärzt).</figcaption></figure>
+<div class="warn"><b>Wichtig:</b> Mit <code>LOGIN_REQUIRES_ALLOWLIST=1</code> löscht jeder Abgleich der Mitgliederliste das Konto samt Hangar von allen,
+die nicht mehr auf einer Zugangsliste stehen. Du selbst bist über <code>SERVER_ADMIN_DISCORD_ID</code> immer ausgenommen. Mit <code>0</code> ist die Sperre aus.
+Als Bremse löscht ein Abgleich nichts, wenn auf einmal mindestens 5 Personen und mehr als die Hälfte der Liste wegfallen (die Meldung nennt das). Dann prüfst du die Liste und löschst bei Bedarf mit <code>bin/purge-former-members.php --yes</code>.</div>
+<h3>Dateirechte setzen und prüfen</h3>
+<p>Danach darf nur noch der Besitzer die Datei lesen. Der Befehl gibt bei Erfolg nichts aus.</p>
+<pre class="file">chmod 600 .env</pre>
+<figure class="small"><img src="bilder/s46.png" alt="Der Befehl chmod."><figcaption>Der Befehl chmod.</figcaption></figure>
+<p>Mit diesem Befehl prüfst du, ob alle Zeilen gefüllt sind. Er zeigt von jedem Wert nur die ersten drei Zeichen:</p>
+<pre class="file">sed -E 's/=(.{3}).*/=\1…/' .env | grep -v '^#' | grep -v '^$'</pre>
+<figure><img src="bilder/s47.jpg" alt="Alle Pflichtzeilen haben einen Wert. Nur LEGAL_IMPRINT_URL und LEGAL_PRIVACY_URL dürfen leer bleiben."><figcaption>Alle Pflichtzeilen haben einen Wert. Nur LEGAL_IMPRINT_URL und LEGAL_PRIVACY_URL dürfen leer bleiben.</figcaption></figure>
+
+<h2 class="pb"><span class="no">5</span>HTTPS einrichten (Reverse-Proxy)</h2>
+<p>Die App spricht nur HTTP. Davor muss ein Reverse-Proxy HTTPS und das Zertifikat übernehmen. Die <code>docker-compose.yml</code> gibt dafür den Port <b>8181</b> auf dem Server frei
+(änderbar mit <code>HANGAR_PORT</code>). Prüfe vorher, dass er frei ist: <code>ss -ltn | grep 8181</code> (keine Ausgabe = frei).
+Der Port hört standardmäßig auf allen Schnittstellen. Läuft der Proxy auf demselben Server, setze <code>HANGAR_BIND=127.0.0.1</code> in der <code>.env</code>, dann ist die App nur noch über den Proxy erreichbar. Steht der Proxy auf einem anderen Rechner, erlaube Port 8181 per Firewall nur für dessen IP.
+Hier der Weg mit dem <b>Nginx Proxy Manager</b>. Ohne eigenen Proxy findest du einen Hinweis in Kapitel 13.</p>
+<h3>Reiter „Details“</h3>
+<figure class="half"><img src="bilder/s48.jpg" alt="Proxy-Host: Domain, Schema http, die IP deines Servers, Port 8181. „Block Common Exploits“ an, „Cache Assets“ und „Websockets“ aus. Zugriffsliste: „Publicly Accessible“."><figcaption>Proxy-Host: Domain, Schema http, die IP deines Servers, Port 8181. „Block Common Exploits“ an, „Cache Assets“ und „Websockets“ aus. Zugriffsliste: „Publicly Accessible“.</figcaption></figure>
+<h3>Reiter „SSL“</h3>
+<figure class="half"><img src="bilder/s49.png" alt="SSL-Zertifikat wählen oder neu anfordern („Request a new certificate“ und die Bedingungen von Let’s Encrypt bestätigen). „Force SSL“ und „HTTP/2“ an, „HSTS“ aus. Dann „Save“."><figcaption>SSL-Zertifikat wählen oder neu anfordern („Request a new certificate“ und die Bedingungen von Let’s Encrypt bestätigen). „Force SSL“ und „HTTP/2“ an, „HSTS“ aus. Dann „Save“.</figcaption></figure>
+<p>Bis der Container läuft, zeigt die Domain <b>502 Bad Gateway</b>. Das ist normal.</p>
+
+<h2 class="pb"><span class="no">6</span>Starten und prüfen</h2>
+<pre class="file">docker compose up -d</pre>
+<p>Docker legt Netzwerk, Volumes und Container an. „Waiting“ bei der Datenbank ist normal, die App startet, sobald sie bereit ist.
+Die Volumes <code>db-data</code> (Datenbank) und <code>ship-images</code> (Schiffsbilder) sind die dauerhaften Daten.
+Beim ersten Mal lädt Docker außerdem die Images herunter, das dauert deutlich länger.</p>
+<figure><img src="bilder/s50.png" alt="Docker legt Netzwerk, Volumes und Container an."><figcaption>Docker legt Netzwerk, Volumes und Container an.</figcaption></figure>
+<pre class="file">docker compose logs --tail 40 app</pre>
+<figure><img src="bilder/s51.png" alt="Beim ersten Start steht „Eingespielt“ mit den Datenbank-Migrationen. Nach einem Neustart ohne Änderungen steht „Datenbank ist aktuell.“. Die Apache-Warnung AH00558 ist harmlos. „GET /healthz … 200“ ist der Gesundheitstest."><figcaption>Beim ersten Start steht „Eingespielt“ mit den Datenbank-Migrationen. Nach einem Neustart ohne Änderungen steht „Datenbank ist aktuell.“. Die Apache-Warnung AH00558 ist harmlos. „GET /healthz … 200“ ist der Gesundheitstest.</figcaption></figure>
+<p>Nach etwa 20 Sekunden beginnt im Hintergrund der Abgleich des Schiffskatalogs aus der RSI Ship Matrix (ein bis zwei Minuten).</p>
+<h3>Auf die neueste Version bringen</h3>
+<pre class="file">docker compose pull &amp;&amp; docker compose up -d</pre>
+<p><code>pull</code> holt die neueste Version des Images, <code>up -d</code> startet die Container damit neu. <code>&amp;&amp;</code> führt den zweiten Befehl nur aus, wenn der erste geklappt hat.
+Das nutzt du auch später für jedes Update. Die Datenbank bleibt dabei erhalten.</p>
+<figure class="small"><img src="bilder/s52.png" alt="Der Befehl."><figcaption>Der Befehl.</figcaption></figure>
+<figure><img src="bilder/s53.jpg" alt="„Already exists“: schon vorhanden. „Pull complete“: neu geladen. „Healthy“ und „Started“: Die Container laufen."><figcaption>„Already exists“: schon vorhanden. „Pull complete“: neu geladen. „Healthy“ und „Started“: Die Container laufen.</figcaption></figure>
+<h3>Prüfen</h3>
+<p>Öffne im Browser <code>https://expg.mcdance.de/healthz</code>. Dort muss <b>ok</b> stehen. Erst wenn das klappt, geht es mit Discord weiter.</p>
+<figure class="half"><img src="bilder/s54.png" alt="Zeigt die Seite „ok“, läuft die App, der Proxy ist richtig eingestellt und das Zertifikat greift."><figcaption>Zeigt die Seite „ok“, läuft die App, der Proxy ist richtig eingestellt und das Zertifikat greift.</figcaption></figure>
+
+<h2 class="pb"><span class="no">7</span>Endpunkt bei Discord eintragen</h2>
+<p>Im Developer Portal: <b>Allgemeine Informationen → Interaktions-Endpunkt-URL</b>. Trage ein (statt <code>expg.mcdance.de</code> deine Adresse) und speichere:</p>
+<pre class="file">https://expg.mcdance.de/discord/interactions</pre>
+<figure><img src="bilder/s56.jpg" alt="Interaktions-Endpunkt-URL eintragen und auf „Änderungen speichern“ klicken."><figcaption>Interaktions-Endpunkt-URL eintragen und auf „Änderungen speichern“ klicken.</figcaption></figure>
+<p>Beim Speichern schickt Discord eine Testanfrage an deinen Server. Klappt sie, erscheint die grüne Meldung:</p>
+<figure><img src="bilder/s57.png" alt="Erfolg: Discord hat den Endpunkt geprüft und gespeichert."><figcaption>Erfolg: Discord hat den Endpunkt geprüft und gespeichert.</figcaption></figure>
+<p>Meldet das Portal einen Fehler, ist meist <code>DISCORD_PUBLIC_KEY</code> falsch oder die Seite nicht erreichbar (Kapitel 6 prüfen). Nach jeder Änderung an der <code>.env</code> gilt: <code>docker compose up -d</code>.</p>
+
+<h2><span class="no">8</span>Befehle registrieren</h2>
+<pre class="file">docker compose exec app php bin/register-commands.php</pre>
+<figure><img src="bilder/s58.png" alt="Erscheint „Befehle registriert.“, kennt Discord die Slash-Befehle /einrichten und /abgleichen."><figcaption>Erscheint „Befehle registriert.“, kennt Discord die Slash-Befehle /einrichten und /abgleichen.</figcaption></figure>
+
+<h2 class="pb"><span class="no">9</span>Bot auf den Server einladen</h2>
+<p>Öffne diesen Link im Browser und ersetze <code>&lt;DEINE CLIENT-ID&gt;</code> durch deine eigene ID:</p>
+<pre class="file">https://discord.com/oauth2/authorize?client_id=&lt;DEINE CLIENT-ID&gt;&amp;scope=bot%20applications.commands&amp;permissions=0</pre>
+<p>Die Client-ID findest du im Developer Portal unter <b>OAuth2</b> im Feld <b>Client-ID</b>. Das ist dieselbe Zahl wie die Anwendungs-ID.</p>
+<figure class="half"><img src="bilder/s60.jpg" alt="Die Client-ID auf der Seite OAuth2 (hier geschwärzt)."><figcaption>Die Client-ID auf der Seite OAuth2 (hier geschwärzt).</figcaption></figure>
+<figure><img src="bilder/s59.jpg" alt="Den Link in die Adresszeile einfügen und mit Enter bestätigen, nicht auf einen Suchvorschlag klicken."><figcaption>Den Link in die Adresszeile einfügen und mit Enter bestätigen, nicht auf einen Suchvorschlag klicken.</figcaption></figure>
+<p>Der Bot braucht keine Rechte (<code>permissions=0</code>), nur zwei Zugriffe: Bot hinzufügen und Befehle erstellen. Wähle im Dropdown deinen Server.
+Es erscheinen nur Server, auf denen du das Recht „Server verwalten“ hast. Wähle den Server, dessen ID du in <code>ONBOARDING_GUILD_IDS</code> eingetragen hast.
+Eine eventuelle Captcha-Abfrage bestätigst du selbst.</p>
+<figure class="tall"><img src="bilder/s61.jpg" alt="Einladungsseite: scrollen, bis „Autorisieren“ aktiv wird."><figcaption>Einladungsseite: scrollen, bis „Autorisieren“ aktiv wird.</figcaption></figure>
+<figure class="half"><img src="bilder/s62.png" alt="Dem Server hinzufügen: den Server wählen (hier geschwärzt)."><figcaption>Dem Server hinzufügen: den Server wählen (hier geschwärzt).</figcaption></figure>
+<figure class="half"><img src="bilder/s63.png" alt="Erfolg: Der Bot ist auf deinem Server."><figcaption>Erfolg: Der Bot ist auf deinem Server.</figcaption></figure>
+<p>Der Bot erscheint in der Mitgliederliste des Servers (online oder offline, beides ist in Ordnung). Er antwortet nur auf Befehle.</p>
+<figure class="small"><img src="bilder/s64.png" alt="Der Bot in der Mitgliederliste."><figcaption>Der Bot in der Mitgliederliste.</figcaption></figure>
+
+<h2 class="pb"><span class="no">10</span>Orga einrichten</h2>
+<p>Tippe in Discord in einem beliebigen Kanal <code>/einrichten</code> (als Admin oder mit „Server verwalten“). Erscheint der Befehl nicht, lade Discord mit <kbd>Strg</kbd>+<kbd>R</kbd> neu; es kann ein paar Minuten dauern.</p>
+<figure><img src="bilder/s65.png" alt="Der Befehl /einrichten im Vorschlagsmenü."><figcaption>Der Befehl /einrichten im Vorschlagsmenü.</figcaption></figure>
+<p>Es erscheint eine Nachricht, die nur du siehst. Die Orga wird mit dem Servernamen angelegt, du stehst automatisch auf der Zugangsliste.</p>
+<figure><img src="bilder/s66.jpg" alt="Die Einrichtungsnachricht mit zwei Rollenauswahlen und dem Knopf „Mitglieder jetzt abgleichen“."><figcaption>Die Einrichtungsnachricht mit zwei Rollenauswahlen und dem Knopf „Mitglieder jetzt abgleichen“.</figcaption></figure>
+<ol class="steps">
+  <li><b>„Wer darf das Tool nutzen?“</b>: Wähle die Rollen deiner Mitglieder (bis zu 10). Rechts neben dem Rollennamen steht, wie viele Mitglieder sie hat. Wähle keine Bot-Rollen und keine Rollen von Personen, die noch keinen Zugang bekommen sollen.</li>
+  <li><b>„Wer darf Events planen?“</b>: Optional die Planer-Rollen.</li>
+  <li>Die Auswahl gilt, sobald du das Menü schließt. Der Bot gleicht danach die Mitglieder ab.</li>
+</ol>
+<figure class="half"><img src="bilder/s67.png" alt="Rollenauswahl: Häkchen bei den Rollen, die das Tool nutzen dürfen (Namen auf dem Bild teilweise geschwärzt)."><figcaption>Rollenauswahl: Häkchen bei den Rollen, die das Tool nutzen dürfen (Namen auf dem Bild teilweise geschwärzt).</figcaption></figure>
+<figure><img src="bilder/s68.jpg" alt="Fertig-Meldung: „9 Mitglieder dürfen sich anmelden“. Die Zahlen in Klammern sind die Änderungen seit dem letzten Abgleich. Nach der zweiten Auswahl steht dort „+0, −0“, weil schon beim ersten Mal abgeglichen wurde."><figcaption>Fertig-Meldung: „9 Mitglieder dürfen sich anmelden“. Die Zahlen in Klammern sind die Änderungen seit dem letzten Abgleich. Nach der zweiten Auswahl steht dort „+0, −0“, weil schon beim ersten Mal abgeglichen wurde.</figcaption></figure>
+<p>Der Befehl lässt sich beliebig oft wiederholen. Der Bot gleicht außerdem automatisch <b>einmal pro Stunde</b> ab. Wer die Rolle bekommt, darf sich anmelden. Wer sie verliert, darf es nicht mehr
+(laufende Sitzungen enden sofort, sein Konto wird gelöscht). Mit <code>/abgleichen</code> kann jede Person mit einer Nutzungs-Rolle (und jeder Server-Admin) sofort abgleichen.</p>
+<figure class="half"><img src="bilder/s69.png" alt="/abgleichen: die nur für dich sichtbare Antwort des Bots."><figcaption>/abgleichen: die nur für dich sichtbare Antwort des Bots.</figcaption></figure>
+
+<h2 class="pb"><span class="no">11</span>Anmelden</h2>
+<figure><img src="bilder/s70.jpg" alt="Die Startseite. Der Schiffskatalog ist nur nach der Anmeldung sichtbar."><figcaption>Die Startseite. Der Schiffskatalog ist nur nach der Anmeldung sichtbar.</figcaption></figure>
+<figure class="half"><img src="bilder/s71.png" alt="Auf „Mit Discord anmelden“ klicken. Dein Discord-Passwort gibst du nur bei Discord ein."><figcaption>Auf „Mit Discord anmelden“ klicken. Dein Discord-Passwort gibst du nur bei Discord ein.</figcaption></figure>
+<p>Discord zeigt eine Abfrage. Sie nennt drei Zugriffe: Benutzername, Avatar und Banner, auf welchen Servern du bist, und deine Mitgliedsinformationen (Nickname, Avatar, Rollen).
+Damit prüft die App, zu welcher Orga du gehörst. Scrolle nach unten, bis „Autorisieren“ aktiv wird, und bestätige selbst.</p>
+<figure class="tall"><img src="bilder/s72.jpg" alt="Discord-Abfrage bei der ersten Anmeldung. Unten steht, wohin du danach weitergeleitet wirst: deine Adresse. (Auf diesem Bild steht noch die Zeile zur E-Mail-Adresse. Die App fragt sie nicht mehr ab.)"><figcaption>Discord-Abfrage bei der ersten Anmeldung. Unten steht, wohin du danach weitergeleitet wirst: deine Adresse. (Auf diesem Bild steht noch die Zeile zur E-Mail-Adresse. Die App fragt sie nicht mehr ab.)</figcaption></figure>
+<figure><img src="bilder/s73.jpg" alt="Nach der Anmeldung siehst du deine Orga. „Server-Admin“ sehen nur Personen, die als SERVER_ADMIN_DISCORD_ID eingetragen sind."><figcaption>Nach der Anmeldung siehst du deine Orga. „Server-Admin“ sehen nur Personen, die als SERVER_ADMIN_DISCORD_ID eingetragen sind.</figcaption></figure>
+<p>Ein Mitglied ohne Rolle sieht stattdessen: „Dieses Discord-Konto steht nicht auf der Zugangsliste.“</p>
+
+<h2 class="pb"><span class="no">12</span>Ersten RSI-Sync machen</h2>
+<p>Jedes Mitglied überträgt seinen Hangar von der RSI-Seite. Öffne oben <b>RSI-Sync</b>.</p>
+<h3>Einmalig: Lesezeichen anlegen</h3>
+<ol class="steps">
+  <li>Blende die Lesezeichenleiste deines Browsers ein: <kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>B</kbd>.</li>
+  <li>Lösche vorher ein älteres Lesezeichen „↻ Hangar-Sync“ (Rechtsklick → Löschen). Das Lesezeichen merkt sich die Adresse der App, von der du es gezogen hast; ein altes zeigt sonst auf die falsche.</li>
+  <li>Ziehe den blauen Knopf <b>„↻ Hangar-Sync“</b> mit gedrückter linker Maustaste in die Leiste. Nur ziehen, nicht anklicken.</li>
+</ol>
+<figure><img src="bilder/s75.jpg" alt="Den Knopf in die Lesezeichenleiste ziehen."><figcaption>Den Knopf in die Lesezeichenleiste ziehen.</figcaption></figure>
+<h3>Bei jedem Sync</h3>
+<ol class="steps">
+  <li>Klicke auf der Seite RSI-Sync auf <b>„RSI-Pledge-Seite öffnen“</b>. Es öffnet sich ein <b>neuer Tab</b> mit RSI. Diese Seite bleibt offen und wartet.</li>
+  <li>Melde dich im neuen Tab bei RSI an, falls nötig. Du musst auf der Seite <b>„My Hangar“</b> (Pledges) mit deiner Liste stehen. Der Tab-Titel zeigt das.</li>
+  <li>Klicke im <b>RSI-Tab</b> in der Lesezeichenleiste auf <b>„↻ Hangar-Sync“</b>. Nicht im Tab der App, sondern im RSI-Tab.</li>
+  <li>Unten rechts läuft der Fortschritt („Lese Seite 4 …“). Das dauert je nach Hangar ein paar Sekunden bis eine Minute, weil absichtlich langsam gelesen wird. Schließe den Tab nicht.</li>
+  <li>Danach schließt sich der RSI-Tab von selbst, und in der App erscheint eine <b>Vorschau</b>. Stimmt sie, klicke auf <b>„In meinen Hangar übernehmen“</b>. Mit „Abbrechen“ wird nichts verändert.</li>
+</ol>
+<figure class="tall"><img src="bilder/s76.jpg" alt="Auf „RSI-Pledge-Seite öffnen“ klicken."><figcaption>Auf „RSI-Pledge-Seite öffnen“ klicken.</figcaption></figure>
+<figure class="small"><img src="bilder/s77.png" alt="RSI öffnet sich in einem neuen Tab neben der App („My Hangar“)."><figcaption>RSI öffnet sich in einem neuen Tab neben der App („My Hangar“).</figcaption></figure>
+<figure><img src="bilder/s78.jpg" alt="Im RSI-Tab auf der Seite „My Hangar“ das Lesezeichen „↻ Hangar-Sync“ anklicken."><figcaption>Im RSI-Tab auf der Seite „My Hangar“ das Lesezeichen „↻ Hangar-Sync“ anklicken.</figcaption></figure>
+<figure class="half"><img src="bilder/s79.jpg" alt="Der Fortschritt unten rechts auf der RSI-Seite."><figcaption>Der Fortschritt unten rechts auf der RSI-Seite.</figcaption></figure>
+<figure><img src="bilder/s80.jpg" alt="Die Vorschau in der App: erkannte Schiffe mit Stückzahl und LTI. „Schiffe nicht im Katalog“ werden mit ihrem Namen übernommen. Upgrades, Paints und Sonstiges werden nur gezählt."><figcaption>Die Vorschau in der App: erkannte Schiffe mit Stückzahl und LTI. „Schiffe nicht im Katalog“ werden mit ihrem Namen übernommen. Upgrades, Paints und Sonstiges werden nur gezählt.</figcaption></figure>
+<figure><img src="bilder/s81.jpg" alt="Fertig: „Mein Hangar“ mit den Schiffen. Die Schiffsbilder lädt die App beim ersten Anzeigen von RSI, die ersten Aufrufe sind deshalb etwas langsamer."><figcaption>Fertig: „Mein Hangar“ mit den Schiffen. Die Schiffsbilder lädt die App beim ersten Anzeigen von RSI, die ersten Aufrufe sind deshalb etwas langsamer.</figcaption></figure>
+
+<h2 class="pb"><span class="no">13</span>Betrieb und Updates</h2>
+<table>
+  <tr><th style="width:38%">Aufgabe</th><th>Befehl</th></tr>
+  <tr><td>Neue Version holen</td><td><code>docker compose pull &amp;&amp; docker compose up -d</code></td></tr>
+  <tr><td>Logs ansehen</td><td><code>docker compose logs -f app</code></td></tr>
+  <tr><td>Katalog sofort abgleichen</td><td><code>docker compose exec app php bin/catalog-sync.php</code></td></tr>
+  <tr><td>Zugangslisten sofort abgleichen</td><td><code>docker compose exec app php bin/sync-allowlist.php</code></td></tr>
+  <tr><td>Konten ohne Zugangsliste löschen (Vorschau, mit <code>--yes</code> wirklich)</td><td><code>docker compose exec app php bin/purge-former-members.php</code></td></tr>
+  <tr><td>Schiffsbilder vorab laden</td><td><code>docker compose exec app php bin/warm-images.php</code></td></tr>
+  <tr><td>Datenbank sichern</td><td><code>docker compose exec db sh -c 'mariadb-dump -u hangar -p"$MARIADB_PASSWORD" hangar' &gt; sicherung.sql</code></td></tr>
+  <tr><td>Stoppen (Daten bleiben)</td><td><code>docker compose down</code></td></tr>
+  <tr><td>Alles löschen (Neuinstallation)</td><td><code>docker compose down -v</code> löscht <b>auch Datenbank und Bilder</b></td></tr>
+</table>
+<p>Gesichert werden sollte die Datenbank. Die Bilder lädt die App bei Bedarf selbst nach.</p>
+<div class="note keep"><b>Ohne eigenen Reverse-Proxy:</b> Du kannst Caddy mitstarten, der das Zertifikat selbst holt. Dafür müssen die Ports 80 und 443 aus dem Internet erreichbar sein und die Domain per DNS auf den Server zeigen.
+Lege neben der <code>docker-compose.yml</code> eine Datei <code>docker-compose.override.yml</code> an (Docker liest sie automatisch mit):</div>
+<pre class="file">services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${DOMAIN} --to app:80
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+
+volumes:
+  caddy-data:</pre>
+<p>Dann <code>docker compose up -d</code>. Den Reverse-Proxy aus Kapitel 5 brauchst du in diesem Fall nicht.</p>
+
+<h2 class="pb"><span class="no">14</span>Betrieb absichern</h2>
+<p>Die App selbst prüft Anmeldung, Rechte und Eingaben. Die folgenden Punkte betreffen den <b>Betrieb</b>: Server, Proxy und Netzwerk. Sie sind nach Wichtigkeit geordnet.
+Wie dringend sie sind, hängt davon ab, wo die App läuft:</p>
+<table>
+  <tr><th style="width:30%">Wo läuft die App?</th><th>Was heißt das</th></tr>
+  <tr><td>Server im Internet (Mietserver, VPS)</td><td>Jeder Punkt unten ist <b>Pflicht</b>. Besonders 14.1: Ohne diese Einstellung ist der App-Port für die ganze Welt offen und umgeht den Proxy.</td></tr>
+  <tr><td>Zuhause hinter einem Router</td><td>Von außen erreichbar ist nur, was du im Router weiterleitest. Die Punkte schützen dann vor Geräten im eigenen Netz und vor Fehlern bei der Weiterleitung.</td></tr>
+</table>
+
+<h3>14.1 Den App-Port nur für den Proxy erreichbar machen</h3>
+<p>Der Port <b>8181</b> spricht unverschlüsseltes HTTP und gehört nur dem Reverse-Proxy. Wer ihn direkt erreicht, umgeht den Proxy samt Zertifikat und Filtern.</p>
+<ul>
+  <li><b>Proxy läuft auf demselben Server:</b> trage in die <code>.env</code> <code>HANGAR_BIND=127.0.0.1</code> ein und starte mit <code>docker compose up -d</code> neu. Danach ist der Port nur noch auf dem Server selbst erreichbar.
+  Prüfen: <code>ss -ltn | grep 8181</code> zeigt <code>127.0.0.1:8181</code>.</li>
+  <li><b>Proxy läuft auf einem anderen Rechner:</b> Lass <code>HANGAR_BIND</code> leer (sonst erreicht der Proxy die App nicht) und erlaube den Port per Firewall nur für die IP des Proxys. Mit Docker greift das übliche <code>ufw</code> nicht von selbst, weil Docker seine Regeln selbst setzt.
+  Zuverlässig ist die Firewall des Hypervisors oder Routers (z. B. Proxmox-Firewall am Container: eingehend Port 8181 nur von der Proxy-IP, alles andere auf dem Port verwerfen) oder eine Regel in der Docker-Kette:</li>
+</ul>
+<pre class="file">sudo iptables -I DOCKER-USER -p tcp -m conntrack --ctorigdstport 8181 --ctdir ORIGINAL ! -s &lt;PROXY-IP&gt; -j DROP</pre>
+<p>Diese Regel verschwindet nach einem Neustart, wenn du sie nicht dauerhaft speicherst (z. B. mit <code>iptables-persistent</code>). Prüfe nach jeder Änderung von <b>einem dritten Rechner</b>, dass der Port wirklich zu ist:
+<code>curl -m 5 http://&lt;SERVER-IP&gt;:8181/healthz</code> darf nichts liefern. Von der Proxy-IP aus muss es weiter „ok“ geben.</p>
+
+<h3>14.2 Größenlimit im Proxy</h3>
+<p>Der größte echte Upload ist der RSI-Import mit bis zu 5 MB. Alles darüber nimmt die App nicht an (Apache lehnt ab 6 MB ab). Damit große Anfragen gar nicht erst bis zur App kommen, begrenze sie auch im Proxy.
+Im <b>Nginx Proxy Manager</b>: Proxy-Host bearbeiten, den Reiter mit dem <b>Zahnrad</b> öffnen („Advanced“), bei „Custom Nginx Configuration“ eintragen und mit <b>Save</b> speichern:</p>
+<pre class="file">client_max_body_size 6m;</pre>
+<p>Prüfen: Eine 7-MB-Anfrage muss mit <b>413</b> abgewiesen werden:</p>
+<pre class="file">head -c 7000000 /dev/zero | curl -s -o /dev/null -w "%{http_code}\n" -X POST -T - https://&lt;DOMAIN&gt;/healthz</pre>
+
+<h3>14.3 HSTS im Proxy einschalten</h3>
+<p>HSTS sagt dem Browser, dass die Seite nur noch über HTTPS geöffnet werden darf. Im Nginx Proxy Manager: Proxy-Host, Reiter <b>SSL</b>, <b>HSTS Enabled</b> einschalten und speichern.
+Schalte es erst ein, wenn HTTPS sicher läuft: Browser merken sich die Einstellung, und bei einem abgelaufenen Zertifikat kommt man dann nicht mehr „mal eben“ per HTTP auf die Seite.</p>
+
+<h3>14.4 SSH nur mit Schlüssel</h3>
+<p>Ein Server, der Anmeldungen per Passwort zulässt, wird im Internet rund um die Uhr durchprobiert, im Heimnetz reicht ein einziges kompromittiertes Gerät. Hinterlege zuerst deinen SSH-Schlüssel (<code>ssh-copy-id benutzer@server</code>) und teste die Anmeldung damit.
+Danach in <code>/etc/ssh/sshd_config</code> setzen:</p>
+<pre class="file">PermitRootLogin prohibit-password
+PasswordAuthentication no</pre>
+<p>Dann <code>sudo systemctl reload ssh</code>. <b>Lass dein aktuelles Fenster offen</b> und probiere die Anmeldung in einem zweiten Fenster, bevor du das erste schließt. Prüfen: <code>sudo sshd -T | grep -iE 'passwordauthentication|permitrootlogin'</code>.</p>
+
+<h3>14.5 Verwaltungsoberflächen und Router</h3>
+<ul>
+  <li><b>Portainer, Nginx-Proxy-Manager-Oberfläche (Port 81) und ähnliche Verwaltungsseiten</b> gehören nie ins Internet. Leite im Router nur die Ports <b>80 und 443</b> an den Proxy weiter. Im eigenen Netz solltest du sie nur von deinem Admin-Rechner aus erreichbar machen (Firewall) und, wo möglich, HTTPS nutzen (bei Portainer Port 9443).</li>
+  <li>Ändere Standard-Zugangsdaten sofort und schalte, wo es geht, die Zwei-Faktor-Anmeldung ein.</li>
+  <li>Schalte <b>UPnP</b> im Router aus, damit sich Geräte nicht selbst Ports freigeben, und prüfe die IPv6-Firewall: Portweiterleitungen gelten nur für IPv4, bei IPv6 muss die Firewall eingehende Verbindungen selbst blocken.</li>
+</ul>
+
+<h3>14.6 Einstellungen, die den Schutz erhöhen</h3>
+<table>
+  <tr><th style="width:36%">Einstellung</th><th>Warum</th></tr>
+  <tr><td><code>LOGIN_REQUIRES_ALLOWLIST=1</code></td><td>Nur Personen auf der Zugangsliste dürfen sich anmelden (siehe Kapitel 4). Ohne sie darf sich jedes Discord-Konto anmelden und ein Konto anlegen.</td></tr>
+  <tr><td><code>ONBOARDING_GUILD_IDS</code></td><td>Nur die eingetragenen Server dürfen per <code>/einrichten</code> eine Orga anlegen. Leer heißt: jeder Server, auf dem der Bot ist.</td></tr>
+  <tr><td>Bot im Portal auf <b>privat</b></td><td>Niemand sonst kann den Bot auf einen eigenen Server einladen (Kapitel 2.5).</td></tr>
+  <tr><td>Starkes <code>DB_PASSWORD</code></td><td>Die Datenbank ist nicht von außen erreichbar, ein schwaches Passwort hilft aber bei einem Fehler an anderer Stelle. Ändere es nicht einfach nachträglich in der <code>.env</code> (siehe Kapitel 15), sondern gleich bei der Installation.</td></tr>
+  <tr><td>Rechte der <code>.env</code> auf <code>600</code></td><td>Dort stehen Geheimnisse (Kapitel 4). Datenbank-Sicherungen enthalten die Discord-Zugangs-Tokens der Nutzer: nicht in offene Cloud-Ordner legen.</td></tr>
+  <tr><td>Regelmäßig aktualisieren</td><td><code>docker compose pull &amp;&amp; docker compose up -d</code> für die App, dazu die Updates des Server-Betriebssystems und des Proxys.</td></tr>
+</table>
+
+<h3>14.7 Selbsttest</h3>
+<p>Mit diesen Befehlen prüfst du von einem <b>anderen Rechner</b> aus, ob alles wirkt. <code>&lt;DOMAIN&gt;</code> ist deine Adresse.</p>
+<table>
+  <tr><th style="width:44%">Befehl</th><th>Erwartung</th></tr>
+  <tr><td><code>curl -s https://&lt;DOMAIN&gt;/healthz</code></td><td><code>ok</code></td></tr>
+  <tr><td><code>curl -m 5 http://&lt;SERVER-IP&gt;:8181/healthz</code></td><td>keine Antwort (Port zu)</td></tr>
+  <tr><td>7-MB-Anfrage (siehe 14.2)</td><td><code>413</code></td></tr>
+  <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" https://&lt;DOMAIN&gt;/catalog</code></td><td><code>303</code> (Katalog nur nach der Anmeldung)</td></tr>
+  <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" -X POST https://&lt;DOMAIN&gt;/discord/interactions</code></td><td><code>401</code> (ohne gültige Signatur von Discord)</td></tr>
+  <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" https://&lt;DOMAIN&gt;/dev/login</code></td><td><code>404</code></td></tr>
+  <tr><td><code>docker inspect community-hangar-app-1 --format 'mem={{.HostConfig.Memory}} pids={{.HostConfig.PidsLimit}}'</code></td><td><code>mem=1073741824 pids=300</code> (auf dem Server)</td></tr>
+</table>
+
+<h2><span class="no">15</span>Wenn etwas nicht klappt</h2>
+<table>
+  <tr><th style="width:34%">Symptom</th><th>Ursache und Lösung</th></tr>
+  <tr><td>Portal: „Private Anwendungen können keinen Standard-Autorisierungslink haben“</td><td>Unter <b>Installation</b> den <b>Installations-Link</b> auf <b>Keine</b> stellen (Kapitel 2.4), dann den Bot erneut privat speichern.</td></tr>
+  <tr><td>Container startet ständig neu („Restarting“)</td><td><code>docker compose logs --tail 40 app</code> lesen. Die Meldung nennt den Grund, z. B. „Fehlende Einstellungen“ (Wert in der <code>.env</code> fehlt).</td></tr>
+  <tr><td>„Datenbank nicht erreichbar“ nach Passwortänderung</td><td><code>DB_PASSWORD</code> wurde nach dem ersten Start geändert. Die Datenbank behält das erste Passwort: das alte wieder eintragen, oder bei leeren Daten <code>docker compose down -v</code> und neu starten.</td></tr>
+  <tr><td><code>/healthz</code> zeigt „502 Bad Gateway“</td><td>Der Proxy erreicht die App nicht: Port, IP und Schema <code>http</code> im Proxy-Host prüfen, <code>docker compose ps</code> (läuft <code>app</code>?).</td></tr>
+  <tr><td>Discord meldet „Invalid redirect_uri“</td><td>Die Redirect-Adresse im Portal muss genau <code>https://&lt;DOMAIN&gt;/api/auth/callback/discord</code> lauten und <b>gespeichert</b> sein.</td></tr>
+  <tr><td>Discord meldet „client_id … snowflake“</td><td><code>AUTH_DISCORD_ID</code> fehlt oder ist leer.</td></tr>
+  <tr><td>Portal lehnt die Endpunkt-URL ab</td><td><code>DISCORD_PUBLIC_KEY</code> prüfen (Zeile ohne <code>#</code>?), Seite von außen erreichbar? Nach <code>.env</code>-Änderung <code>docker compose up -d</code>.</td></tr>
+  <tr><td><code>/einrichten</code> erscheint nicht</td><td>Befehle registrieren (Kapitel 8), Bot eingeladen (Kapitel 9)? Discord mit <kbd>Strg</kbd>+<kbd>R</kbd> neu laden, es kann ein paar Minuten dauern.</td></tr>
+  <tr><td>„Die Anwendung reagiert nicht“</td><td>Die Interaktions-Endpunkt-URL fehlt im Portal oder ist falsch (Kapitel 7). <code>docker compose logs app | grep interactions</code> zeigt, ob Anfragen ankommen.</td></tr>
+  <tr><td>„Der Bot darf die Mitgliederliste nicht lesen“</td><td>Im Portal unter <b>Bot</b> den <b>Server Members Intent</b> einschalten und speichern.</td></tr>
+  <tr><td>„Dieser Server ist nicht freigeschaltet“</td><td>Die Server-ID in <code>ONBOARDING_GUILD_IDS</code> eintragen, dann <code>docker compose up -d</code>. Prüfe, dass du beim Einladen den richtigen Server gewählt hast.</td></tr>
+  <tr><td>Anmeldung: „nicht auf der Zugangsliste“</td><td>Die Person hat keine der gewählten Rollen, oder der Abgleich lief noch nicht (<code>/abgleichen</code>). Du selbst kommst über <code>SERVER_ADMIN_DISCORD_ID</code> immer herein.</td></tr>
+  <tr><td>Es öffnet sich kein neuer RSI-Tab</td><td>Der Browser hat das Öffnen blockiert. Pop-ups für die Seite erlauben (Symbol rechts in der Adresszeile) und den Knopf noch einmal klicken.</td></tr>
+  <tr><td>In der App kommt nach dem Lesen keine Vorschau</td><td>Du hast die App-Seite zwischendurch gewechselt oder geschlossen. Beginne mit Schritt 1 des Syncs von vorn und lass die App-Seite offen. Prüfe außerdem, dass du das Lesezeichen von <b>deiner</b> Instanz gezogen hast und kein altes auf eine andere Adresse zeigt.</td></tr>
+  <tr><td>Im Fortschrittskasten steht ein Fehler</td><td>Meist bist du bei RSI nicht angemeldet. Melde dich an, lade die Pledge-Seite neu und klicke das Lesezeichen noch einmal.</td></tr>
+  <tr><td>Katalog leer</td><td><code>docker compose exec app php bin/catalog-sync.php</code> und die Ausgabe lesen (RSI-Server erreichbar?).</td></tr>
+  <tr><td>Schiffsbilder fehlen anfangs</td><td>Normal: Die App lädt sie beim ersten Anzeigen von RSI. Mit <code>bin/warm-images.php</code> vorab laden.</td></tr>
+</table>
+
+</body>
+</html>

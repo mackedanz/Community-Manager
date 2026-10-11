@@ -1,0 +1,83 @@
+@import "tailwindcss";
+@source "../views";
+@source "../public/js";
+
+/* Zusätzlicher Breakpoint für die breiten Kachelseiten (Inhalt bis 1800 px). */
+@theme {
+  --breakpoint-3xl: 112.5rem;
+}
+
+/* Platz für den Rollbalken immer freihalten, damit zentrierter Inhalt zwischen kurzen und langen Seiten nicht springt. */
+#page-scroll {
+  scrollbar-gutter: stable;
+}
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
+}
+
+/* Heller Modus: die zinc-Skala wird gespiegelt (950<->50 usw.), damit alle vorhandenen
+   Klassen wie bg-zinc-900 oder text-zinc-400 ohne Änderung in beiden Modi funktionieren.
+   Die Signalfarben werden abgedunkelt, damit sie auf hellem Grund lesbar bleiben. */
+:root[data-theme="light"] {
+  --background: #fafafa;
+  --foreground: #18181b;
+  color-scheme: light;
+
+  --color-zinc-50: #09090b;
+  --color-zinc-100: #18181b;
+  --color-zinc-200: #27272a;
+  --color-zinc-300: #3f3f46;
+  --color-zinc-400: #52525c;
+  --color-zinc-500: #71717b;
+  --color-zinc-600: #9f9fa9;
+  --color-zinc-700: #d4d4d8;
+  --color-zinc-800: #e4e4e7;
+  --color-zinc-900: #f4f4f5;
+  --color-zinc-950: #fafafa;
+
+  --color-indigo-400: #4f39f6;
+  --color-red-400: #e7000b;
+  --color-green-400: #008236;
+  --color-amber-200: #7b3306;
+  --color-amber-400: #b75000;
+  --color-amber-950: #fffbeb;
+  --color-teal-950: #d5f3f0;
+  --color-cyan-800: #0e8aa6;
+  --color-cyan-200: #0e5f73;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* <details> ohne Standard-Pfeil (Orga-Menü, einklappbare Bereiche) */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+
+/* Einheitlicher, feststehender Hintergrund. Als fixiertes Element statt background-attachment, weil mobile
+   Browser "fixed" oft ignorieren; die Überblendung (dunkel bzw. hell) hält den Text lesbar. */
+:root {
+  --bg-overlay: rgb(10 10 10 / 0.9);
+}
+:root[data-theme="light"] {
+  --bg-overlay: rgb(250 250 250 / 0.6);
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(var(--bg-overlay), var(--bg-overlay)), var(--bg-image, url("/img/background.jpg")) center / cover no-repeat;
+  pointer-events: none;
+}
+body {
+  background: transparent;
+}
+html {
+  background: var(--background);
+}

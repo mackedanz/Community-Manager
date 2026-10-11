@@ -1,0 +1,205 @@
+{
+ "success": 1,
+ "code": "OK",
+ "msg": "OK",
+ "data": [
+  {
+   "id": 1,
+   "name": "Aurora Mk I ES",
+   "type": "Multi-Role",
+   "size": "Small",
+   "focus": "Starter / Pathfinder",
+   "production_status": "flight-ready",
+   "min_crew": 1,
+   "max_crew": 1,
+   "cargocapacity": 3,
+   "length": 19,
+   "beam": 8.75,
+   "height": 4.5,
+   "mass": 24774,
+   "scm_speed": 222,
+   "url": "/pledge/ships/rsi-aurora/Aurora-Mk-I-ES",
+   "manufacturer": {
+    "id": 1,
+    "code": "RSI",
+    "name": "Roberts Space Industries"
+   }
+  },
+  {
+   "id": 99,
+   "name": "Retaliator",
+   "type": "Combat",
+   "size": "Large",
+   "focus": "Modular",
+   "production_status": "flight-ready",
+   "min_crew": 7,
+   "max_crew": 7,
+   "cargocapacity": 102,
+   "length": 70.5,
+   "beam": 44,
+   "height": 13.5,
+   "mass": 317870.29,
+   "scm_speed": 205,
+   "url": "/pledge/ships/aegis-retaliator/Retaliator",
+   "manufacturer": {
+    "id": 12,
+    "code": "AEGS",
+    "name": "Aegis Dynamics"
+   }
+  },
+  {
+   "id": 11,
+   "name": "F7C Hornet Mk I",
+   "type": "Combat",
+   "size": "Small",
+   "focus": "Medium Fighter",
+   "production_status": "flight-ready",
+   "min_crew": 1,
+   "max_crew": 1,
+   "cargocapacity": 2,
+   "length": 28.25,
+   "beam": 25.5,
+   "height": 7.5,
+   "mass": 72032,
+   "scm_speed": 220,
+   "url": "/pledge/ships/anvil-hornet/F7C-Hornet-Mk-I",
+   "manufacturer": {
+    "id": 3,
+    "code": "ANVL",
+    "name": "Anvil Aerospace"
+   }
+  },
+  {
+   "id": 204,
+   "name": "Carrack w/C8X",
+   "type": "exploration",
+   "size": "large",
+   "focus": "Expedition",
+   "production_status": "flight-ready",
+   "min_crew": 4,
+   "max_crew": 6,
+   "cargocapacity": 456,
+   "length": 126.5,
+   "beam": 76.5,
+   "height": 30,
+   "mass": 4397858,
+   "scm_speed": 140,
+   "url": "/pledge/ships/carrack/Carrack-W-C8X",
+   "manufacturer": {
+    "id": 3,
+    "code": "ANVL",
+    "name": "Anvil Aerospace"
+   }
+  },
+  {
+   "id": 28,
+   "name": "Idris-P",
+   "type": "Combat",
+   "size": "Capital",
+   "focus": "Frigate",
+   "production_status": "flight-ready",
+   "min_crew": 28,
+   "max_crew": 28,
+   "cargocapacity": 1374,
+   "length": 243,
+   "beam": 127,
+   "height": 57.5,
+   "mass": 37854373,
+   "scm_speed": 110,
+   "url": "/pledge/ships/aegis-idris/Idris-P",
+   "manufacturer": {
+    "id": 12,
+    "code": "AEGS",
+    "name": "Aegis Dynamics"
+   }
+  },
+  {
+   "id": 201,
+   "name": "MOLE",
+   "type": "Industrial",
+   "size": "Medium",
+   "focus": "Medium Mining",
+   "production_status": "flight-ready",
+   "min_crew": 4,
+   "max_crew": 4,
+   "cargocapacity": 32,
+   "length": 45,
+   "beam": 26,
+   "height": 15,
+   "mass": 852686,
+   "scm_speed": 140,
+   "url": "/pledge/ships/argo-mole/MOLE",
+   "manufacturer": {
+    "id": 73,
+    "code": "ARGO",
+    "name": "Argo Astronautics"
+   }
+  },
+  {
+   "id": 36,
+   "name": "Merchantman",
+   "type": "transport",
+   "size": "large",
+   "focus": "Heavy Freight",
+   "production_status": "in-concept",
+   "min_crew": 4,
+   "max_crew": 8,
+   "cargocapacity": 2880,
+   "length": 160,
+   "beam": 160,
+   "height": 65,
+   "mass": 9635000,
+   "scm_speed": 0,
+   "url": "/pledge/ships/merchantman/Merchantman",
+   "manufacturer": {
+    "id": 21,
+    "code": "BANU",
+    "name": "Banu"
+   }
+  },
+  {
+   "id": 139,
+   "name": "Ursa",
+   "type": "Exploration",
+   "size": null,
+   "focus": "Pathfinder",
+   "production_status": "flight-ready",
+   "min_crew": 2,
+   "max_crew": 2,
+   "cargocapacity": 0,
+   "length": 6,
+   "beam": 8.75,
+   "height": 3.5,
+   "mass": 50356.62999999998,
+   "scm_speed": null,
+   "url": "/pledge/ships/ursa/Ursa",
+   "manufacturer": {
+    "id": 1,
+    "code": "RSI",
+    "name": "Roberts Space Industries"
+   }
+  },
+  {
+   "id": 27,
+   "name": "Idris-M",
+   "type": "Combat",
+   "size": "Capital",
+   "focus": "Frigate",
+   "production_status": "flight-ready",
+   "min_crew": 28,
+   "max_crew": 28,
+   "cargocapacity": 1326,
+   "length": 243,
+   "beam": 127,
+   "height": 57.5,
+   "mass": 37854373,
+   "scm_speed": 110,
+   "url": "/pledge/ships/aegis-idris/Idris-M",
+   "manufacturer": {
+    "id": 12,
+    "code": "AEGS",
+    "name": "Aegis Dynamics"
+   }
+  }
+ ]
+}

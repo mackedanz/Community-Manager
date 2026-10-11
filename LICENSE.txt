@@ -1,0 +1,18 @@
+Community-Hangar
+Copyright (c) 2026 Michael Mackedanz. All rights reserved.
+
+This software is proprietary. It is made available only to persons and
+organisations that the author has explicitly authorised. You may run it on your
+own infrastructure for your own community, free of charge. Redistribution,
+publication, resale, offering it as a paid service to third parties and
+sublicensing are not permitted without the author's written permission.
+
+The software is provided "as is", without warranty of any kind. The binding
+terms are the German-language "Nutzungsbedingungen und Lizenzvereinbarung" in
+LIZENZ.md (also shown in the application under /lizenz). Third-party components
+included in the image keep their own licences.
+
+This is an unofficial Star Citizen fan project. It is not endorsed by or
+affiliated with the Cloud Imperium group of companies. Star Citizen(R), Roberts
+Space Industries(R) and Cloud Imperium(R) are registered trademarks of Cloud
+Imperium Rights LLC / Cloud Imperium Rights Ltd.

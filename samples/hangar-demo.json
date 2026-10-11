@@ -1,0 +1,43 @@
+{
+  "type": "hangarexport",
+  "version": 2,
+  "handle": "DemoPilot",
+  "pledges": [
+    {
+      "pledgeId": "1",
+      "pledgeName": "Standalone Ship - Avenger Titan - LTI",
+      "items": [
+        { "title": "Avenger Titan", "kind": "Ship", "liner": "Aegis Dynamics", "itemCustomName": "" },
+        { "title": "Lifetime Insurance", "kind": "Insurance", "liner": "", "itemCustomName": "" }
+      ],
+      "alsoContains": []
+    },
+    {
+      "pledgeId": "2",
+      "pledgeName": "Standalone Ship - Carrack",
+      "items": [{ "title": "Carrack", "kind": "Ship", "liner": "Anvil Aerospace", "itemCustomName": "" }],
+      "alsoContains": []
+    },
+    {
+      "pledgeId": "3",
+      "pledgeName": "Package - Idris-M",
+      "items": [
+        { "title": "Idris-M", "kind": "Ship", "liner": "Aegis Dynamics", "itemCustomName": "" },
+        { "title": "Some Paint", "kind": "Skin", "liner": "", "itemCustomName": "" }
+      ],
+      "alsoContains": [{ "title": "Lifetime Insurance" }]
+    },
+    {
+      "pledgeId": "4",
+      "pledgeName": "Upgrade - Avenger Titan to Avenger Warlock",
+      "items": [{ "title": "Avenger Warlock", "kind": "Ship", "liner": "", "itemCustomName": "" }],
+      "alsoContains": []
+    },
+    {
+      "pledgeId": "5",
+      "pledgeName": "Standalone Ship - Totally Made Up Ship",
+      "items": [{ "title": "Totally Made Up Ship", "kind": "Ship", "liner": "", "itemCustomName": "" }],
+      "alsoContains": []
+    }
+  ]
+}

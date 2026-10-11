@@ -1,0 +1,84 @@
+# Community-Hangar (PHP + MariaDB) – fertiger Stack für den Betrieb hinter einem Reverse-Proxy
+# (z. B. Nginx Proxy Manager, der HTTPS und das Zertifikat übernimmt).
+#
+# 1. Diese Datei und .env.docker.example herunterladen, .env.docker.example in .env umbenennen
+#    und ausfüllen (Domain, Discord-Zugangsdaten, Datenbank-Passwort).
+# 2. docker compose up -d
+# 3. Im Reverse-Proxy einen Host anlegen: <DOMAIN> -> http://<IP dieses Servers>:8181 (HANGAR_PORT)
+#
+# Datenbank, Migrationen und Schiffskatalog (RSI Ship Matrix) werden automatisch eingerichtet.
+# Updates: docker compose pull && docker compose up -d
+#
+# Alle Einstellungen kommen aus .env (bzw. den Umgebungsvariablen der Portainer-Stack-Oberfläche).
+# Pflichtwerte ohne Eintrag führen zu einer klaren Fehlermeldung beim Start.
+#
+# Ohne eigenen Reverse-Proxy: einen Caddy-Dienst ergänzen, z. B.
+#   caddy:
+#     image: caddy:2-alpine
+#     restart: unless-stopped
+#     command: caddy reverse-proxy --from ${DOMAIN} --to app:80
+#     ports: ["80:80", "443:443"]
+#     volumes: [caddy-data:/data]
+# und unten bei volumes "caddy-data:" ergänzen.
+
+services:
+  app:
+    image: ${HANGAR_IMAGE:-ghcr.io/mackedanz/community-hangar-1:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN fehlt (z. B. hangar.example.de)}
+      AUTH_URL: https://${DOMAIN}
+      AUTH_DISCORD_ID: ${AUTH_DISCORD_ID:?AUTH_DISCORD_ID fehlt}
+      AUTH_DISCORD_SECRET: ${AUTH_DISCORD_SECRET:?AUTH_DISCORD_SECRET fehlt}
+      # Schlüssel zur Verschlüsselung der Discord-Tokens in der Datenbank: einmal erzeugen (openssl rand -base64 32), sichern, nie ändern
+      APP_KEY: ${APP_KEY:?APP_KEY fehlt (erzeugen mit openssl rand -base64 32 und in die .env eintragen)}
+      DB_HOST: db
+      DB_NAME: hangar
+      DB_USER: hangar
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt}
+      # Server-Admin (Discord-ID, mehrere mit Komma); Wechsel: in .env ändern, dann docker compose up -d
+      SERVER_ADMIN_DISCORD_ID: ${SERVER_ADMIN_DISCORD_ID:-}
+      # Onboarding-Bot und Zugangsliste (optional, siehe .env.docker.example)
+      DISCORD_PUBLIC_KEY: ${DISCORD_PUBLIC_KEY:-}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      LOGIN_REQUIRES_ALLOWLIST: ${LOGIN_REQUIRES_ALLOWLIST:-0}
+      # Nur diese Discord-Server dürfen per /einrichten eine Orga anlegen (leer = jeder Server)
+      ONBOARDING_GUILD_IDS: ${ONBOARDING_GUILD_IDS:-}
+      # Links zu Impressum/Datenschutz des Betreibers (optional)
+      LEGAL_IMPRINT_URL: ${LEGAL_IMPRINT_URL:-}
+      LEGAL_PRIVACY_URL: ${LEGAL_PRIVACY_URL:-}
+      # Katalog-Abgleich in Sekunden (Standard: alle 2 Stunden)
+      CATALOG_SYNC_INTERVAL_SECONDS: ${CATALOG_SYNC_INTERVAL_SECONDS:-7200}
+    volumes:
+      - ship-images:/var/www/html/storage/images
+    # Grenzen, damit eine überlastete App nicht den ganzen Server mitzieht
+    mem_limit: 1g
+    pids_limit: 300
+    # Port auf dem Server, an den der Reverse-Proxy weiterleitet (HANGAR_PORT in .env änderbar).
+    # HANGAR_BIND beschränkt, an welche Adresse er gebunden wird (Standard: alle Schnittstellen, siehe .env.docker.example)
+    ports:
+      - "${HANGAR_BIND:-0.0.0.0}:${HANGAR_PORT:-8181}:80"
+
+  db:
+    image: mariadb:11.8
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: hangar
+      MARIADB_USER: hangar
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  db-data:
+  ship-images:

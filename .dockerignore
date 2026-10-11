@@ -1,0 +1,9 @@
+tools/
+vendor/
+node_modules/
+tests/
+storage/images/
+.env
+.phpunit.cache/
+public/css/
+*.ps1

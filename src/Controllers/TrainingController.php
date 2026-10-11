@@ -1,0 +1,78 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Hangar\Controllers;
+
+use Hangar\Auth;
+use Hangar\Http\Flash;
+use Hangar\Http\HttpException;
+use Hangar\Http\Request;
+use Hangar\Http\Response;
+use Hangar\OrgError;
+use Hangar\Training;
+
+/** Ausbildung: Übersicht der sechs Bereiche, Seite je Bereich, Pflege der Ausbildungen (Admins und Ausbilder). */
+final class TrainingController extends Controller
+{
+    public static function index(Request $req, array $p): Response
+    {
+        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        return OrgController::orgPage($org, 'training_index', [
+            'counts' => Training::countsByArea($org['id']),
+        ], 'Ausbildung', 'training');
+    }
+
+    public static function area(Request $req, array $p): Response
+    {
+        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        $area = Training::cleanArea((string) $p['area']) ?? throw HttpException::notFound();
+        $manage = Training::canManage($org);
+        $edit = null;
+        if ($manage && (string) $req->query('edit', '') !== '') {
+            $edit = Training::find($org['id'], (string) $req->query('edit'));
+        }
+        $topics = Training::listByArea($org['id'], $area);
+        return OrgController::orgPage($org, 'training_area', [
+            'area' => $area,
+            'topics' => $topics,
+            'manage' => $manage,
+            'edit' => $edit,
+        ], Training::AREAS[$area][0], 'training');
+    }
+
+    public static function save(Request $req, array $p): Response
+    {
+        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        $area = Training::cleanArea((string) $p['area']) ?? throw HttpException::notFound();
+        $to = '/o/' . $org['slug'] . '/training/' . $area;
+        if (!Training::canManage($org)) {
+            return Flash::error($to, 'Das dürfen nur Admins und Ausbilder.');
+        }
+        $id = (string) $req->input('id', '');
+        try {
+            Training::save($org['id'], [
+                'area' => $area,
+                'topic' => $req->input('topic', ''),
+                'level' => $req->input('level', ''),
+                'title' => $req->input('title', ''),
+                'content' => $req->input('content', ''),
+            ], $id === '' ? null : $id);
+        } catch (OrgError $e) {
+            return Flash::error($to . ($id !== '' ? '?edit=' . rawurlencode($id) : ''), $e->getMessage());
+        }
+        return Flash::ok($to, 'Gespeichert.');
+    }
+
+    public static function delete(Request $req, array $p): Response
+    {
+        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        $area = Training::cleanArea((string) $p['area']) ?? throw HttpException::notFound();
+        $to = '/o/' . $org['slug'] . '/training/' . $area;
+        if (!Training::canManage($org)) {
+            return Flash::error($to, 'Das dürfen nur Admins und Ausbilder.');
+        }
+        Training::delete($org['id'], (string) $req->input('id', ''));
+        return Flash::ok($to, 'Ausbildung gelöscht.');
+    }
+}

@@ -1,0 +1,13 @@
+/tools/
+/vendor/
+/storage/images/
+/storage/*.log
+.env
+/node_modules/
+/.phpunit.cache/
+/public/css/
+
+# Lokale Arbeitsdateien (nie einchecken)
+/Ship-Matrix.xlsx
+/omarax.sql
+~$*.xlsx
