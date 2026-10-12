@@ -266,7 +266,9 @@ final class Community
         foreach ($nickHandles as $n) {
             $nickHandle ??= $n;
         }
-        $cands = array_values(array_unique(array_filter([...$nickHandles, RsiOrg::handleFromName($user['name'] ?? null)])));
+        // Der Kontoname zählt nur, wenn der Nickname keinen Handle ergibt; sonst würde ein gleichnamiger fremder RSI-Account passen.
+        $nickHandles = array_values(array_filter($nickHandles));
+        $cands = array_values(array_unique($nickHandles !== [] ? $nickHandles : array_filter([RsiOrg::handleFromName($user['name'] ?? null)])));
         if ($cands === []) {
             return null;
         }

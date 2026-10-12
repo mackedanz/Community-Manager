@@ -345,6 +345,9 @@ final class RsiOrgTest extends DbTestCase
         $this->assertSame('https://robertsspaceindustries.com/en/citizens/eXpG_McDance', $u['rsiUrl']);
         // nicht in der RSI-Liste, aber der Nickname folgt der Server-Regel (Nickname = Handle): trotzdem verlinkt
         $this->assertSame('https://robertsspaceindustries.com/en/citizens/Ben_Unbekannt', Community::getProfile($stranger, $viewer)['user']['rsiUrl']);
+        // gleichnamiger fremder RSI-Account: der Kontoname darf den Nickname nicht überstimmen
+        $namesake = $mk('Pilot_1', 'Echt_Handle');
+        $this->assertSame('Echt_Handle', Community::getProfile($namesake, $viewer)['user']['rsiHandle']);
         // ohne Nickname wird nichts geraten
         $noNick = $mk('Cem_Handle', null);
         $this->assertNull(Community::getProfile($noNick, $viewer)['user']['rsiUrl']);
