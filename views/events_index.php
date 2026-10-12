@@ -51,7 +51,7 @@ foreach ($timeline as $col) {
                 </div>
                 <div class="min-w-0 flex-1 space-y-0.5 bg-zinc-950/70 px-2 py-1.5">
                   <div class="truncate text-sm font-medium <?= $ev['cancelled'] ? 'line-through' : '' ?>"><?= e($ev['title']) ?></div>
-                  <div class="text-xs text-zinc-400"><?= e(EventTime::formatTime($ev['startsAt'])) ?><?= $ev['endsAt'] ? ' – ' . e(EventTime::formatTime($ev['endsAt'])) : '' ?><?= $dur ? ' · ' . e($dur) : '' ?><?= $ev['cancelled'] ? ' · abgesagt' : '' ?><?= $draft ? ' · Entwurf' : '' ?></div>
+                  <div class="text-xs text-zinc-400"><?= e(EventTime::formatTime($ev['startsAt'])) ?><?= $ev['endsAt'] ? ' – ' . e(EventTime::formatTime($ev['endsAt'])) : '' ?><?= $dur ? ' · ' . e($dur) : '' ?><?= $ev['cancelled'] ? ' · abgesagt' : '' ?><?= $draft ? ' · Entwurf' : '' ?><?= !empty($ev['training']) ? ' · Ausbildung: ' . e($ev['training']) : '' ?></div>
                   <div class="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
                     <span title="Zusagen" class="shrink-0 whitespace-nowrap"><?= (int) $ev['yes'] ?> ✓ · <?= (int) $ev['shipCount'] ?> Schiffe</span>
                     <span class="truncate">von <?= e($ev['by']) ?></span>

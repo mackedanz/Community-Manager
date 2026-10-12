@@ -19,7 +19,7 @@ final class Events
     /** @return array<string,mixed> */
     private static function requireMember(string $userId, string $orgId): array
     {
-        $m = Db::one('SELECT role, can_plan FROM org_memberships WHERE user_id = ? AND org_id = ?', [$userId, $orgId]);
+        $m = Db::one('SELECT role, can_plan, can_instruct FROM org_memberships WHERE user_id = ? AND org_id = ?', [$userId, $orgId]);
         if ($m === null) {
             throw new EventError('Kein Mitglied dieser Orga.');
         }
@@ -120,6 +120,7 @@ final class Events
             'title' => $title,
             'description' => self::text($in['description'] ?? null, 3000),
             'location' => self::text($in['location'] ?? null, 100),
+            'courseId' => isset($in['courseId']) && $in['courseId'] !== '' ? (string) $in['courseId'] : null,
             'startsAt' => $startsAt,
             'endsAt' => $endsAt,
             'ships' => $ships,
@@ -138,6 +139,10 @@ final class Events
 
         if ($eventId !== null && Db::val('SELECT 1 FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]) === null) {
             throw new EventError('Event nicht gefunden.');
+        }
+
+        if ($data['courseId'] !== null && Training::course($orgId, $data['courseId']) === null) {
+            throw new EventError('Die gewählte Ausbildung gibt es in dieser Orga nicht.');
         }
 
         // Zugeordnete Personen müssen Mitglieder dieser Orga sein.
@@ -174,6 +179,7 @@ final class Events
             $fields = [
                 'title' => $data['title'], 'description' => $data['description'], 'location' => $data['location'],
                 'starts_at' => Time::db($data['startsAt']), 'ends_at' => $data['endsAt'] ? Time::db($data['endsAt']) : null,
+                'course_id' => $data['courseId'],
             ];
             $wasPushed = false;
             if ($eventId === null) {
@@ -192,8 +198,8 @@ final class Events
                     }
                 }
                 Db::run(
-                    'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ? WHERE id = ?',
-                    [$fields['title'], $fields['description'], $fields['location'], $fields['starts_at'], $fields['ends_at'], $eventId],
+                    'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ?, course_id = ? WHERE id = ?',
+                    [$fields['title'], $fields['description'], $fields['location'], $fields['starts_at'], $fields['ends_at'], $fields['course_id'], $eventId],
                 );
                 // Entwurf an/aus; ein abgesagtes Event bleibt abgesagt, außer es wird zum Entwurf gemacht.
                 Db::run("UPDATE events SET status = ? WHERE id = ? AND (status <> 'CANCELLED' OR ?)", [$draft ? 'DRAFT' : 'PLANNED', $eventId, $draft ? 1 : 0]);
@@ -256,6 +262,15 @@ final class Events
         if (!in_array($status, Constants::RSVP_STATUSES, true)) {
             throw new EventError('Ungültige Antwort.');
         }
+        if ($status !== 'NO' && $m['role'] !== 'ADMIN' && !$m['can_instruct']) {
+            $courseId = Db::val('SELECT course_id FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]);
+            if ($courseId !== null) {
+                $missing = Training::missingPrerequisites($orgId, $userId, (string) $courseId);
+                if ($missing !== []) {
+                    throw new EventError(self::missingText($missing));
+                }
+            }
+        }
         Db::run(
             'INSERT INTO event_rsvps (event_id, user_id, status) VALUES (?,?,?) ON DUPLICATE KEY UPDATE status = VALUES(status)',
             [$eventId, $userId, $status],
@@ -263,6 +278,13 @@ final class Events
         if ($status !== 'YES') {
             self::releaseSlots($userId, $eventId);
         }
+    }
+
+    /** @param list<array{level:int,title:string}> $missing */
+    public static function missingText(array $missing): string
+    {
+        $list = implode(', ', array_map(static fn (array $m): string => 'Stufe ' . $m['level'] . ' („' . $m['title'] . '“)', $missing));
+        return 'Für diese Ausbildung fehlt dir noch: ' . $list . '. Erst die früheren Stufen bestehen, dann kannst du dich anmelden.';
     }
 
     private static function releaseSlots(string $userId, string $eventId): void
@@ -326,6 +348,7 @@ final class Events
         }
         $rows = Db::all(
             "SELECT e.id, e.title, e.starts_at, e.ends_at, e.status,
+                    (SELECT CONCAT(tc.topic, ' · Stufe ', tc.level) FROM training_courses tc WHERE tc.id = e.course_id) AS training,
                     (SELECT COUNT(*) FROM event_ships s WHERE s.event_id = e.id) AS ship_count,
                     (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'YES') AS yes_count
                FROM events e WHERE e.org_id = ? AND e.starts_at >= ? AND e.starts_at < ?" . (self::canPlanIn($orgId, $viewer) ? '' : " AND e.status <> 'DRAFT'") . " ORDER BY e.starts_at ASC",
@@ -335,6 +358,7 @@ final class Events
             'id' => $e['id'], 'title' => $e['title'], 'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
             'draft' => $e['status'] === 'DRAFT',
             'cancelled' => $e['status'] === 'CANCELLED', 'shipCount' => (int) $e['ship_count'], 'yes' => (int) $e['yes_count'],
+            'training' => $e['training'],
         ], $rows);
     }
 
@@ -350,6 +374,7 @@ final class Events
         $to = $from->modify('+' . $months . ' months');
         $rows = Db::all(
             "SELECT e.id, e.title, e.starts_at, e.ends_at, e.status, COALESCE(om.nick, u.name) AS creator,
+                    (SELECT CONCAT(tc.topic, ' · Stufe ', tc.level) FROM training_courses tc WHERE tc.id = e.course_id) AS training,
                     (SELECT COUNT(*) FROM event_ships s WHERE s.event_id = e.id) AS ship_count,
                     (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'YES') AS yes_count
                FROM events e LEFT JOIN users u ON u.id = e.created_by_id
@@ -362,6 +387,7 @@ final class Events
             'draft' => $e['status'] === 'DRAFT',
             'cancelled' => $e['status'] === 'CANCELLED', 'shipCount' => (int) $e['ship_count'], 'yes' => (int) $e['yes_count'],
             'by' => (string) ($e['creator'] ?? 'Unbekannt'),
+            'training' => $e['training'],
         ], $rows);
     }
 
@@ -425,9 +451,21 @@ final class Events
                 $mine = $r['status'];
             }
         }
+        $course = $e['course_id'] !== null ? Training::course($orgId, (string) $e['course_id']) : null;
+        $missing = [];
+        if ($course !== null) {
+            $exempt = false;
+            foreach ($viewer->orgs as $o) {
+                $exempt = $exempt || ($o['id'] === $orgId && ($o['role'] === 'ADMIN' || !empty($o['canInstruct'])));
+            }
+            $missing = $exempt ? [] : Training::missingPrerequisites($orgId, $viewer->id, $course['id']);
+        }
         return [
             'id' => $e['id'], 'title' => $e['title'], 'description' => $e['description'], 'location' => $e['location'],
             'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
+            'course' => $course,
+            'missing' => $missing,
+            'missingText' => $missing !== [] ? self::missingText($missing) : null,
             'cancelled' => $e['status'] === 'CANCELLED',
             'draft' => $e['status'] === 'DRAFT',
             'discordPush' => (bool) $e['discord_push'],

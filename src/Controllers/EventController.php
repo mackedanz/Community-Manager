@@ -94,6 +94,7 @@ final class EventController extends Controller
         return OrgController::orgPage($org, 'event_form', [
             'heading' => $title, 'eventId' => $eventId, 'initial' => $initial, 'config' => $config,
             'discordBot' => \Hangar\DiscordBot::configured(),
+            'courses' => \Hangar\Training::listAll($org['id']),
         ], $title, 'events');
     }
 
@@ -103,7 +104,7 @@ final class EventController extends Controller
         if (!$org['canPlan']) {
             throw HttpException::notFound();
         }
-        return self::formPage($req, $org, $viewer, 'Neues Event', ['title' => '', 'description' => '', 'location' => '', 'draft' => false, 'discord' => false, 'discordImported' => false, 'startsAt' => '', 'endsAt' => '', 'ships' => []], null);
+        return self::formPage($req, $org, $viewer, 'Neues Event', ['title' => '', 'description' => '', 'location' => '', 'courseId' => '', 'draft' => false, 'discord' => false, 'discordImported' => false, 'startsAt' => '', 'endsAt' => '', 'ships' => []], null);
     }
 
     public static function editForm(Request $req, array $p): Response
@@ -114,7 +115,7 @@ final class EventController extends Controller
         }
         $e = Events::getEvent($org['id'], $viewer, (string) $p['id']) ?? throw HttpException::notFound();
         return self::formPage($req, $org, $viewer, 'Event bearbeiten', [
-            'title' => $e['title'], 'description' => $e['description'] ?? '', 'location' => $e['location'] ?? '', 'draft' => $e['draft'], 'discord' => $e['discordPush'], 'discordImported' => $e['discordOrigin'] === 'IMPORT',
+            'title' => $e['title'], 'description' => $e['description'] ?? '', 'location' => $e['location'] ?? '', 'courseId' => $e['course']['id'] ?? '', 'draft' => $e['draft'], 'discord' => $e['discordPush'], 'discordImported' => $e['discordOrigin'] === 'IMPORT',
             'startsAt' => EventTime::toInput($e['startsAt']), 'endsAt' => $e['endsAt'] ? EventTime::toInput($e['endsAt']) : '',
             'ships' => array_map(fn ($s) => [
                 'catalogItemId' => $s['catalogItemId'], 'customName' => $s['customName'], 'name' => $s['name'], 'task' => $s['task'] ?? '',

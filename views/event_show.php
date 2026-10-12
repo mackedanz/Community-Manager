@@ -36,6 +36,12 @@ foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['user
         </div>
       <?php endif; ?>
     </div>
+    <?php if ($event['course']): $c = $event['course']; ?>
+      <p class="inline-flex flex-wrap items-center gap-2 rounded border border-cyan-700/60 bg-teal-950/50 px-3 py-1 text-sm">
+        <span class="text-cyan-300">Ausbildung</span>
+        <a href="/o/<?= e($org['slug']) ?>/training/<?= e($c['area']) ?>" class="hover:underline"><?= e($c['areaName'] . ' · ' . $c['topic'] . ' · Stufe ' . $c['level'] . ': ' . $c['title']) ?></a>
+      </p>
+    <?php endif; ?>
     <p class="text-sm text-zinc-300"><?= e(EventTime::format($event['startsAt'])) ?><?= $event['endsAt'] ? e(' bis ' . EventTime::format($event['endsAt'])) : '' ?></p>
     <?php if ($org['canPlan'] && $event['discordPush'] && $event['discordOrigin'] !== 'IMPORT'): ?>
       <?php if ($event['discordError']): ?>
@@ -53,12 +59,16 @@ foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['user
 
   <section class="space-y-2">
     <h3 class="font-medium">Deine Antwort</h3>
+    <?php if (!empty($event['missingText'])): ?>
+      <p class="max-w-3xl rounded border border-amber-600/60 bg-amber-900/20 p-3 text-sm text-amber-200"><?= e($event['missingText']) ?></p>
+    <?php endif; ?>
     <div class="flex flex-wrap gap-2">
-      <?php foreach ($labels as $s => $label): ?>
+      <?php foreach ($labels as $s => $label):
+          $blocked = !empty($event['missing']) && $s !== 'NO'; ?>
         <form method="post" action="<?= e($base . '/' . $event['id']) ?>/rsvp">
           <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
           <input type="hidden" name="status" value="<?= $my === $s ? 'NONE' : $s ?>">
-          <button aria-pressed="<?= $my === $s ? 'true' : 'false' ?>" class="rounded border px-3 py-1 text-sm <?= $my === $s ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-zinc-700 hover:bg-zinc-800' ?>"><?= e($label) ?></button>
+          <button aria-pressed="<?= $my === $s ? 'true' : 'false' ?>"<?= $blocked ? ' disabled title="Die früheren Stufen fehlen noch"' : '' ?> class="rounded border px-3 py-1 text-sm <?= $blocked ? 'cursor-not-allowed border-zinc-800 text-zinc-600' : ($my === $s ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-zinc-700 hover:bg-zinc-800') ?>"><?= e($label) ?></button>
         </form>
       <?php endforeach; ?>
     </div>

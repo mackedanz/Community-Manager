@@ -24,6 +24,21 @@ $small = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
         <label class="block space-y-1"><span class="text-sm text-zinc-400">Ende (optional)</span>
           <input type="datetime-local" name="endsAt" value="<?= e($initial['endsAt']) ?>" class="<?= $input ?>"></label>
       </div>
+      <label class="block space-y-1"><span class="text-sm text-zinc-400">Ausbildung (optional): Wer sich anmeldet, braucht die früheren Stufen dieses Themas</span>
+        <select name="courseId" class="<?= $input ?>">
+          <option value="">Keine Ausbildung, normaler Termin</option>
+          <?php
+          $byArea = [];
+          foreach ($courses as $c) { $byArea[$c['area']][] = $c; }
+          foreach (\Hangar\Training::AREAS as $areaKey => [$areaName]):
+              if (empty($byArea[$areaKey])) { continue; } ?>
+            <optgroup label="<?= e($areaName) ?>">
+              <?php foreach ($byArea[$areaKey] as $c): ?>
+                <option value="<?= e($c['id']) ?>"<?= ($initial['courseId'] ?? '') === $c['id'] ? ' selected' : '' ?>><?= e($c['topic'] . ' · Stufe ' . $c['level'] . ': ' . $c['title']) ?></option>
+              <?php endforeach; ?>
+            </optgroup>
+          <?php endforeach; ?>
+        </select></label>
       <label class="block space-y-1"><span class="text-sm text-zinc-400">Treffpunkt / Ort im Spiel (optional)</span>
         <input name="location" value="<?= e($initial['location']) ?>" maxlength="100" class="<?= $input ?>"></label>
       <label class="block space-y-1"><span class="text-sm text-zinc-400">Briefing: Ziele, Ablauf, Hinweise (optional)</span>

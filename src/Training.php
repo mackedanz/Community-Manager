@@ -109,6 +109,49 @@ final class Training
         return $id;
     }
 
+    /**
+     * Alle Ausbildungen der Orga (für die Auswahl im Termin-Formular), nach Bereich, Thema und Stufe.
+     * @return list<array{id:string,area:string,topic:string,level:int,title:string}>
+     */
+    public static function listAll(string $orgId): array
+    {
+        $rows = Db::all('SELECT id, area, topic, level, title FROM training_courses WHERE org_id = ? ORDER BY topic ASC, level ASC', [$orgId]);
+        $order = array_flip(array_keys(self::AREAS));
+        usort($rows, static fn (array $a, array $b): int => ($order[$a['area']] ?? 99) <=> ($order[$b['area']] ?? 99));
+        return array_map(static fn (array $r): array => ['id' => $r['id'], 'area' => $r['area'], 'topic' => $r['topic'], 'level' => (int) $r['level'], 'title' => $r['title']], $rows);
+    }
+
+    /** @return ?array{id:string,area:string,areaName:string,topic:string,level:int,title:string} */
+    public static function course(string $orgId, string $id): ?array
+    {
+        $r = Db::one('SELECT id, area, topic, level, title FROM training_courses WHERE org_id = ? AND id = ?', [$orgId, $id]);
+        if ($r === null) {
+            return null;
+        }
+        return ['id' => $r['id'], 'area' => $r['area'], 'areaName' => self::AREAS[$r['area']][0] ?? $r['area'], 'topic' => $r['topic'], 'level' => (int) $r['level'], 'title' => $r['title']];
+    }
+
+    /**
+     * Stufen desselben Themas unterhalb der gegebenen Ausbildung, die der Nutzer noch nicht bestanden hat (in Reihenfolge).
+     * Leer heißt: Die Voraussetzungen sind erfüllt.
+     * @return list<array{level:int,title:string}>
+     */
+    public static function missingPrerequisites(string $orgId, string $userId, string $courseId): array
+    {
+        $c = Db::one('SELECT area, topic, level FROM training_courses WHERE org_id = ? AND id = ?', [$orgId, $courseId]);
+        if ($c === null) {
+            return [];
+        }
+        $rows = Db::all(
+            'SELECT t.level, t.title FROM training_courses t
+               LEFT JOIN training_completions d ON d.course_id = t.id AND d.user_id = ?
+              WHERE t.org_id = ? AND t.area = ? AND t.topic = ? AND t.level < ? AND d.course_id IS NULL
+              ORDER BY t.level ASC',
+            [$userId, $orgId, $c['area'], $c['topic'], (int) $c['level']],
+        );
+        return array_map(static fn (array $r): array => ['level' => (int) $r['level'], 'title' => $r['title']], $rows);
+    }
+
     public static function delete(string $orgId, string $id): void
     {
         Db::run('DELETE FROM training_courses WHERE org_id = ? AND id = ?', [$orgId, $id]);
