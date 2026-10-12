@@ -121,6 +121,9 @@ final class Events
             'description' => self::text($in['description'] ?? null, 3000),
             'location' => self::text($in['location'] ?? null, 100),
             'courseId' => isset($in['courseId']) && $in['courseId'] !== '' ? (string) $in['courseId'] : null,
+            'departmentId' => isset($in['departmentId']) && $in['departmentId'] !== '' ? (string) $in['departmentId'] : null,
+            // Ohne Abteilung gibt es keine Art; mit Abteilung gilt Training, wenn nichts Gültiges gewählt ist.
+            'departmentKind' => isset($in['departmentId']) && $in['departmentId'] !== '' ? (Departments::cleanKind(isset($in['departmentKind']) ? (string) $in['departmentKind'] : null) ?? 'TRAINING') : null,
             'startsAt' => $startsAt,
             'endsAt' => $endsAt,
             'ships' => $ships,
@@ -143,6 +146,10 @@ final class Events
 
         if ($data['courseId'] !== null && Training::course($orgId, $data['courseId']) === null) {
             throw new EventError('Die gewählte Ausbildung gibt es in dieser Orga nicht.');
+        }
+
+        if ($data['departmentId'] !== null && Departments::find($orgId, $data['departmentId']) === null) {
+            throw new EventError('Die gewählte Abteilung gibt es in dieser Orga nicht.');
         }
 
         // Zugeordnete Personen müssen Mitglieder dieser Orga sein.
@@ -179,7 +186,7 @@ final class Events
             $fields = [
                 'title' => $data['title'], 'description' => $data['description'], 'location' => $data['location'],
                 'starts_at' => Time::db($data['startsAt']), 'ends_at' => $data['endsAt'] ? Time::db($data['endsAt']) : null,
-                'course_id' => $data['courseId'],
+                'course_id' => $data['courseId'], 'department_id' => $data['departmentId'], 'department_kind' => $data['departmentKind'],
             ];
             $wasPushed = false;
             if ($eventId === null) {
@@ -198,8 +205,8 @@ final class Events
                     }
                 }
                 Db::run(
-                    'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ?, course_id = ? WHERE id = ?',
-                    [$fields['title'], $fields['description'], $fields['location'], $fields['starts_at'], $fields['ends_at'], $fields['course_id'], $eventId],
+                    'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ?, course_id = ?, department_id = ?, department_kind = ? WHERE id = ?',
+                    [$fields['title'], $fields['description'], $fields['location'], $fields['starts_at'], $fields['ends_at'], $fields['course_id'], $fields['department_id'], $fields['department_kind'], $eventId],
                 );
                 // Entwurf an/aus; ein abgesagtes Event bleibt abgesagt, außer es wird zum Entwurf gemacht.
                 Db::run("UPDATE events SET status = ? WHERE id = ? AND (status <> 'CANCELLED' OR ?)", [$draft ? 'DRAFT' : 'PLANNED', $eventId, $draft ? 1 : 0]);
@@ -349,6 +356,7 @@ final class Events
         $rows = Db::all(
             "SELECT e.id, e.title, e.starts_at, e.ends_at, e.status,
                     (SELECT CONCAT(tc.topic, ' · Stufe ', tc.level) FROM training_courses tc WHERE tc.id = e.course_id) AS training,
+                    (SELECT d.name FROM departments d WHERE d.id = e.department_id) AS department, e.department_kind,
                     (SELECT COUNT(*) FROM event_ships s WHERE s.event_id = e.id) AS ship_count,
                     (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'YES') AS yes_count
                FROM events e WHERE e.org_id = ? AND e.starts_at >= ? AND e.starts_at < ?" . (self::canPlanIn($orgId, $viewer) ? '' : " AND e.status <> 'DRAFT'") . " ORDER BY e.starts_at ASC",
@@ -359,6 +367,7 @@ final class Events
             'draft' => $e['status'] === 'DRAFT',
             'cancelled' => $e['status'] === 'CANCELLED', 'shipCount' => (int) $e['ship_count'], 'yes' => (int) $e['yes_count'],
             'training' => $e['training'],
+            'department' => $e['department'] === null ? null : (Departments::KINDS[$e['department_kind']] ?? 'Termin') . ': ' . $e['department'],
         ], $rows);
     }
 
@@ -375,6 +384,7 @@ final class Events
         $rows = Db::all(
             "SELECT e.id, e.title, e.starts_at, e.ends_at, e.status, COALESCE(om.nick, u.name) AS creator,
                     (SELECT CONCAT(tc.topic, ' · Stufe ', tc.level) FROM training_courses tc WHERE tc.id = e.course_id) AS training,
+                    (SELECT d.name FROM departments d WHERE d.id = e.department_id) AS department, e.department_kind,
                     (SELECT COUNT(*) FROM event_ships s WHERE s.event_id = e.id) AS ship_count,
                     (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'YES') AS yes_count
                FROM events e LEFT JOIN users u ON u.id = e.created_by_id
@@ -388,6 +398,7 @@ final class Events
             'cancelled' => $e['status'] === 'CANCELLED', 'shipCount' => (int) $e['ship_count'], 'yes' => (int) $e['yes_count'],
             'by' => (string) ($e['creator'] ?? 'Unbekannt'),
             'training' => $e['training'],
+            'department' => $e['department'] === null ? null : (Departments::KINDS[$e['department_kind']] ?? 'Termin') . ': ' . $e['department'],
         ], $rows);
     }
 
@@ -464,6 +475,9 @@ final class Events
             'id' => $e['id'], 'title' => $e['title'], 'description' => $e['description'], 'location' => $e['location'],
             'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
             'course' => $course,
+            'department' => $e['department_id'] !== null ? Departments::summary($orgId, (string) $e['department_id']) : null,
+            'departmentKind' => $e['department_kind'],
+            'departmentKindName' => Departments::KINDS[$e['department_kind']] ?? null,
             'missing' => $missing,
             'missingText' => $missing !== [] ? self::missingText($missing) : null,
             'cancelled' => $e['status'] === 'CANCELLED',

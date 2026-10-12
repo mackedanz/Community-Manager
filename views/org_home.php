@@ -7,6 +7,8 @@
 /** @var int $upcomingCount */
 /** @var int $trainingCount */
 /** @var bool $trainingEnabled */
+/** @var int $departmentCount */
+/** @var bool $departmentsEnabled */
 /** @var DateTimeImmutable $now */
 use Hangar\EventTime;
 
@@ -43,7 +45,11 @@ $tiles = [
         'href' => $trainingEnabled ? $base . '/training' : null, 'disabled' => !$trainingEnabled, 'label' => 'Ausbildung', 'value' => $nf($trainingCount), 'note' => count(\Hangar\Training::AREAS) . ' Bereiche',
         'icon' => '<path d="M2 9.5 12 5l10 4.5-10 4.5Z"/><path d="M6 11.7V16c0 1.4 2.7 2.8 6 2.8s6-1.4 6-2.8v-4.3M22 9.5V15"/>',
     ],
-    ['empty' => true],
+    [
+        // Ohne benannte Abteilungsleiter nicht eingerichtet: Kachel ausgegraut, ohne Link.
+        'href' => $departmentsEnabled ? $base . '/departments' : null, 'disabled' => !$departmentsEnabled, 'label' => 'Abteilungen', 'value' => $nf($departmentCount), 'note' => 'Trainings und Übungen',
+        'icon' => '<rect x="9" y="2.5" width="6" height="5" rx="1"/><rect x="2.5" y="16.5" width="6" height="5" rx="1"/><rect x="15.5" y="16.5" width="6" height="5" rx="1"/><path d="M12 7.5V12M5.5 16.5V12h13v4.5"/>',
+    ],
     ['empty' => true],
 ];
 ?>

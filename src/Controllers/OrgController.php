@@ -77,6 +77,7 @@ final class OrgController extends Controller
             'plannerRoleIds' => Orgs::parseRoleIds($full['planner_role_ids']),
             'recruiterRoleIds' => Orgs::parseRoleIds($full['recruiter_role_ids'] ?? null),
             'instructorRoleIds' => Orgs::parseRoleIds($full['instructor_role_ids'] ?? null),
+            'leadRoleIds' => Orgs::parseRoleIds($full['lead_role_ids'] ?? null),
             'roleLabels' => Orgs::parseRoleLabels($full['role_labels']),
             'maxRoles' => Orgs::MAX_ROLES,
             'allowed' => Db::all('SELECT discord_id, name, avatar_url, fixed FROM org_allowed_members WHERE org_id = ? ORDER BY name ASC', [$org['id']]),
@@ -99,10 +100,12 @@ final class OrgController extends Controller
                 'plannerRoleIds' => $req->post['plannerRoleIds'] ?? [],
                 'recruiterRoleIds' => $req->post['recruiterRoleIds'] ?? [],
                 'instructorRoleIds' => $req->post['instructorRoleIds'] ?? [],
+                'leadRoleIds' => $req->post['leadRoleIds'] ?? [],
                 'roleNames' => self::roleNames($req->post['memberRoleIds'] ?? [], $req->post['memberRoleNames'] ?? [])
                     + self::roleNames($req->post['plannerRoleIds'] ?? [], $req->post['plannerRoleNames'] ?? [])
                     + self::roleNames($req->post['recruiterRoleIds'] ?? [], $req->post['recruiterRoleNames'] ?? [])
-                    + self::roleNames($req->post['instructorRoleIds'] ?? [], $req->post['instructorRoleNames'] ?? []),
+                    + self::roleNames($req->post['instructorRoleIds'] ?? [], $req->post['instructorRoleNames'] ?? [])
+                    + self::roleNames($req->post['leadRoleIds'] ?? [], $req->post['leadRoleNames'] ?? []),
             ]);
         } catch (\Throwable $e) {
             return Flash::error("/o/$slug/settings", self::errorMessage($e));
@@ -268,6 +271,8 @@ final class OrgController extends Controller
             'next' => Events::listUpcoming($org['id'], $viewer, $now, 1)[0] ?? null,
             'trainingCount' => array_sum(\Hangar\Training::countsByArea($org['id'])),
             'trainingEnabled' => Orgs::parseRoleIds(Orgs::find($org['id'])['instructor_role_ids'] ?? null) !== [],
+            'departmentCount' => \Hangar\Departments::count($org['id']),
+            'departmentsEnabled' => \Hangar\Departments::enabled($org['id']),
             'upcomingCount' => count(Events::listUpcoming($org['id'], $viewer, $now, 100)),
             'now' => $now,
         ], 'Übersicht', 'home');

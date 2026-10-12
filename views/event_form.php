@@ -39,6 +39,26 @@ $small = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
             </optgroup>
           <?php endforeach; ?>
         </select></label>
+      <?php if (!empty($departments)): ?>
+        <div class="grid gap-3 sm:grid-cols-[1fr_12rem]">
+          <label class="block space-y-1"><span class="text-sm text-zinc-400">Abteilung (optional): Training oder Übung einer Abteilung</span>
+            <select name="departmentId" class="<?= $input ?>">
+              <option value="">Keine Abteilung</option>
+              <?php foreach ($departments as $d): ?>
+                <option value="<?= e($d['id']) ?>"<?= ($initial['departmentId'] ?? '') === $d['id'] ? ' selected' : '' ?>><?= e($d['name']) ?></option>
+              <?php endforeach; ?>
+            </select></label>
+          <label class="block space-y-1"><span class="text-sm text-zinc-400">Art</span>
+            <select name="departmentKind" class="<?= $input ?>">
+              <?php foreach (\Hangar\Departments::KINDS as $k => $kn): ?>
+                <option value="<?= e($k) ?>"<?= ($initial['departmentKind'] ?? 'TRAINING') === $k ? ' selected' : '' ?>><?= e($kn) ?></option>
+              <?php endforeach; ?>
+            </select></label>
+        </div>
+      <?php else: ?>
+        <input type="hidden" name="departmentId" value="">
+        <input type="hidden" name="departmentKind" value="TRAINING">
+      <?php endif; ?>
       <label class="block space-y-1"><span class="text-sm text-zinc-400">Treffpunkt / Ort im Spiel (optional)</span>
         <input name="location" value="<?= e($initial['location']) ?>" maxlength="100" class="<?= $input ?>"></label>
       <label class="block space-y-1"><span class="text-sm text-zinc-400">Briefing: Ziele, Ablauf, Hinweise (optional)</span>

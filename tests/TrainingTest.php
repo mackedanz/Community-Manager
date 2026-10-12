@@ -108,12 +108,12 @@ final class TrainingTest extends DbTestCase
         $home = $this->call('GET', '/o/exp', $member, $csrf)->body;
         $this->assertStringContainsString('Ausbildung', $home);
         $this->assertStringNotContainsString('href="/o/exp/training"', $home, 'ohne Ausbilder-Rolle kein Link');
-        $this->assertStringContainsString('opacity-5', $home);
+        $this->assertSame(2, substr_count($home, 'opacity-5'), 'Ausbildung und Abteilungen sind ausgegraut');
 
         Db::run('UPDATE organizations SET instructor_role_ids = ? WHERE id = ?', ['role-ins', $this->orgId]);
         $home = $this->call('GET', '/o/exp', $member, $csrf)->body;
         $this->assertStringContainsString('href="/o/exp/training"', $home);
-        $this->assertStringNotContainsString('opacity-5', $home);
+        $this->assertSame(1, substr_count($home, 'opacity-5'), 'nur noch die Abteilungen sind ausgegraut');
     }
 
     public function testMembersSeePagesButOnlyAdminsAndInstructorsMayChange(): void

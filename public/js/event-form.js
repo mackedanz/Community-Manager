@@ -176,7 +176,7 @@
   form.addEventListener("submit", function () {
     var v = function (name) { return form.elements[name].value; };
     form.elements.payload.value = JSON.stringify({
-      title: v("title"), description: v("description"), location: v("location"), courseId: v("courseId"),
+      title: v("title"), description: v("description"), location: v("location"), courseId: v("courseId"), departmentId: v("departmentId"), departmentKind: v("departmentKind"),
       startsAt: v("startsAt"), endsAt: v("endsAt"),
       ships: ships.map(function (s) {
         return {

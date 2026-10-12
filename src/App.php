@@ -16,6 +16,7 @@ use Hangar\Controllers\ImageController;
 use Hangar\Controllers\OrgController;
 use Hangar\Controllers\SettingsController;
 use Hangar\Controllers\SyncController;
+use Hangar\Controllers\DepartmentController;
 use Hangar\Controllers\TrainingController;
 use Hangar\Http\Flash;
 use Hangar\Http\Request;
@@ -88,6 +89,10 @@ final class App
         $r->get('/o/{slug}/hangar', [OrgController::class, 'hangar']);
         $r->get('/o/{slug}/stats', [OrgController::class, 'stats']);
         $r->get('/o/{slug}/settings', [OrgController::class, 'settings']);
+        $r->get('/o/{slug}/departments', [DepartmentController::class, 'index']);
+        $r->post('/o/{slug}/departments/save', [DepartmentController::class, 'save']);
+        $r->post('/o/{slug}/departments/delete', [DepartmentController::class, 'delete']);
+        $r->get('/o/{slug}/departments/{id}', [DepartmentController::class, 'show']);
         $r->get('/o/{slug}/training', [TrainingController::class, 'index']);
         $r->get('/o/{slug}/training/{area}', [TrainingController::class, 'area']);
         $r->post('/o/{slug}/training/{area}/save', [TrainingController::class, 'save']);

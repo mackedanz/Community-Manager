@@ -33,6 +33,10 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
       <p class="text-xs text-zinc-500">
         Ausbilder und Orga-Admins legen die Ausbildungen an, ändern sie und bestätigen Abschlüsse. Ohne Eintrag können es nur Admins.
       </p>
+      <?= View::partial('partials/role_fields', ['values' => $leadRoleIds, 'name' => 'leadRoleIds', 'nameField' => 'leadRoleNames', 'labels' => $roleLabels, 'legend' => 'Rollen-IDs der Abteilungsleiter (pflegen die Abteilungen)']) ?>
+      <p class="text-xs text-zinc-500">
+        Abteilungsleiter und Orga-Admins legen Abteilungen an und ändern sie. Ohne Eintrag ist der Bereich Abteilungen ausgeblendet.
+      </p>
       <?= View::partial('partials/role_help') ?>
       <p class="text-xs text-zinc-500">Nach einer Änderung der Rollen werden alle Mitglieder bei ihrem nächsten Seitenaufruf neu geprüft.</p>
       <button class="rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500">Speichern</button>

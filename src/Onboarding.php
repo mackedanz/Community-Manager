@@ -77,7 +77,7 @@ final class Onboarding
     }
 
     /**
-     * Speichert die gewählten Rollen. $kind: 'use' (darf nutzen), 'plan' (darf Events planen) 'recruit' (sieht die RSI-Zugehörigkeit) oder 'instruct' (pflegt die Ausbildung).
+     * Speichert die gewählten Rollen. $kind: 'use' (darf nutzen), 'plan' (darf Events planen) 'recruit' (sieht die RSI-Zugehörigkeit) 'instruct' (pflegt die Ausbildung) oder 'lead' (pflegt die Abteilungen).
      * @param list<string> $ids @param array<string,string> $names Rollen-ID => Name
      */
     public static function setRoles(string $orgId, string $kind, array $ids, array $names): void
@@ -88,12 +88,13 @@ final class Onboarding
         $planner = $kind === 'plan' ? $clean : $org['planner_role_ids'];
         $recruiter = $kind === 'recruit' ? $clean : ($org['recruiter_role_ids'] ?? null);
         $instructor = $kind === 'instruct' ? $clean : ($org['instructor_role_ids'] ?? null);
+        $lead = $kind === 'lead' ? $clean : ($org['lead_role_ids'] ?? null);
         $labels = Orgs::buildRoleLabels(
-            [...Orgs::parseRoleIds($member), ...Orgs::parseRoleIds($planner), ...Orgs::parseRoleIds($recruiter), ...Orgs::parseRoleIds($instructor)],
+            [...Orgs::parseRoleIds($member), ...Orgs::parseRoleIds($planner), ...Orgs::parseRoleIds($recruiter), ...Orgs::parseRoleIds($instructor), ...Orgs::parseRoleIds($lead)],
             $names + Orgs::parseRoleLabels($org['role_labels']),
         );
-        Db::run('UPDATE organizations SET member_role_ids = ?, planner_role_ids = ?, recruiter_role_ids = ?, instructor_role_ids = ?, role_labels = ? WHERE id = ?', [$member, $planner, $recruiter, $instructor, $labels, $orgId]);
-        if ($org['member_role_ids'] !== $member || $org['planner_role_ids'] !== $planner || ($org['recruiter_role_ids'] ?? null) !== $recruiter || ($org['instructor_role_ids'] ?? null) !== $instructor) {
+        Db::run('UPDATE organizations SET member_role_ids = ?, planner_role_ids = ?, recruiter_role_ids = ?, instructor_role_ids = ?, lead_role_ids = ?, role_labels = ? WHERE id = ?', [$member, $planner, $recruiter, $instructor, $lead, $labels, $orgId]);
+        if ($org['member_role_ids'] !== $member || $org['planner_role_ids'] !== $planner || ($org['recruiter_role_ids'] ?? null) !== $recruiter || ($org['instructor_role_ids'] ?? null) !== $instructor || ($org['lead_role_ids'] ?? null) !== $lead) {
             // Alle bisherigen Mitglieder beim nächsten Seitenaufruf neu prüfen.
             Db::run('UPDATE users SET membership_checked_at = NULL WHERE id IN (SELECT user_id FROM org_memberships WHERE org_id = ?)', [$orgId]);
         }
@@ -122,7 +123,7 @@ final class Onboarding
         if ($use === []) {
             throw new OrgError('Wähle zuerst mindestens eine Rolle, die das Tool nutzen darf.');
         }
-        $wanted = array_values(array_unique([...$use, ...Orgs::parseRoleIds($org['planner_role_ids']), ...Orgs::parseRoleIds($org['recruiter_role_ids'] ?? null), ...Orgs::parseRoleIds($org['instructor_role_ids'] ?? null)]));
+        $wanted = array_values(array_unique([...$use, ...Orgs::parseRoleIds($org['planner_role_ids']), ...Orgs::parseRoleIds($org['recruiter_role_ids'] ?? null), ...Orgs::parseRoleIds($org['instructor_role_ids'] ?? null), ...Orgs::parseRoleIds($org['lead_role_ids'] ?? null)]));
         $guildMembers = DiscordBot::members((string) $org['discord_guild_id']);
         self::refreshNames($orgId, $guildMembers);
         $members = array_values(array_filter(

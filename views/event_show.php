@@ -42,6 +42,12 @@ foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['user
         <a href="/o/<?= e($org['slug']) ?>/training/<?= e($c['area']) ?>" class="hover:underline"><?= e($c['areaName'] . ' · ' . $c['topic'] . ' · Stufe ' . $c['level'] . ': ' . $c['title']) ?></a>
       </p>
     <?php endif; ?>
+    <?php if ($event['department']): $d = $event['department']; ?>
+      <p class="inline-flex flex-wrap items-center gap-2 rounded border border-cyan-700/60 bg-teal-950/50 px-3 py-1 text-sm">
+        <span class="text-cyan-300"><?= e($event['departmentKindName'] ?? 'Termin') ?></span>
+        <a href="/o/<?= e($org['slug']) ?>/departments/<?= e($d['id']) ?>" class="hover:underline"><?= e($d['name']) ?></a>
+      </p>
+    <?php endif; ?>
     <p class="text-sm text-zinc-300"><?= e(EventTime::format($event['startsAt'])) ?><?= $event['endsAt'] ? e(' bis ' . EventTime::format($event['endsAt'])) : '' ?></p>
     <?php if ($org['canPlan'] && $event['discordPush'] && $event['discordOrigin'] !== 'IMPORT'): ?>
       <?php if ($event['discordError']): ?>
