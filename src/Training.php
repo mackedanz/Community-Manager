@@ -182,6 +182,12 @@ final class Training
         Db::run('DELETE FROM training_courses WHERE org_id = ? AND id = ?', [$orgId, $id]);
     }
 
+    /** Entfernt einen Nachweis (auch von einer gelöschten Ausbildung). Die Berechtigung (Admin) prüft der Aufrufer. */
+    public static function removeCompletion(string $orgId, int $completionId): void
+    {
+        Db::run('DELETE FROM training_completions WHERE id = ? AND org_id = ?', [$completionId, $orgId]);
+    }
+
     /** @return array<string,true> IDs der Ausbildungen dieser Orga, die der Nutzer bestanden hat */
     public static function doneIds(string $orgId, string $userId): array
     {
@@ -202,16 +208,17 @@ final class Training
     public static function qualifications(string $orgId, string $userId): array
     {
         $rows = Db::all(
-            'SELECT t.area, t.topic, t.level, t.title, d.completed_at FROM training_completions d
-               JOIN training_courses t ON t.id = d.course_id
-              WHERE d.user_id = ? AND t.org_id = ? ORDER BY t.topic ASC, t.level ASC',
+            'SELECT d.id, COALESCE(t.area, d.area) AS area, COALESCE(t.topic, d.topic) AS topic, COALESCE(t.level, d.level) AS level,
+                    COALESCE(t.title, d.title) AS title, d.completed_at, (d.course_id IS NULL) AS retired
+               FROM training_completions d LEFT JOIN training_courses t ON t.id = d.course_id
+              WHERE d.user_id = ? AND d.org_id = ? ORDER BY topic ASC, level ASC',
             [$userId, $orgId],
         );
         $order = array_flip(array_keys(self::AREAS));
         usort($rows, static fn (array $a, array $b): int => ($order[$a['area']] ?? 99) <=> ($order[$b['area']] ?? 99));
         return array_map(static fn (array $r): array => [
-            'area' => $r['area'], 'areaName' => self::AREAS[$r['area']][0] ?? $r['area'], 'topic' => $r['topic'],
-            'level' => (int) $r['level'], 'title' => $r['title'], 'completedAt' => (string) $r['completed_at'],
+            'id' => (int) $r['id'], 'area' => $r['area'], 'areaName' => self::AREAS[$r['area']][0] ?? $r['area'], 'topic' => $r['topic'],
+            'level' => (int) $r['level'], 'title' => $r['title'], 'completedAt' => (string) $r['completed_at'], 'retired' => (bool) $r['retired'],
         ], $rows);
     }
 
@@ -247,14 +254,16 @@ final class Training
         if ($courseId === null) {
             throw new OrgError('Zu diesem Termin gehört keine Ausbildung.');
         }
+        $c = Db::one('SELECT area, topic, level, title FROM training_courses WHERE org_id = ? AND id = ?', [$orgId, $courseId]) ?? throw new OrgError('Ausbildung nicht gefunden.');
         $passed = array_flip($passed);
-        Db::transaction(static function () use ($orgId, $eventId, $confirmerId, $courseId, $passed): void {
+        Db::transaction(static function () use ($orgId, $eventId, $confirmerId, $courseId, $passed, $c): void {
             foreach (self::participants($orgId, $eventId, (string) $courseId) as $p) {
                 if (isset($passed[$p['userId']])) {
+                    // Orga, Bereich, Thema, Stufe und Titel werden mitgespeichert: der Eintrag überlebt das Löschen der Ausbildung.
                     Db::run(
-                        'INSERT INTO training_completions (user_id, course_id, confirmed_by, completed_at) VALUES (?,?,?,?)
+                        'INSERT INTO training_completions (user_id, course_id, org_id, area, topic, level, title, confirmed_by, completed_at) VALUES (?,?,?,?,?,?,?,?,?)
                          ON DUPLICATE KEY UPDATE user_id = user_id',
-                        [$p['userId'], $courseId, $confirmerId, Time::nowDb()],
+                        [$p['userId'], $courseId, $orgId, $c['area'], $c['topic'], (int) $c['level'], $c['title'], $confirmerId, Time::nowDb()],
                     );
                 } else {
                     Db::run('DELETE FROM training_completions WHERE user_id = ? AND course_id = ?', [$p['userId'], $courseId]);

@@ -77,7 +77,15 @@ $panel = 'rounded border border-cyan-800/60 bg-teal-950/50';
               <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-700/60 bg-zinc-950/50 text-sm font-bold text-cyan-200" title="Stufe <?= (int) $c['level'] ?>"><?= (int) $c['level'] ?></span>
               <div class="min-w-0">
                 <div class="font-medium"><?= e($c['topic']) ?></div>
-                <div class="text-xs text-zinc-400"><?= e($c['areaName'] . ' · ' . $c['title']) ?></div>
+                <div class="text-xs text-zinc-400"><?= e($c['areaName'] . ' · ' . $c['title']) ?><?= !empty($c['retired']) ? ' · wird nicht mehr angeboten' : '' ?></div>
+                <?php if ($q['canRemove']): ?>
+                  <form method="post" action="/o/<?= e($q['orgSlug']) ?>/training/completions/remove" data-confirm="Diesen Nachweis wirklich entfernen?" class="mt-1">
+                    <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                    <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
+                    <input type="hidden" name="user" value="<?= e($u['id']) ?>">
+                    <button class="text-xs text-red-400 hover:underline">Entfernen</button>
+                  </form>
+                <?php endif; ?>
               </div>
             </li>
           <?php endforeach; ?>

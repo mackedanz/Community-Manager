@@ -244,10 +244,14 @@ final class Community
     private static function qualificationsOf(string $userId, array $orgIds, Viewer $viewer): array
     {
         $out = [];
-        foreach (array_values(array_intersect($orgIds, $viewer->orgIds())) as $orgId) {
-            $items = Training::qualifications((string) $orgId, $userId);
+        foreach ($viewer->orgs as $o) {
+            if (!in_array($o['id'], $orgIds, true)) {
+                continue;
+            }
+            $items = Training::qualifications((string) $o['id'], $userId);
             if ($items !== []) {
-                $out[] = ['orgName' => (string) Db::val('SELECT name FROM organizations WHERE id = ?', [$orgId]), 'items' => $items];
+                // Entfernen dürfen nur Admins der Orga.
+                $out[] = ['orgName' => (string) $o['name'], 'orgSlug' => (string) $o['slug'], 'canRemove' => $o['role'] === 'ADMIN', 'items' => $items];
             }
         }
         return $out;

@@ -96,6 +96,7 @@ final class App
         $r->get('/o/{slug}/departments/{id}', [DepartmentController::class, 'show']);
         $r->get('/o/{slug}/training', [TrainingController::class, 'index']);
         $r->get('/o/{slug}/training/{area}', [TrainingController::class, 'area']);
+        $r->post('/o/{slug}/training/completions/remove', [TrainingController::class, 'removeCompletion']);
         $r->post('/o/{slug}/training/{area}/save', [TrainingController::class, 'save']);
         $r->post('/o/{slug}/training/{area}/delete', [TrainingController::class, 'delete']);
 

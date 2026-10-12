@@ -44,7 +44,8 @@ final class TrainingEventsTest extends DbTestCase
 
     private function done(string $user, string $courseId): void
     {
-        Db::insert('training_completions', ['user_id' => $this->u[$user], 'course_id' => $courseId]);
+        $c = Training::find($this->orgId, $courseId);
+        Db::insert('training_completions', ['user_id' => $this->u[$user], 'course_id' => $courseId, 'org_id' => $this->orgId, 'area' => $c['area'], 'topic' => $c['topic'], 'level' => $c['level'], 'title' => $c['title']]);
     }
 
     private function event(?string $courseId, string $title = 'Mining-Kurs'): string
@@ -208,6 +209,27 @@ final class TrainingEventsTest extends DbTestCase
         $this->assertSame('Mining und Salvage', $q[0]['areaName']);
         $this->assertSame([], Training::qualifications($this->otherOrg, $this->u['Pilot']));
         $this->assertSame([], Training::qualifications($this->orgId, $this->u['Admin']));
+    }
+
+    public function testPassedCourseStaysAfterTheCourseIsDeleted(): void
+    {
+        $this->done('Pilot', $this->level1);
+        $id = $this->event($this->level2);
+        Events::setRsvp($this->u['Pilot'], $this->orgId, $id, 'YES');
+        Training::confirm($this->orgId, $id, $this->u['Ausbilder'], [$this->u['Pilot']]);
+
+        Training::delete($this->orgId, $this->level1);
+        Training::delete($this->orgId, $this->level2);
+        $q = Training::qualifications($this->orgId, $this->u['Pilot']);
+        $this->assertSame(['Grundlagen', 'Fortgeschritten'], array_column($q, 'title'), 'Nachweis bleibt');
+        $this->assertSame([true, true], array_column($q, 'retired'));
+        $this->assertSame(2, (int) Db::val('SELECT COUNT(*) FROM training_completions'));
+
+        // Admins können einen Nachweis entfernen, nur in der eigenen Orga.
+        Training::removeCompletion($this->otherOrg, $q[0]['id']);
+        $this->assertSame(2, (int) Db::val('SELECT COUNT(*) FROM training_completions'));
+        Training::removeCompletion($this->orgId, $q[0]['id']);
+        $this->assertSame(['Fortgeschritten'], array_column(Training::qualifications($this->orgId, $this->u['Pilot']), 'title'));
     }
 
     public function testAreaListsUpcomingEventsOfEachCourse(): void

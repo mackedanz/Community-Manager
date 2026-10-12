@@ -75,6 +75,18 @@ final class TrainingController extends Controller
         return Flash::ok($to, 'Gespeichert.');
     }
 
+    /** Admins entfernen den Nachweis einer bestandenen Ausbildung (auch einer inzwischen gelöschten). */
+    public static function removeCompletion(Request $req, array $p): Response
+    {
+        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        $to = '/members/' . rawurlencode((string) $req->input('user', ''));
+        if (($org['role'] ?? '') !== 'ADMIN') {
+            return Flash::error($to, 'Das dürfen nur Admins.');
+        }
+        Training::removeCompletion($org['id'], (int) $req->input('id', '0'));
+        return Flash::ok($to, 'Nachweis entfernt.');
+    }
+
     public static function delete(Request $req, array $p): Response
     {
         [, $org] = self::member($req, $p);
