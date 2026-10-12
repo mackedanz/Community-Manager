@@ -173,8 +173,10 @@ final class Community
         }
         return array_map(function ($u) use ($ships, $ach, $orgsOf, $viewer, $roster, $rsi, $isAdmin) {
             $orgIds = $orgsOf[$u['id']] ?? [];
+            $nickHandle = RsiOrg::handleFromName($u['nick'], (string) $rsi['handle_style']);
+            // Der Kontoname zählt nur, wenn der Nickname keinen Handle ergibt (siehe rsiHandleOf).
             $rsiStatus = $roster === null || !$isAdmin ? null : RsiOrg::status(
-                [$u['rsi_handle'], RsiOrg::handleFromName($u['nick'], (string) $rsi['handle_style']), RsiOrg::handleFromName($u['user_name'])],
+                [$u['rsi_handle'], $nickHandle, $nickHandle === null ? RsiOrg::handleFromName($u['user_name']) : null],
                 $roster,
                 (int) $rsi['rsi_redacted'],
             );
