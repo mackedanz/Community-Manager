@@ -19,11 +19,39 @@ use Hangar\OrgError;
 final class DepartmentsTest extends DbTestCase
 {
     private string $orgId;
+    private string $dir;
+
+    protected function tearDown(): void
+    {
+        foreach (glob($this->dir . '/departments/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($this->dir . '/departments');
+        @rmdir($this->dir);
+        parent::tearDown();
+    }
+
+    private function png(int $w = 1024, int $h = 1024): string
+    {
+        $im = imagecreatetruecolor($w, $h);
+        imagefill($im, 0, 0, (int) imagecolorallocate($im, 30, 120, 200));
+        ob_start();
+        imagepng($im);
+        return (string) ob_get_clean();
+    }
+
+    /** @return list<string> */
+    private function files(): array
+    {
+        return array_map('basename', glob($this->dir . '/departments/*') ?: []);
+    }
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->orgId = new_id();
+        $this->dir = sys_get_temp_dir() . '/hangar-dept-' . bin2hex(random_bytes(4));
+        mkdir($this->dir, 0775, true);
+        \Hangar\Env::set('IMAGE_DIR', $this->dir);        $this->orgId = new_id();
         Db::insert('organizations', ['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'discord_guild_id' => '9', 'created_by_id' => 'x']);
     }
 
@@ -149,6 +177,74 @@ final class DepartmentsTest extends DbTestCase
         Departments::delete($this->orgId, $dept);
         $this->assertNull(Db::val('SELECT department_id FROM events WHERE id = ?', [$e['id']]));
         $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM events WHERE id = ?', [$e['id']]));
+    }
+
+    public function testImageIsShrunkStoredAndCleanedUp(): void
+    {
+        $id = Departments::save($this->orgId, ['name' => 'Marine'], null, $this->png());
+        $url = Departments::find($this->orgId, $id)['image'];
+        $this->assertMatchesRegularExpression('#^/img/dept/dept-[a-f0-9]{16}\.png$#', (string) $url);
+        $path = Departments::imagePath(basename((string) $url));
+        $info = getimagesize((string) $path);
+        $this->assertSame([256, 256, IMAGETYPE_PNG], [$info[0], $info[1], $info[2]]);
+
+        // Ändern ohne neues Bild behält es, ein neues ersetzt es und löscht die alte Datei.
+        Departments::save($this->orgId, ['name' => 'Marine'], $id);
+        $this->assertSame($url, Departments::find($this->orgId, $id)['image']);
+        Departments::save($this->orgId, ['name' => 'Marine'], $id, $this->png(300, 200));
+        $this->assertNotSame($url, Departments::find($this->orgId, $id)['image']);
+        $this->assertCount(1, $this->files());
+
+        // Entfernen löscht die Datei; Löschen der Abteilung ebenso.
+        Departments::save($this->orgId, ['name' => 'Marine'], $id, null, true);
+        $this->assertNull(Departments::find($this->orgId, $id)['image']);
+        $this->assertSame([], $this->files());
+        Departments::save($this->orgId, ['name' => 'Marine'], $id, $this->png());
+        Departments::delete($this->orgId, $id);
+        $this->assertSame([], $this->files());
+    }
+
+    public function testBadImagesAreRejectedAndNothingIsSaved(): void
+    {
+        foreach (['kein Bild' => 'abc', 'zu klein' => $this->png(20, 20), 'zu groß' => $this->png(4100, 100)] as $why => $bytes) {
+            try {
+                Departments::save($this->orgId, ['name' => 'Marine'], null, $bytes);
+                $this->fail("$why wurde akzeptiert");
+            } catch (OrgError) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertSame(0, Departments::count($this->orgId));
+        $this->assertSame([], $this->files());
+    }
+
+    public function testUploadAndDeliveryOfTheImage(): void
+    {
+        $this->enable();
+        [$leader, $lCsrf] = $this->login('MEMBER', true);
+        [$member, $mCsrf] = $this->login('MEMBER');
+        $tmp = tempnam(sys_get_temp_dir(), 'up');
+        file_put_contents($tmp, $this->png());
+        Auth::reset();
+        App::handle(new Request('POST', '/o/exp/departments/save', [], ['_csrf' => $lCsrf, 'name' => 'Marine'], [], [Auth::COOKIE => $leader], '', '0.0.0.0', ['image' => ['error' => UPLOAD_ERR_OK, 'tmp_name' => $tmp]]));
+        @unlink($tmp);
+        $url = (string) Departments::list($this->orgId, new DateTimeImmutable('now', new DateTimeZone('UTC')))[0]['image'];
+        $this->assertNotSame('', $url);
+
+        $res = $this->call('GET', $url, $member, $mCsrf);
+        $this->assertSame(200, $res->status);
+        $this->assertSame('image/png', $res->headers['Content-Type']);
+        $this->assertStringContainsString('<img src="' . $url . '"', $this->call('GET', '/o/exp/departments', $member, $mCsrf)->body);
+
+        // Mitglieder einer anderen Orga und Abgemeldete bekommen das Bild nicht.
+        $other = new_id();
+        Db::insert('organizations', ['id' => $other, 'slug' => 'zz', 'name' => 'Zz', 'discord_guild_id' => '8', 'created_by_id' => 'x']);
+        $u = $this->mkUser(['membership_checked_at' => \Hangar\Time::nowDb(), 'membership_status' => 'OK']);
+        Db::insert('org_memberships', ['user_id' => $u['id'], 'org_id' => $other, 'role' => 'MEMBER', 'can_plan' => 0]);
+        $s = Auth::createSession($u['id']);
+        $this->assertSame(404, $this->call('GET', $url, $s['token'], 'x')->status);
+        $this->assertSame(404, $this->call('GET', '/img/dept/dept-0000000000000000.png', $member, $mCsrf)->status);
+        $this->assertSame(404, $this->call('GET', '/img/dept/..%2Fx.png', $member, $mCsrf)->status);
     }
 
     public function testLeaderRoleIsStoredFromTheBot(): void

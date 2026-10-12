@@ -123,7 +123,7 @@ final class Branding
      * @return array{body:string,ext:string}
      * @throws OrgError
      */
-    private static function process(string $kind, string $bytes): array
+    public static function process(string $kind, string $bytes): array
     {
         if ($bytes === '' || strlen($bytes) > self::MAX_BYTES) {
             throw new OrgError('Das Bild ist größer als 5 MB.');

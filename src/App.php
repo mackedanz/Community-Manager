@@ -51,6 +51,7 @@ final class App
         $r->get('/img/armor/{slug}', [ImageController::class, 'armor']);
         $r->get('/img/info/{key}', [ImageController::class, 'info']);
         $r->get('/brand/{file}', [ImageController::class, 'brand']);
+        $r->get('/img/dept/{file}', [ImageController::class, 'department']);
 
         // Mein Hangar
         $r->get('/hangar', [HangarController::class, 'index']);

@@ -1,6 +1,6 @@
 <?php
 /** @var array{slug:string,name:string,canPlan:bool} $org */
-/** @var array{id:string,name:string,description:string} $dept */
+/** @var array{id:string,name:string,description:string,image:?string} $dept */
 /** @var list<array{id:string,title:string,startsAt:DateTimeImmutable,kind:?string,kindName:string}> $events Kommende Trainings und Übungen */
 /** @var bool $manage Admin oder Abteilungsleiter */
 /** @var string $csrf */
@@ -13,7 +13,10 @@ $base = '/o/' . $org['slug'] . '/departments';
   <div class="space-y-2">
     <a href="<?= e($base) ?>" class="text-sm text-indigo-400 hover:underline">← Abteilungen</a>
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <h1 class="text-2xl font-bold"><?= e($dept['name']) ?></h1>
+      <div class="flex items-center gap-4">
+        <?php if ($dept['image']): ?><img src="<?= e($dept['image']) ?>" alt="" class="h-16 w-16 object-contain"><?php endif; ?>
+        <h1 class="text-2xl font-bold"><?= e($dept['name']) ?></h1>
+      </div>
       <?php if ($manage): ?>
         <div class="flex items-center gap-3 text-sm">
           <a href="<?= e($base . '?edit=' . $dept['id']) ?>#form" class="text-indigo-400 hover:underline">Bearbeiten</a>
