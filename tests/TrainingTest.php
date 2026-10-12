@@ -147,6 +147,27 @@ final class TrainingTest extends DbTestCase
         $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM training_courses'), 'Admins dürfen löschen');
     }
 
+    public function testConfirmationFormPostsCheckedParticipants(): void
+    {
+        [$teacher, $tCsrf] = $this->login('MEMBER', true);
+        [$member, $mCsrf] = $this->login('MEMBER');
+        $memberId = (string) Db::val('SELECT user_id FROM sessions WHERE token_hash = ?', [hash('sha256', $member)]);
+        $course = Training::save($this->orgId, $this->course());
+        $teacherId = (string) Db::val('SELECT user_id FROM sessions WHERE token_hash = ?', [hash('sha256', $teacher)]);
+        Db::run('UPDATE org_memberships SET can_plan = 1 WHERE user_id = ?', [$teacherId]);
+        $ev = \Hangar\Events::save($teacherId, $this->orgId, ['title' => 'Kurs', 'startsAt' => '2030-01-10T20:00', 'courseId' => $course, 'ships' => []]);
+        Db::insert('event_rsvps', ['event_id' => $ev['id'], 'user_id' => $memberId, 'status' => 'YES']);
+
+        $this->call('POST', '/o/exp/events/' . $ev['id'] . '/complete', $member, $mCsrf, ['passed' => [$memberId]]);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM training_completions'), 'Mitglieder dürfen nicht bestätigen');
+
+        $r = $this->call('POST', '/o/exp/events/' . $ev['id'] . '/complete', $teacher, $tCsrf, ['passed' => [$memberId]]);
+        $this->assertSame(303, $r->status);
+        $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM training_completions'));
+        $this->call('POST', '/o/exp/events/' . $ev['id'] . '/complete', $teacher, $tCsrf);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM training_completions'), 'ohne Haken wird zurückgenommen');
+    }
+
     public function testCoursesOfOtherOrgsAreNotTouched(): void
     {
         $other = new_id();

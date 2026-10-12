@@ -210,6 +210,19 @@ final class TrainingEventsTest extends DbTestCase
         $this->assertSame([], Training::qualifications($this->orgId, $this->u['Admin']));
     }
 
+    public function testAreaListsUpcomingEventsOfEachCourse(): void
+    {
+        $id = $this->event($this->level2);
+        $now = new \DateTimeImmutable('2029-12-01', new \DateTimeZone('UTC'));
+        $list = Training::upcomingEventsByCourse($this->orgId, 'mining', $now);
+        $this->assertSame([$this->level2], array_keys($list));
+        $this->assertSame($id, $list[$this->level2][0]['id']);
+        $this->assertSame([], Training::upcomingEventsByCourse($this->orgId, 'space', $now));
+        $this->assertSame([], Training::upcomingEventsByCourse($this->orgId, 'mining', new \DateTimeImmutable('2031-01-01', new \DateTimeZone('UTC'))), 'vergangene nicht');
+        Events::setCancelled($this->u['Planer'], $this->orgId, $id, true);
+        $this->assertSame([], Training::upcomingEventsByCourse($this->orgId, 'mining', $now), 'abgesagte nicht');
+    }
+
     public function testEventCanBeEditedToAnotherCourseOrNone(): void
     {
         $id = $this->event($this->level1);

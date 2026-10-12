@@ -54,6 +54,24 @@ final class Training
         return $out;
     }
 
+    /**
+     * Kommende Termine (nicht abgesagt, keine Entwürfe) zu den Ausbildungen eines Bereichs.
+     * @return array<string,list<array{id:string,title:string,startsAt:\DateTimeImmutable}>> Ausbildung => Termine
+     */
+    public static function upcomingEventsByCourse(string $orgId, string $area, \DateTimeImmutable $now): array
+    {
+        $out = [];
+        foreach (Db::all(
+            "SELECT e.id, e.title, e.starts_at, e.course_id FROM events e JOIN training_courses t ON t.id = e.course_id
+              WHERE e.org_id = ? AND t.area = ? AND e.status = 'PLANNED' AND (e.starts_at >= ? OR e.ends_at >= ?)
+              ORDER BY e.starts_at ASC",
+            [$orgId, $area, Time::db($now), Time::db($now)],
+        ) as $r) {
+            $out[(string) $r['course_id']][] = ['id' => $r['id'], 'title' => $r['title'], 'startsAt' => Time::parse($r['starts_at'])];
+        }
+        return $out;
+    }
+
     /** @return array<string,int> Bereich => Anzahl der Ausbildungen */
     public static function countsByArea(string $orgId): array
     {

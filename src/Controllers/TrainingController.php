@@ -48,6 +48,7 @@ final class TrainingController extends Controller
             'topics' => $topics,
             'manage' => $manage,
             'edit' => $edit,
+            'events' => Training::upcomingEventsByCourse($org['id'], $area, new \DateTimeImmutable('now', new \DateTimeZone('UTC'))),
         ], Training::AREAS[$area][0], 'training');
     }
 

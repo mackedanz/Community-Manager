@@ -168,9 +168,9 @@ final class EventController extends Controller
         if (!Training::canManage($org)) {
             return Flash::error($to, 'Das dürfen nur Admins und Ausbilder.');
         }
-        $passed = $req->input('passed', []);
+        $passed = $req->post['passed'] ?? [];
         try {
-            Training::confirm($org['id'], (string) $p['id'], $viewer->id, is_array($passed) ? array_values(array_map('strval', $passed)) : []);
+            Training::confirm($org['id'], (string) $p['id'], $viewer->id, is_array($passed) ? array_values(array_filter($passed, 'is_string')) : []);
         } catch (OrgError $e) {
             return Flash::error($to, $e->getMessage());
         }

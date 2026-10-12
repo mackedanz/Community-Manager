@@ -4,6 +4,7 @@
 /** @var array<string,list<array<string,mixed>>> $topics Ausbildungen nach Thema, je Thema nach Stufe */
 /** @var bool $manage Admin oder Ausbilder */
 /** @var ?array<string,mixed> $edit Ausbildung, die gerade bearbeitet wird */
+/** @var array<string,list<array<string,mixed>>> $events kommende Termine je Ausbildung */
 /** @var string $csrf */
 use Hangar\Http\View;
 use Hangar\Training;
@@ -51,6 +52,13 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm';
                 </div>
               <?php endif; ?>
             </div>
+            <?php foreach ($events[$c['id']] ?? [] as $ev): ?>
+              <p class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-cyan-700/60 bg-zinc-950/40 px-3 py-2 text-sm">
+                <span class="text-cyan-300">Termin</span>
+                <span><?= e(\Hangar\EventTime::format($ev['startsAt'])) ?> · <?= e($ev['title']) ?></span>
+                <a href="/o/<?= e($org['slug']) ?>/events/<?= e($ev['id']) ?>" class="ml-auto font-medium text-indigo-400 hover:underline"><?= !empty($c['done']) ? 'Zum Termin' : 'Zum Termin und anmelden' ?> →</a>
+              </p>
+            <?php endforeach; ?>
             <?php if ($c['content'] !== ''): ?>
               <div class="mt-3 whitespace-pre-line text-sm text-zinc-300"><?= Training::renderContent($c['content']) ?></div>
             <?php endif; ?>
