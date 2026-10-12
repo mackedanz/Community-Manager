@@ -40,7 +40,8 @@ foreach ($timeline as $col) {
                 $running = !$ev['cancelled'] && $ev['endsAt'] && $ev['startsAt'] <= $nowUtc && $ev['endsAt'] >= $nowUtc;   // läuft gerade
                 $past = $ev['startsAt'] < $nowUtc && (!$ev['endsAt'] || $ev['endsAt'] < $nowUtc);
                 $draft = !empty($ev['draft']);   // Entwurf: nur Planer bekommen ihn überhaupt in der Liste
-                $locked = ($past || $ev['cancelled']) && !$org['canPlan'];   // Vergangenes und Abgesagtes öffnen nur Planer
+                $confirmable = $past && !$ev['cancelled'] && !empty($ev['training']) && \Hangar\Training::canManage($org);   // Ausbilder bestätigen Teilnehmer
+                $locked = ($past || $ev['cancelled']) && !$org['canPlan'] && !$confirmable;   // Vergangenes und Abgesagtes öffnen nur Planer
                 $tag = $locked ? 'div' : 'a';
                 $dayNo = substr(EventTime::dayKey($ev['startsAt']), 8, 2);
                 $wd = $wdFmt->format($ev['startsAt']); ?>

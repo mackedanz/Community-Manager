@@ -20,7 +20,7 @@ final class TrainingTest extends DbTestCase
     {
         parent::setUp();
         $this->orgId = new_id();
-        Db::insert('organizations', ['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'discord_guild_id' => '9', 'created_by_id' => 'x']);
+        Db::insert('organizations', ['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'discord_guild_id' => '9', 'created_by_id' => 'x', 'instructor_role_ids' => 'role-ins']);
     }
 
     /** @return array{0:string,1:string} Sitzungs-Token und CSRF-Token */
@@ -104,9 +104,12 @@ final class TrainingTest extends DbTestCase
 
     public function testHomeTileIsDisabledWithoutInstructorRole(): void
     {
+        Db::run('UPDATE organizations SET instructor_role_ids = NULL WHERE id = ?', [$this->orgId]);
         [$member, $csrf] = $this->login('MEMBER');
         $home = $this->call('GET', '/o/exp', $member, $csrf)->body;
         $this->assertStringContainsString('Ausbildung', $home);
+        $this->assertSame(404, $this->call('GET', '/o/exp/training', $member, $csrf)->status, 'ohne Ausbilder-Rolle auch nicht per Adresse');
+        $this->assertSame(404, $this->call('GET', '/o/exp/training/mining', $member, $csrf)->status);
         $this->assertStringNotContainsString('href="/o/exp/training"', $home, 'ohne Ausbilder-Rolle kein Link');
         $this->assertSame(2, substr_count($home, 'opacity-5'), 'Ausbildung und Abteilungen sind ausgegraut');
 

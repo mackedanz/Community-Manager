@@ -89,6 +89,30 @@ foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['user
     </ul>
   </section>
 
+  <?php if (!empty($event['canConfirm'])): ?>
+    <section class="space-y-3" aria-labelledby="confirm-title">
+      <h3 id="confirm-title" class="font-medium">Ausbildung bestätigen</h3>
+      <?php if (!$event['participants']): ?>
+        <p class="text-sm text-zinc-400">Noch niemand hat mit „Dabei“ zugesagt.</p>
+      <?php else: ?>
+        <form method="post" action="<?= e($base . '/' . $event['id']) ?>/complete" class="max-w-xl space-y-3">
+          <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+          <p class="text-sm text-zinc-400">Hake die Teilnehmer an, die „<?= e($event['course']['topic'] . ' · Stufe ' . $event['course']['level']) ?>“ bestanden haben.</p>
+          <ul class="divide-y divide-cyan-900/40 rounded border border-cyan-800/50 bg-teal-950/40 text-sm">
+            <?php foreach ($event['participants'] as $pt): ?>
+              <li><label class="flex cursor-pointer items-center gap-3 px-3 py-2">
+                <input type="checkbox" name="passed[]" value="<?= e($pt['userId']) ?>"<?= $pt['passed'] ? ' checked' : '' ?>>
+                <span class="flex-1"><?= e($pt['name']) ?></span>
+                <?php if ($pt['passed']): ?><span class="text-xs text-emerald-300">bestanden</span><?php endif; ?>
+              </label></li>
+            <?php endforeach; ?>
+          </ul>
+          <button class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">Speichern</button>
+        </form>
+      <?php endif; ?>
+    </section>
+  <?php endif; ?>
+
   <section class="space-y-3">
     <h3 class="font-medium">Schiffe (<?= count($event['ships']) ?>)</h3>
     <?php if (!$event['ships']): ?>

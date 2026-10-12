@@ -38,6 +38,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm';
               <div class="flex items-center gap-3">
                 <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-700/60 bg-zinc-950/50 text-sm font-bold text-cyan-200" title="Stufe <?= (int) $c['level'] ?>"><?= (int) $c['level'] ?></span>
                 <h3 class="font-semibold"><?= e($c['title']) ?></h3>
+                <?php if (!empty($c['done'])): ?><span class="rounded bg-emerald-900/50 px-2 py-0.5 text-xs text-emerald-300">Bestanden</span><?php endif; ?>
               </div>
               <?php if ($manage): ?>
                 <div class="flex items-center gap-3 text-sm">

@@ -232,7 +232,25 @@ final class Community
                 [$userId],
             ) : null,
             'lastSync' => $showHangar ? self::getLastSync($userId) : null,
+            'qualifications' => self::qualificationsOf($userId, $orgIds, $viewer),
         ];
+    }
+
+    /**
+     * Bestandene Ausbildungen je Orga, in der der Betrachter und das Mitglied zusammen sind (nur nicht leere).
+     * @param list<string> $orgIds Orgas des Mitglieds
+     * @return list<array{orgName:string,items:list<array<string,mixed>>}>
+     */
+    private static function qualificationsOf(string $userId, array $orgIds, Viewer $viewer): array
+    {
+        $out = [];
+        foreach (array_values(array_intersect($orgIds, $viewer->orgIds())) as $orgId) {
+            $items = Training::qualifications((string) $orgId, $userId);
+            if ($items !== []) {
+                $out[] = ['orgName' => (string) Db::val('SELECT name FROM organizations WHERE id = ?', [$orgId]), 'items' => $items];
+            }
+        }
+        return $out;
     }
 
     /** Name wie in der Mitgliederliste: Server-Nickname einer gemeinsamen Orga, sonst der Discord-Kontoname. @param array<string,mixed> $user */

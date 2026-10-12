@@ -15,6 +15,8 @@ use Hangar\Http\Flash;
 use Hangar\Http\HttpException;
 use Hangar\Http\Request;
 use Hangar\Http\Response;
+use Hangar\OrgError;
+use Hangar\Training;
 
 final class EventController extends Controller
 {
@@ -69,7 +71,8 @@ final class EventController extends Controller
         // Vergangene und abgesagte Termine öffnen nur Planer (wie in der Zeitleiste gesperrt).
         $now = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $over = ($event['endsAt'] ?? $event['startsAt']) < $now;
-        if (($over || $event['cancelled']) && !$org['canPlan']) {
+        // Ausbilder und Admins öffnen vergangene Ausbildungstermine, um die Teilnehmer zu bestätigen.
+        if (($over || $event['cancelled']) && !$org['canPlan'] && !($over && !$event['cancelled'] && $event['canConfirm'])) {
             throw HttpException::notFound();
         }
         return OrgController::orgPage($org, 'event_show', [
@@ -155,6 +158,23 @@ final class EventController extends Controller
             return Flash::error($to, $e->getMessage());
         }
         return Response::redirect($to);
+    }
+
+    /** Ausbilder und Admins bestätigen, wer die Ausbildung des Termins bestanden hat. */
+    public static function complete(Request $req, array $p): Response
+    {
+        [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/events/' . $p['id'];
+        if (!Training::canManage($org)) {
+            return Flash::error($to, 'Das dürfen nur Admins und Ausbilder.');
+        }
+        $passed = $req->input('passed', []);
+        try {
+            Training::confirm($org['id'], (string) $p['id'], $viewer->id, is_array($passed) ? array_values(array_map('strval', $passed)) : []);
+        } catch (OrgError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Flash::ok($to, 'Gespeichert.');
     }
 
     public static function slot(Request $req, array $p): Response

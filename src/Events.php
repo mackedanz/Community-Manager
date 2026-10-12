@@ -464,8 +464,8 @@ final class Events
         }
         $course = $e['course_id'] !== null ? Training::course($orgId, (string) $e['course_id']) : null;
         $missing = [];
+        $exempt = false;
         if ($course !== null) {
-            $exempt = false;
             foreach ($viewer->orgs as $o) {
                 $exempt = $exempt || ($o['id'] === $orgId && ($o['role'] === 'ADMIN' || !empty($o['canInstruct'])));
             }
@@ -475,6 +475,8 @@ final class Events
             'id' => $e['id'], 'title' => $e['title'], 'description' => $e['description'], 'location' => $e['location'],
             'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
             'course' => $course,
+            'canConfirm' => $course !== null && $exempt,
+            'participants' => $course !== null && $exempt ? Training::participants($orgId, $eventId, $course['id']) : [],
             'department' => $e['department_id'] !== null ? Departments::summary($orgId, (string) $e['department_id']) : null,
             'departmentKind' => $e['department_kind'],
             'departmentKindName' => Departments::KINDS[$e['department_kind']] ?? null,

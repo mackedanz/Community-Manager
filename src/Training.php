@@ -28,6 +28,12 @@ final class Training
         return $area !== null && isset(self::AREAS[$area]) ? $area : null;
     }
 
+    /** Sind in der Orga Ausbilder benannt? Erst dann ist die Ausbildung eingerichtet. */
+    public static function enabled(string $orgId): bool
+    {
+        return Orgs::parseRoleIds(Orgs::find($orgId)['instructor_role_ids'] ?? null) !== [];
+    }
+
     /** Darf der Betrachter Ausbildungen pflegen? (Admin oder Ausbilder der Orga) @param array<string,mixed> $org Eintrag aus Viewer::org() */
     public static function canManage(array $org): bool
     {
@@ -38,11 +44,12 @@ final class Training
      * Ausbildungen eines Bereichs nach Thema gruppiert, je Thema nach Stufe.
      * @return array<string,list<array<string,mixed>>>
      */
-    public static function listByArea(string $orgId, string $area): array
+    public static function listByArea(string $orgId, string $area, ?string $userId = null): array
     {
         $out = [];
+        $done = $userId !== null ? self::doneIds($orgId, $userId) : [];
         foreach (Db::all('SELECT id, topic, level, title, content FROM training_courses WHERE org_id = ? AND area = ? ORDER BY topic ASC, level ASC', [$orgId, $area]) as $r) {
-            $out[$r['topic']][] = ['id' => $r['id'], 'topic' => $r['topic'], 'level' => (int) $r['level'], 'title' => $r['title'], 'content' => (string) $r['content']];
+            $out[$r['topic']][] = ['id' => $r['id'], 'topic' => $r['topic'], 'level' => (int) $r['level'], 'title' => $r['title'], 'content' => (string) $r['content'], 'done' => isset($done[$r['id']])];
         }
         return $out;
     }
@@ -155,6 +162,87 @@ final class Training
     public static function delete(string $orgId, string $id): void
     {
         Db::run('DELETE FROM training_courses WHERE org_id = ? AND id = ?', [$orgId, $id]);
+    }
+
+    /** @return array<string,true> IDs der Ausbildungen dieser Orga, die der Nutzer bestanden hat */
+    public static function doneIds(string $orgId, string $userId): array
+    {
+        $out = [];
+        foreach (Db::all(
+            'SELECT d.course_id FROM training_completions d JOIN training_courses t ON t.id = d.course_id WHERE d.user_id = ? AND t.org_id = ?',
+            [$userId, $orgId],
+        ) as $r) {
+            $out[(string) $r['course_id']] = true;
+        }
+        return $out;
+    }
+
+    /**
+     * Bestandene Ausbildungen eines Nutzers in einer Orga, nach Bereich, Thema und Stufe.
+     * @return list<array{area:string,areaName:string,topic:string,level:int,title:string,completedAt:string}>
+     */
+    public static function qualifications(string $orgId, string $userId): array
+    {
+        $rows = Db::all(
+            'SELECT t.area, t.topic, t.level, t.title, d.completed_at FROM training_completions d
+               JOIN training_courses t ON t.id = d.course_id
+              WHERE d.user_id = ? AND t.org_id = ? ORDER BY t.topic ASC, t.level ASC',
+            [$userId, $orgId],
+        );
+        $order = array_flip(array_keys(self::AREAS));
+        usort($rows, static fn (array $a, array $b): int => ($order[$a['area']] ?? 99) <=> ($order[$b['area']] ?? 99));
+        return array_map(static fn (array $r): array => [
+            'area' => $r['area'], 'areaName' => self::AREAS[$r['area']][0] ?? $r['area'], 'topic' => $r['topic'],
+            'level' => (int) $r['level'], 'title' => $r['title'], 'completedAt' => (string) $r['completed_at'],
+        ], $rows);
+    }
+
+    /**
+     * Teilnehmer eines Ausbildungstermins (Zusage „Dabei“) mit der Angabe, ob sie die Ausbildung schon bestanden haben.
+     * @return list<array{userId:string,name:string,passed:bool}>
+     */
+    public static function participants(string $orgId, string $eventId, string $courseId): array
+    {
+        $rows = Db::all(
+            "SELECT r.user_id, COALESCE(om.nick, u.name) AS name, (d.user_id IS NOT NULL) AS passed
+               FROM event_rsvps r JOIN users u ON u.id = r.user_id
+               JOIN org_memberships om ON om.user_id = r.user_id AND om.org_id = ?
+               LEFT JOIN training_completions d ON d.user_id = r.user_id AND d.course_id = ?
+              WHERE r.event_id = ? AND r.status = 'YES'",
+            [$orgId, $courseId, $eventId],
+        );
+        $out = array_map(static fn (array $r): array => ['userId' => (string) $r['user_id'], 'name' => (string) ($r['name'] ?? 'Unbekannt'), 'passed' => (bool) $r['passed']], $rows);
+        usort($out, static fn (array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+        return $out;
+    }
+
+    /**
+     * Hält fest, wer die Ausbildung eines Termins bestanden hat. Betroffen sind nur die Teilnehmer mit Zusage; wer in
+     * $passed steht, gilt als bestanden (mit dem Bestätiger), die übrigen Teilnehmer verlieren einen früheren Eintrag.
+     * Die Berechtigung prüft der Aufrufer (canManage).
+     * @param list<string> $passed Nutzer-IDs
+     * @throws OrgError
+     */
+    public static function confirm(string $orgId, string $eventId, string $confirmerId, array $passed): void
+    {
+        $courseId = Db::val('SELECT course_id FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]);
+        if ($courseId === null) {
+            throw new OrgError('Zu diesem Termin gehört keine Ausbildung.');
+        }
+        $passed = array_flip($passed);
+        Db::transaction(static function () use ($orgId, $eventId, $confirmerId, $courseId, $passed): void {
+            foreach (self::participants($orgId, $eventId, (string) $courseId) as $p) {
+                if (isset($passed[$p['userId']])) {
+                    Db::run(
+                        'INSERT INTO training_completions (user_id, course_id, confirmed_by, completed_at) VALUES (?,?,?,?)
+                         ON DUPLICATE KEY UPDATE user_id = user_id',
+                        [$p['userId'], $courseId, $confirmerId, Time::nowDb()],
+                    );
+                } else {
+                    Db::run('DELETE FROM training_completions WHERE user_id = ? AND course_id = ?', [$p['userId'], $courseId]);
+                }
+            }
+        });
     }
 
     /** Text mit Zeilenumbrüchen und anklickbaren Links (http/https), sonst nur Text. */

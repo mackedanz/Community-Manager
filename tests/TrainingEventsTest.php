@@ -169,6 +169,47 @@ final class TrainingEventsTest extends DbTestCase
         $this->assertSame('YES', Db::val('SELECT status FROM event_rsvps WHERE event_id = ?', [$id]));
     }
 
+    public function testInstructorConfirmsParticipantsAndMayRevoke(): void
+    {
+        $id = $this->event($this->level1);
+        Events::setRsvp($this->u['Pilot'], $this->orgId, $id, 'YES');
+        Events::setRsvp($this->u['Planer'], $this->orgId, $id, 'MAYBE');
+
+        $this->assertFalse(Events::getEvent($this->orgId, $this->viewer('Pilot'), $id)['canConfirm']);
+        $this->assertFalse(Events::getEvent($this->orgId, $this->viewer('Planer'), $id)['canConfirm']);
+        $e = Events::getEvent($this->orgId, $this->viewer('Ausbilder'), $id);
+        $this->assertTrue($e['canConfirm']);
+        $this->assertSame(['Pilot'], array_column($e['participants'], 'name'), 'nur Zusagen „Dabei“');
+        $this->assertTrue(Events::getEvent($this->orgId, $this->viewer('Admin'), $id)['canConfirm']);
+
+        Training::confirm($this->orgId, $id, $this->u['Ausbilder'], [$this->u['Pilot'], $this->u['Planer']]);
+        $this->assertSame([], Training::missingPrerequisites($this->orgId, $this->u['Pilot'], $this->level2));
+        $this->assertSame($this->u['Ausbilder'], Db::val('SELECT confirmed_by FROM training_completions WHERE user_id = ?', [$this->u['Pilot']]));
+        $this->assertNull(Db::val('SELECT 1 FROM training_completions WHERE user_id = ?', [$this->u['Planer']]), 'ohne Zusage nicht betroffen');
+        $this->assertTrue(Events::getEvent($this->orgId, $this->viewer('Ausbilder'), $id)['participants'][0]['passed']);
+
+        Training::confirm($this->orgId, $id, $this->u['Ausbilder'], []);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM training_completions'));
+    }
+
+    public function testConfirmNeedsACourseAndQualificationsListThePassedOnes(): void
+    {
+        $plain = $this->event(null, 'Ohne');
+        try {
+            Training::confirm($this->orgId, $plain, $this->u['Ausbilder'], []);
+            $this->fail('Ohne Ausbildung gibt es nichts zu bestätigen');
+        } catch (\Hangar\OrgError) {
+            $this->addToAssertionCount(1);
+        }
+        $this->done('Pilot', $this->level2);
+        $this->done('Pilot', $this->level1);
+        $q = Training::qualifications($this->orgId, $this->u['Pilot']);
+        $this->assertSame([1, 2], array_column($q, 'level'));
+        $this->assertSame('Mining und Salvage', $q[0]['areaName']);
+        $this->assertSame([], Training::qualifications($this->otherOrg, $this->u['Pilot']));
+        $this->assertSame([], Training::qualifications($this->orgId, $this->u['Admin']));
+    }
+
     public function testEventCanBeEditedToAnotherCourseOrNone(): void
     {
         $id = $this->event($this->level1);

@@ -66,6 +66,26 @@ $panel = 'rounded border border-cyan-800/60 bg-teal-950/50';
     <?php endif; ?>
   </section>
 
+  <?php if (!empty($profile['qualifications'])): ?>
+    <section class="space-y-3">
+      <h2 class="text-lg font-semibold">Qualifikationen</h2>
+      <?php foreach ($profile['qualifications'] as $q): ?>
+        <?php if (count($profile['qualifications']) > 1): ?><h3 class="text-sm text-zinc-400"><?= e($q['orgName']) ?></h3><?php endif; ?>
+        <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <?php foreach ($q['items'] as $c): ?>
+            <li class="flex gap-3 rounded border border-cyan-800/60 bg-teal-950/50 p-3">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-700/60 bg-zinc-950/50 text-sm font-bold text-cyan-200" title="Stufe <?= (int) $c['level'] ?>"><?= (int) $c['level'] ?></span>
+              <div class="min-w-0">
+                <div class="font-medium"><?= e($c['topic']) ?></div>
+                <div class="text-xs text-zinc-400"><?= e($c['areaName'] . ' · ' . $c['title']) ?></div>
+              </div>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endforeach; ?>
+    </section>
+  <?php endif; ?>
+
   <section class="space-y-3">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h2 class="text-lg font-semibold">Schiffe<?php if ($shipCount !== null): ?> <span class="text-sm font-normal text-zinc-400">(<?= (int) $shipCount ?>)</span><?php endif; ?></h2>

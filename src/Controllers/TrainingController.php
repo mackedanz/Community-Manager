@@ -15,9 +15,19 @@ use Hangar\Training;
 /** Ausbildung: Übersicht der sechs Bereiche, Seite je Bereich, Pflege der Ausbildungen (Admins und Ausbilder). */
 final class TrainingController extends Controller
 {
+    /** Mitglied der Orga; ohne benannte Ausbilder ist die Ausbildung nicht eingerichtet (404, wie die Kachel ausgegraut). @return array{0:\Hangar\Viewer,1:array<string,mixed>} */
+    private static function member(Request $req, array $p): array
+    {
+        [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        if (!Training::enabled($org['id'])) {
+            throw HttpException::notFound();
+        }
+        return [$viewer, $org];
+    }
+
     public static function index(Request $req, array $p): Response
     {
-        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        [, $org] = self::member($req, $p);
         return OrgController::orgPage($org, 'training_index', [
             'counts' => Training::countsByArea($org['id']),
         ], 'Ausbildung', 'training');
@@ -25,14 +35,14 @@ final class TrainingController extends Controller
 
     public static function area(Request $req, array $p): Response
     {
-        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        [$viewer, $org] = self::member($req, $p);
         $area = Training::cleanArea((string) $p['area']) ?? throw HttpException::notFound();
         $manage = Training::canManage($org);
         $edit = null;
         if ($manage && (string) $req->query('edit', '') !== '') {
             $edit = Training::find($org['id'], (string) $req->query('edit'));
         }
-        $topics = Training::listByArea($org['id'], $area);
+        $topics = Training::listByArea($org['id'], $area, $viewer->id);
         return OrgController::orgPage($org, 'training_area', [
             'area' => $area,
             'topics' => $topics,
@@ -43,7 +53,7 @@ final class TrainingController extends Controller
 
     public static function save(Request $req, array $p): Response
     {
-        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        [, $org] = self::member($req, $p);
         $area = Training::cleanArea((string) $p['area']) ?? throw HttpException::notFound();
         $to = '/o/' . $org['slug'] . '/training/' . $area;
         if (!Training::canManage($org)) {
@@ -66,7 +76,7 @@ final class TrainingController extends Controller
 
     public static function delete(Request $req, array $p): Response
     {
-        [, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        [, $org] = self::member($req, $p);
         $area = Training::cleanArea((string) $p['area']) ?? throw HttpException::notFound();
         $to = '/o/' . $org['slug'] . '/training/' . $area;
         if (!Training::canManage($org)) {

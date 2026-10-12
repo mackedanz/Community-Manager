@@ -107,6 +107,7 @@ final class App
         $r->get('/o/{slug}/events/{id}/edit', [EventController::class, 'editForm']);
         $r->post('/o/{slug}/events/{id}/rsvp', [EventController::class, 'rsvp']);
         $r->post('/o/{slug}/events/{id}/slot', [EventController::class, 'slot']);
+        $r->post('/o/{slug}/events/{id}/complete', [EventController::class, 'complete']);
         $r->post('/o/{slug}/events/{id}/cancel', [EventController::class, 'cancel']);
         $r->post('/o/{slug}/events/{id}/delete', [EventController::class, 'delete']);
 
