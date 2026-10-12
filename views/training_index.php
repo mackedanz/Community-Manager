@@ -1,6 +1,7 @@
 <?php
 /** @var array{slug:string,name:string} $org */
 /** @var array<string,int> $counts Anzahl der Ausbildungen je Bereich */
+/** @var array<string,int> $active Ausbildungen je Bereich mit kommendem Termin */
 use Hangar\Http\View;
 use Hangar\Training;
 
@@ -17,7 +18,15 @@ $base = '/o/' . $org['slug'] . '/training';
         <span class="text-cyan-300 transition group-hover:scale-105"><?= View::partial('partials/training_icon', ['area' => $key, 'size' => '56']) ?></span>
         <span class="text-lg font-semibold tracking-wide"><?= e($name) ?></span>
         <span class="text-xs text-zinc-400"><?= e($about) ?></span>
-        <span class="text-sm text-cyan-100"><?= $n === 0 ? 'Noch keine Ausbildung' : ($n === 1 ? '1 Ausbildung' : $n . ' Ausbildungen') ?></span>
+        <?php $a = min($n, $active[$key] ?? 0); ?>
+        <?php if ($n === 0): ?>
+          <span class="text-sm text-zinc-500">Noch keine Ausbildung</span>
+        <?php elseif ($a === 0): ?>
+          <span class="text-sm text-zinc-400">Gerade keine Ausbildung angeboten</span>
+          <span class="text-xs text-zinc-500"><?= $n === 1 ? '1 Ausbildung' : $n . ' Ausbildungen' ?> insgesamt</span>
+        <?php else: ?>
+          <span class="text-sm font-medium text-emerald-300"><?= $a ?> von <?= $n ?> <?= $n === 1 ? 'Ausbildung' : 'Ausbildungen' ?> aktiv</span>
+        <?php endif; ?>
       </a>
     <?php endforeach; ?>
   </div>

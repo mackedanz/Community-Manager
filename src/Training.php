@@ -72,6 +72,25 @@ final class Training
         return $out;
     }
 
+    /**
+     * Zahl der Ausbildungen je Bereich, zu denen es einen kommenden Termin gibt (nicht abgesagt, kein Entwurf).
+     * @return array<string,int>
+     */
+    public static function activeCountsByArea(string $orgId, \DateTimeImmutable $now): array
+    {
+        $out = array_fill_keys(array_keys(self::AREAS), 0);
+        foreach (Db::all(
+            "SELECT t.area, COUNT(DISTINCT t.id) n FROM training_courses t JOIN events e ON e.course_id = t.id
+              WHERE t.org_id = ? AND e.status = 'PLANNED' AND (e.starts_at >= ? OR e.ends_at >= ?) GROUP BY t.area",
+            [$orgId, Time::db($now), Time::db($now)],
+        ) as $r) {
+            if (isset($out[$r['area']])) {
+                $out[$r['area']] = (int) $r['n'];
+            }
+        }
+        return $out;
+    }
+
     /** @return array<string,int> Bereich => Anzahl der Ausbildungen */
     public static function countsByArea(string $orgId): array
     {

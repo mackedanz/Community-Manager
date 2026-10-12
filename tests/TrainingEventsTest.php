@@ -232,6 +232,21 @@ final class TrainingEventsTest extends DbTestCase
         $this->assertSame(['Fortgeschritten'], array_column(Training::qualifications($this->orgId, $this->u['Pilot']), 'title'));
     }
 
+    public function testActiveCountsOnlyCoursesWithAnUpcomingEvent(): void
+    {
+        $now = new \DateTimeImmutable('2029-12-01', new \DateTimeZone('UTC'));
+        $this->assertSame(0, Training::activeCountsByArea($this->orgId, $now)['mining']);
+        $a = $this->event($this->level1);
+        $this->event($this->level1, 'Zweiter Termin');
+        $this->event($this->level2, 'Stufe 2');
+        $counts = Training::activeCountsByArea($this->orgId, $now);
+        $this->assertSame(2, $counts['mining'], 'zwei Ausbildungen, mehrere Termine zählen nur einmal');
+        $this->assertSame(0, $counts['space']);
+        $this->assertSame(0, Training::activeCountsByArea($this->orgId, new \DateTimeImmutable('2031-01-01', new \DateTimeZone('UTC')))['mining'], 'vergangene nicht');
+        Events::setCancelled($this->u['Planer'], $this->orgId, $a, true);
+        $this->assertSame(2, Training::activeCountsByArea($this->orgId, $now)['mining'], 'der zweite Termin der Stufe 1 bleibt');
+    }
+
     public function testAreaListsUpcomingEventsOfEachCourse(): void
     {
         $id = $this->event($this->level2);
