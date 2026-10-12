@@ -6,6 +6,7 @@
 /** @var ?array<string,mixed> $next */
 /** @var int $upcomingCount */
 /** @var int $trainingCount */
+/** @var bool $trainingEnabled */
 /** @var DateTimeImmutable $now */
 use Hangar\EventTime;
 
@@ -38,7 +39,8 @@ $tiles = [
         'icon' => '<circle cx="9" cy="8" r="3.4"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.4 3.4 0 0 1 0 6.8M18.5 14.3c2 .8 3.5 2.7 3.5 5.7"/>',
     ],
     [
-        'href' => $base . '/training', 'label' => 'Ausbildung', 'value' => $nf($trainingCount), 'note' => count(\Hangar\Training::AREAS) . ' Bereiche',
+        // Ohne gewählte Ausbilder-Rolle ist die Ausbildung in dieser Orga nicht eingerichtet: Kachel ausgegraut, ohne Link.
+        'href' => $trainingEnabled ? $base . '/training' : null, 'disabled' => !$trainingEnabled, 'label' => 'Ausbildung', 'value' => $nf($trainingCount), 'note' => count(\Hangar\Training::AREAS) . ' Bereiche',
         'icon' => '<path d="M2 9.5 12 5l10 4.5-10 4.5Z"/><path d="M6 11.7V16c0 1.4 2.7 2.8 6 2.8s6-1.4 6-2.8v-4.3M22 9.5V15"/>',
     ],
     ['empty' => true],
@@ -54,7 +56,7 @@ $tiles = [
       <?php endif; ?>
       <?php $box = 'group flex min-h-56 flex-col items-center justify-center gap-2 rounded-lg border border-cyan-800/50 bg-teal-950/50 px-4 py-8 text-center transition';
             $open = $t['href'] !== null; ?>
-      <<?= $open ? 'a href="' . e($t['href']) . '"' : 'div' ?> class="<?= $box ?><?= $open ? ' hover:border-cyan-400/80 hover:bg-teal-900/50 hover:shadow-[0_0_28px_-6px_rgba(34,211,238,0.45)]' : '' ?>">
+      <<?= $open ? 'a href="' . e($t['href']) . '"' : 'div' ?><?= !empty($t['disabled']) ? ' aria-disabled="true"' : '' ?> class="<?= $box ?><?= !empty($t['disabled']) ? ' pointer-events-none select-none opacity-5' : '' ?><?= $open ?' hover:border-cyan-400/80 hover:bg-teal-900/50 hover:shadow-[0_0_28px_-6px_rgba(34,211,238,0.45)]' : '' ?>">
         <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-300<?= $open ? ' transition group-hover:scale-105' : ' opacity-70' ?>" aria-hidden="true"><?= $t['icon'] ?></svg>
         <span class="text-lg font-semibold tracking-wide"><?= e($t['label']) ?></span>
         <?php if ($t['value'] !== ''): ?><span class="text-4xl font-bold tabular-nums text-cyan-100"><?= e($t['value']) ?></span><?php endif; ?>

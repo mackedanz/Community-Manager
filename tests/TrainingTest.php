@@ -102,6 +102,20 @@ final class TrainingTest extends DbTestCase
         $this->assertStringContainsString('rel="noopener noreferrer"', $html);
     }
 
+    public function testHomeTileIsDisabledWithoutInstructorRole(): void
+    {
+        [$member, $csrf] = $this->login('MEMBER');
+        $home = $this->call('GET', '/o/exp', $member, $csrf)->body;
+        $this->assertStringContainsString('Ausbildung', $home);
+        $this->assertStringNotContainsString('href="/o/exp/training"', $home, 'ohne Ausbilder-Rolle kein Link');
+        $this->assertStringContainsString('opacity-5', $home);
+
+        Db::run('UPDATE organizations SET instructor_role_ids = ? WHERE id = ?', ['role-ins', $this->orgId]);
+        $home = $this->call('GET', '/o/exp', $member, $csrf)->body;
+        $this->assertStringContainsString('href="/o/exp/training"', $home);
+        $this->assertStringNotContainsString('opacity-5', $home);
+    }
+
     public function testMembersSeePagesButOnlyAdminsAndInstructorsMayChange(): void
     {
         [$member, $mCsrf] = $this->login('MEMBER');

@@ -267,6 +267,7 @@ final class OrgController extends Controller
             'days' => $days,
             'next' => Events::listUpcoming($org['id'], $viewer, $now, 1)[0] ?? null,
             'trainingCount' => array_sum(\Hangar\Training::countsByArea($org['id'])),
+            'trainingEnabled' => Orgs::parseRoleIds(Orgs::find($org['id'])['instructor_role_ids'] ?? null) !== [],
             'upcomingCount' => count(Events::listUpcoming($org['id'], $viewer, $now, 100)),
             'now' => $now,
         ], 'Übersicht', 'home');
