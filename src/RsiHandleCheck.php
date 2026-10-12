@@ -85,7 +85,9 @@ final class RsiHandleCheck
         $recheckBefore = Time::db(Time::now()->modify('-' . self::RECHECK_DAYS . ' days'));
         foreach ($rows as $u) {
             $matched = null;
-            foreach ([$u['rsi_handle'], RsiOrg::handleFromName($u['nick'], $style), RsiOrg::handleFromName($u['name'])] as $cand) {
+            $nickHandle = RsiOrg::handleFromName($u['nick'], $style);
+            // Der Kontoname zählt nur, wenn der Nickname keinen Handle ergibt (siehe Community::rsiHandleOf).
+            foreach ([$u['rsi_handle'], $nickHandle, $nickHandle === null ? RsiOrg::handleFromName($u['name']) : null] as $cand) {
                 if ($cand !== null && $cand !== '') {
                     $claimed[strtolower($cand)] = true;
                     $matched ??= $roster[strtolower($cand)] ?? null;
