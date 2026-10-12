@@ -23,7 +23,7 @@
 
 services:
   app:
-    image: ${HANGAR_IMAGE:-ghcr.io/mackedanz/community-hangar-1:latest}
+    image: ${HANGAR_IMAGE:-ghcr.io/mackedanz/community-manager:latest}
     restart: unless-stopped
     depends_on:
       db:

@@ -111,7 +111,7 @@
   <tr><td>Ein <b>Discord-Konto</b> mit Admin-Rechten</td><td>Auf dem Server, der die Orga werden soll („Administrator“ oder „Server verwalten“).</td></tr>
   <tr><td>Zugriff auf das <b>Discord Developer Portal</b></td><td>Kostenlos, mit demselben Konto: <code>https://discord.com/developers/applications</code></td></tr>
 </table>
-<p>Nichts davon kostet etwas. Das Docker-Image ist öffentlich und kommt von <code>ghcr.io/mackedanz/community-hangar-1</code>.</p>
+<p>Nichts davon kostet etwas. Das Docker-Image ist öffentlich und kommt von <code>ghcr.io/mackedanz/community-manager</code>.</p>
 
 <div class="note"><b>Deutsches oder englisches Portal.</b> Das Developer Portal ist je nach Spracheinstellung deutsch oder englisch.
 Die Namen in diesem Heft sind deutsch, die englischen stehen daneben:
@@ -210,11 +210,11 @@ Sonst meldet das Portal beim Speichern des privaten Bots: <i>„Private Anwendun
   <li><code>cd ~/community-hangar</code> wechselt in diesen Ordner. Alle weiteren Befehle laufen dort.</li>
 </ul>
 <h3>Befehl 2: Docker-Compose-Datei herunterladen</h3>
-<pre class="file">curl -O https://raw.githubusercontent.com/mackedanz/community-hangar-1/main/docker-compose.yml</pre>
+<pre class="file">curl -O https://raw.githubusercontent.com/mackedanz/Community-Manager/main/docker-compose.yml</pre>
 <p><code>curl</code> lädt eine Datei aus dem Internet, <code>-O</code> speichert sie unter ihrem Namen. Die Datei beschreibt, welche Container Docker startet (die App und die Datenbank) und welche Daten sie behalten.
 Fehlt <code>curl</code> („command not found“), installiere es mit <code>sudo apt install curl</code>.</p>
 <h3>Befehl 3: Vorlage für die Einstellungen herunterladen</h3>
-<pre class="file">curl -o .env https://raw.githubusercontent.com/mackedanz/community-hangar-1/main/.env.docker.example</pre>
+<pre class="file">curl -o .env https://raw.githubusercontent.com/mackedanz/Community-Manager/main/.env.docker.example</pre>
 <p><code>-o .env</code> (kleines o) speichert die Vorlage unter dem Namen <code>.env</code>. Diese Datei enthält später deine Einstellungen und Geheimnisse. Sie beginnt mit einem Punkt und ist deshalb
 unsichtbar; <code>ls -la</code> zeigt sie.</p>
 <figure><img src="bilder/s41.jpg" alt="So sollte es aussehen: Die beiden Fortschrittstabellen von curl sind normal. Am Ende stehen .env und docker-compose.yml im Ordner."><figcaption>So sollte es aussehen: Die beiden Fortschrittstabellen von curl sind normal. Am Ende stehen .env und docker-compose.yml im Ordner.</figcaption></figure>
