@@ -125,6 +125,9 @@ final class Branding
      */
     public static function process(string $kind, string $bytes): array
     {
+        if (!function_exists('imagecreatefromstring')) {
+            throw new OrgError('Auf diesem Server fehlt die PHP-Erweiterung GD, Bilder lassen sich nicht verarbeiten.');
+        }
         if ($bytes === '' || strlen($bytes) > self::MAX_BYTES) {
             throw new OrgError('Das Bild ist größer als 5 MB.');
         }

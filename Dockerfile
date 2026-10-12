@@ -21,9 +21,11 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 FROM php:8.3-apache
 LABEL org.opencontainers.image.licenses="LicenseRef-Proprietary" \
       org.opencontainers.image.description="Community-Hangar (Self-Hosted); Nutzungsbedingungen siehe LIZENZ.md"
+# gd: Bilder prüfen und verkleinern (Logo, Hintergrund, Abteilungsbilder; PNG, JPEG, WebP)
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libicu-dev \
- && docker-php-ext-install -j"$(nproc)" intl pdo_mysql opcache \
+ && apt-get install -y --no-install-recommends libicu-dev libpng-dev libjpeg-dev libwebp-dev \
+ && docker-php-ext-configure gd --with-jpeg --with-webp \
+ && docker-php-ext-install -j"$(nproc)" intl pdo_mysql opcache gd \
  && rm -rf /var/lib/apt/lists/* \
  && a2enmod headers
 
