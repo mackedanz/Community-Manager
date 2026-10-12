@@ -74,9 +74,42 @@
   });
 
   // Rückfrage vor dem Absenden: <form data-confirm="Wirklich …?">
+  // Eigenes Fenster statt window.confirm, denn Browser können Dialoge der Seite unterdrücken (dann käme nie eine Antwort).
   document.addEventListener("submit", function (e) {
-    var msg = e.target.getAttribute && e.target.getAttribute("data-confirm");
-    if (msg && !window.confirm(msg)) e.preventDefault();
+    var form = e.target;
+    var msg = form.getAttribute && form.getAttribute("data-confirm");
+    if (!msg) return;
+    e.preventDefault();
+    if (typeof HTMLDialogElement !== "function") {
+      if (window.confirm(msg)) form.submit();
+      return;
+    }
+    var dlg = document.createElement("dialog");
+    dlg.className = "m-auto max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-6 text-zinc-100 shadow-xl backdrop:bg-black/60";
+    var text = document.createElement("p");
+    text.className = "mb-5 text-sm";
+    text.textContent = msg;
+    var row = document.createElement("div");
+    row.className = "flex justify-end gap-3";
+    var cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "rounded border border-zinc-600 px-4 py-2 text-sm hover:bg-zinc-800";
+    cancel.textContent = "Abbrechen";
+    var ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "rounded bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-600";
+    ok.textContent = "Ja, fortfahren";
+    row.appendChild(cancel);
+    row.appendChild(ok);
+    dlg.appendChild(text);
+    dlg.appendChild(row);
+    document.body.appendChild(dlg);
+    var close = function () { dlg.close(); dlg.remove(); };
+    cancel.addEventListener("click", close);
+    dlg.addEventListener("cancel", function () { dlg.remove(); });
+    ok.addEventListener("click", function () { close(); form.submit(); });
+    dlg.showModal();
+    cancel.focus();
   });
 
   // Filterleisten (<form data-autofilter>): Auswahlen wirken sofort, Texteingaben nach kurzer Pause.
