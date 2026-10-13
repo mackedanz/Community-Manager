@@ -12,6 +12,17 @@ const e = {
 };
 const at = (iso) => Date.parse(iso);
 
+test('Ankündigung: Schiffe mit Plätzen und Hinweis auf den Community-Manager', () => {
+  const withShips = { ...e, ships: [{ name: 'Constellation Phoenix', task: 'Lazarett', slots: [{ label: 'Pilot', holder: 'Anna' }, { label: 'Copilot', holder: null }] }] };
+  const f = announceView(org, withShips, 'https://cm.example', at('2026-10-10T12:00:00Z')).embeds[0].fields.find((x) => x.name === 'Schiffe (1)');
+  assert.match(f.value, /\*\*Constellation Phoenix\*\* \(Lazarett\) 1\/2 belegt – Pilot: Anna, Copilot: offen/);
+  assert.match(f.value, /wählst du im Community-Manager/);
+  assert.ok(f.value.length <= 1024);
+  // ohne Schiffe kein Feld
+  assert.ok(!announceView(org, e, 'https://cm.example', at('2026-10-10T12:00:00Z')).embeds[0].fields.some((x) => x.name.startsWith('Schiffe')));
+  assert.notEqual(fingerprint(announceView(org, e, 'https://cm.example')), fingerprint(announceView(org, withShips, 'https://cm.example')));
+});
+
 test('vorbei: Ende, sonst sechs Stunden nach Beginn', () => {
   assert.equal(isPast(e, at('2026-10-14T23:59:00Z')), false);
   assert.equal(isPast(e, at('2026-10-15T00:01:00Z')), true);

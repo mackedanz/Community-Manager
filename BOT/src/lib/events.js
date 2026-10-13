@@ -56,6 +56,25 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
        LEFT JOIN org_memberships om ON om.user_id = r.user_id AND om.org_id = ? WHERE r.event_id = ?`,
     [orgId, eventId],
   );
+  // Schiffe mit ihren Plätzen (wie in der Web-App; Plätze einnehmen geht nur dort)
+  const slots = await all(
+    db,
+    `SELECT s.id AS ship_id, s.task, COALESCE(c.name, s.custom_name, 'Unbekanntes Schiff') AS ship_name, x.label,
+            COALESCE(om.nick, u.name) AS holder
+       FROM event_ships s
+       LEFT JOIN catalog_items c ON c.id = s.catalog_item_id
+       LEFT JOIN event_slots x ON x.event_ship_id = s.id
+       LEFT JOIN users u ON u.id = x.user_id
+       LEFT JOIN org_memberships om ON om.user_id = x.user_id AND om.org_id = ?
+      WHERE s.event_id = ? ORDER BY s.sort ASC, s.id ASC, x.sort ASC, x.id ASC`,
+    [orgId, eventId],
+  );
+  const ships = [];
+  for (const r of slots) {
+    let ship = ships.find((s) => s.id === r.ship_id);
+    if (!ship) ships.push(ship = { id: r.ship_id, name: r.ship_name, task: r.task, slots: [] });
+    if (r.label !== null) ship.slots.push({ label: r.label, holder: r.holder });
+  }
   rsvps.sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? ''), 'de', { sensitivity: 'base' }));
   return {
     id: e.id,
@@ -67,6 +86,7 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
     status: e.status,
     course: course === null ? null : { ...course, level: Number(course.level), areaName: AREAS[course.area] ?? course.area },
     department: department === null ? null : `${DEPARTMENT_KINDS[e.department_kind] ?? 'Termin'}: ${department}`,
+    ships: ships.map(({ name, task, slots: list }) => ({ name, task, slots: list.map((s) => ({ label: s.label, holder: s.holder ?? null })) })),
     rsvps: rsvps.map((r) => ({ userId: r.user_id, status: r.status, name: r.name ?? 'Unbekannt' })),
   };
 }

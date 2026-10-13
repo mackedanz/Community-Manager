@@ -38,6 +38,8 @@ export function eventEmbed(org, e, appUrl, { myStatus, past = false } = {}) {
   if (e.location) fields.push({ name: 'Wo', value: cut(e.location, 1024) });
   if (e.course) fields.push({ name: 'Ausbildung', value: `${e.course.areaName} · ${e.course.topic} · Stufe ${e.course.level} („${e.course.title}“)` });
   if (e.department) fields.push({ name: 'Abteilung', value: e.department });
+  const ships = shipsField(e.ships ?? []);
+  if (ships) fields.push(ships);
   fields.push(field(RSVP_LABELS.YES, names('YES')), field(RSVP_LABELS.MAYBE, names('MAYBE')), field(RSVP_LABELS.NO, names('NO')));
   if (myStatus !== undefined) fields.push({ name: 'Deine Antwort', value: myStatus ? RSVP_LABELS[myStatus] : 'noch keine' });
   const cancelled = e.status === 'CANCELLED';
@@ -49,6 +51,19 @@ export function eventEmbed(org, e, appUrl, { myStatus, past = false } = {}) {
     color: cancelled || past ? 0x71717a : 0x0ea5e9,
     fields,
   };
+}
+
+/** Schiffe mit besetzten und offenen Plätzen; einen Platz wählt man nur im Community-Manager (Hinweis im Feld). */
+export function shipsField(ships) {
+  if (ships.length === 0) return null;
+  const lines = ships.slice(0, 8).map((s) => {
+    const taken = s.slots.filter((x) => x.holder).length;
+    const places = s.slots.length === 0 ? '' : ' – ' + s.slots.map((x) => `${x.label}: ${x.holder ?? 'offen'}`).join(', ');
+    return `**${s.name}**${s.task ? ` (${s.task})` : ''}${s.slots.length ? ` ${taken}/${s.slots.length} belegt` : ''}${places}`;
+  });
+  if (ships.length > 8) lines.push(`… und ${ships.length - 8} weitere`);
+  const hint = '_Einen Platz auf einem Schiff wählst du im Community-Manager (Knopf „Im Community-Manager öffnen“)._';
+  return { name: `Schiffe (${ships.length})`, value: cut(lines.join('\n'), 1024 - hint.length - 2) + '\n' + hint };
 }
 
 export function eventUrl(org, e, appUrl) {

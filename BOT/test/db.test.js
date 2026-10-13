@@ -171,8 +171,11 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     const slotId = newId();
     await run(pool, 'INSERT INTO event_ships (id, event_id, custom_name) VALUES (?,?,?)', [shipId, kurs, 'Prospector']);
     await run(pool, 'INSERT INTO event_slots (id, event_ship_id, label, user_id) VALUES (?,?,?,?)', [slotId, shipId, 'Pilot', userId]);
+    await run(pool, 'UPDATE event_ships SET task = ? WHERE id = ?', ['Erz abbauen', shipId]);
+    assert.deepEqual((await eventDetail(pool, org.id, kurs)).ships, [{ name: 'Prospector', task: 'Erz abbauen', slots: [{ label: 'Pilot', holder: 'Anna' }] }]);
     await setRsvp(pool, org.id, userId, kurs, 'MAYBE', member);
     assert.equal(await val(pool, 'SELECT user_id FROM event_slots WHERE id = ?', [slotId]), null);
+    assert.deepEqual((await eventDetail(pool, org.id, kurs)).ships[0].slots, [{ label: 'Pilot', holder: null }]);
 
     const detail = await eventDetail(pool, org.id, kurs);
     assert.deepEqual(detail.rsvps, [{ userId, status: 'MAYBE', name: 'Anna' }]);
