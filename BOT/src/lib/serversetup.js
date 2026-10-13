@@ -38,17 +38,20 @@ export const ROLE_DEFS = [
   { key: 'visitor', name: 'Besucher', kind: null },
 ];
 
-/** Wer eine Kategorie sieht: alle, nur Mitglieder (und Moderatoren, Planer, Ausbilder), nur Moderatoren oder nur Admins. */
-export const VISIBILITY_LABELS = { public: 'alle', members: 'nur Mitglieder', mods: 'nur Moderatoren', admins: 'nur Admins' };
+/**
+ * Wer eine Kategorie sieht: public = alle (auch wer die Regeln noch nicht bestätigt hat), visitors = Besucher (Regeln bestätigt) und
+ * Mitglieder, members = nur Mitglieder (alle Rollen mit Zugang zum Tool und die Moderatoren), mods = nur Moderatoren, admins = nur Admins.
+ */
+export const VISIBILITY_LABELS = { public: 'alle', visitors: 'Besucher und Mitglieder', members: 'nur Mitglieder', mods: 'nur Moderatoren', admins: 'nur Admins' };
 
 export const CATEGORY_DEFS = [
   { key: 'entrance', name: 'Eingangshalle', visibility: 'public' },
   { key: 'intern', name: 'Intern', visibility: 'members' },
   { key: 'events', name: 'Events', visibility: 'members' },
-  { key: 'info', name: 'Star Citizen Info', visibility: 'public' },
-  { key: 'open', name: 'Öffentlich', visibility: 'public' },
-  { key: 'voice', name: 'Öffentliche Sprachkanäle', visibility: 'public' },
-  { key: 'gaming', name: 'Gaming Area', visibility: 'public' },
+  { key: 'info', name: 'Star Citizen Info', visibility: 'visitors' },
+  { key: 'open', name: 'Öffentlich', visibility: 'visitors' },
+  { key: 'voice', name: 'Öffentliche Sprachkanäle', visibility: 'visitors' },
+  { key: 'gaming', name: 'Gaming Area', visibility: 'visitors' },
   { key: 'departments', name: 'Abteilungen', visibility: 'members' },
   { key: 'admin', name: 'Administrative', visibility: 'admins' },
 ];
@@ -152,6 +155,9 @@ export function planText(plan) {
     lines.push(`${MARK[entry?.action ?? 'configured']} **${cat.name}** (${VISIBILITY_LABELS[cat.visibility]})${list.length ? `: ${list.join(' · ')}` : ' (leer)'}`);
   }
   lines.push('', '✅ vorhanden, bleibt unverändert · 🔗 vorhandenes wird übernommen · ➕ wird neu angelegt');
+  if (plan.categories.some((k) => k.visibility === 'visitors' && k.action === 'create')) {
+    lines.push('Wer neu auf den Server kommt, sieht nur die Eingangshalle. Mit „Bestätigen“ in den Regeln gibt es die Rolle „Besucher“ und damit die öffentlichen Bereiche.');
+  }
   if (plan.postRules) lines.push('Im neuen Regeln-Kanal erscheint ein Standard-Regeltext; „Bestätigen“ vergibt die Rolle „Besucher“ (ändern mit /serverregeln).');
   lines.push('Rechte setzt der Bot nur für das, was er neu anlegt. Vorhandenes bleibt, wie es ist.');
   if (plan.memberChange) {
@@ -163,7 +169,7 @@ export function planText(plan) {
 
 /**
  * Rechte einer Kategorie oder eines Kanals. visibility: public | members | mods | admins; write: 'bot' = nur der Bot darf schreiben.
- * ids: everyone (= Server-ID), bot, members (Rollen, die Mitglieder-Bereiche sehen), mods (Moderatoren-Rollen).
+ * ids: everyone (= Server-ID), bot, members (Rollen, die Mitglieder-Bereiche sehen), mods (Moderatoren-Rollen), visitors (Besucher-Rolle).
  * voice: Sprachkanal, dort braucht der Bot keine Rechte.
  */
 export function overwritesFor(visibility, write, ids, voice = false) {
@@ -172,7 +178,10 @@ export function overwritesFor(visibility, write, ids, voice = false) {
     if (!map.has(id)) map.set(id, { id, type, allow: [], deny: [] });
     return map.get(id);
   };
-  const viewers = visibility === 'members' ? ids.members : visibility === 'mods' ? ids.mods : [];
+  // Besucher-Bereiche sehen auch die Mitglieder, die die Regeln-Rolle nicht haben
+  const viewers = visibility === 'members' ? ids.members
+    : visibility === 'visitors' ? [...new Set([...(ids.visitors ?? []), ...ids.members])]
+      : visibility === 'mods' ? ids.mods : [];
   if (visibility !== 'public') entry(ids.everyone, 0).deny.push(P.ViewChannel);
   for (const id of viewers) entry(id, 0).allow.push(P.ViewChannel, P.ReadMessageHistory);
   if (write === 'bot' && !voice) {
@@ -216,7 +225,7 @@ export async function runSetup({ pool, guild, org, plan, botId, reason = '/disco
     // Wer Mitglieder-Bereiche sieht: alle Rollen mit Zugang zum Tool sowie die Moderatoren
     const fresh = await findOrg(pool, org.id);
     const overwriteIds = {
-      everyone: guild.id, bot: botId, mods: ids.mod,
+      everyone: guild.id, bot: botId, mods: ids.mod, visitors: ids.visitor,
       members: [...new Set([...allAccessRoleIds(fresh ?? org), ...ids.mod, ...ids.use])],
     };
 

@@ -96,14 +96,15 @@ Zusätzliche Rechte für die Moderation: Mitglieder kicken, Mitglieder bannen, M
 | Eingangshalle | alle | `┋! -server-regeln-!` (Regeln mit „Bestätigen“), `┋willkommen` |
 | Intern | Mitglieder | `┋team`, `┋abteilungen`, `┋recruits` |
 | Events | Mitglieder | `┋operations-plan` (Terminankündigungen des Bots), `┋op-chat` |
-| Star Citizen Info | alle | `┋patchnotes`, `┋sc-news`, `┋youtube-news`, `┋tips und tricks`, `┋issue-council`, `┋leaks` |
-| Öffentlich | alle | `┋screenshots`, `┋chat`, `┋wer streamt gerade` |
-| Öffentliche Sprachkanäle | alle | Lobby, Gruppe 1, Gruppe 2 |
-| Gaming Area | alle | Gaming 1, Gaming 2 |
+| Star Citizen Info | Besucher und Mitglieder | `┋patchnotes`, `┋sc-news`, `┋youtube-news`, `┋tips und tricks`, `┋issue-council`, `┋leaks` |
+| Öffentlich | Besucher und Mitglieder | `┋screenshots`, `┋chat`, `┋wer streamt gerade` |
+| Öffentliche Sprachkanäle | Besucher und Mitglieder | Lobby, Gruppe 1, Gruppe 2 |
+| Gaming Area | Besucher und Mitglieder | Gaming 1, Gaming 2 |
 | Abteilungen | Mitglieder | leer, für die Abteilungskanäle |
 | Administrative | Admins | `┋mod-protokoll` (auch Moderatoren), `┋bot-einstellungen` |
 
-„Mitglieder“ sind alle Rollen mit Zugang zum Tool (Mitglied, Planer, Ausbilder …) und die Moderatoren. Der Befehl zeigt erst eine
+„Mitglieder“ sind alle Rollen mit Zugang zum Tool (Mitglied, Planer, Ausbilder …) und die Moderatoren. „Besucher“ ist die Rolle, die „Bestätigen“ unter den Regeln vergibt:
+Wer neu auf den Server kommt, sieht nur die Eingangshalle, bis er die Regeln bestätigt hat. Der Befehl zeigt erst eine
 Vorschau und legt nur an, was fehlt: Vorhandene Rollen und Kanäle werden übernommen (Namen ohne Symbole wie „┋“, Groß-/Kleinschreibung
 und Leerzeichen sind egal), nie geändert oder gelöscht. Rechte setzt er nur für Neues. Ist noch keine Rolle für „Mitglied“ eingetragen,
 wird die neue Rolle eingetragen; ab dann nutzen nur ihre Träger das Tool und sehen Intern, Events und Abteilungen.

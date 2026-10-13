@@ -477,10 +477,11 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     // Rechte: Anzahl der Einträge je Kategorie bzw. Kanal (everyone, Rollen, Bot)
     const overwrites = Object.fromEntries(created.slice(5).map((c) => [c[1], c[3]]));
     assert.deepEqual(overwrites, {
-      Eingangshalle: 1, Intern: 6, Events: 6, 'Star Citizen Info': 1, Öffentlich: 1, 'Öffentliche Sprachkanäle': 1, 'Gaming Area': 1, Abteilungen: 6, Administrative: 2,
+      // Besucher-Bereiche: everyone gesperrt, Besucher, die vier Rollen mit Zugang (Mitglied, Planer, Ausbilder, Moderator), der Bot
+      Eingangshalle: 1, Intern: 6, Events: 6, 'Star Citizen Info': 7, Öffentlich: 7, 'Öffentliche Sprachkanäle': 7, 'Gaming Area': 7, Abteilungen: 6, Administrative: 2,
       '┋! -server-regeln-!': 2, '┋willkommen': 2, '┋team': 6, '┋abteilungen': 6, '┋recruits': 6, '┋operations-plan': 6, '┋op-chat': 6,
-      '┋patchnotes': 1, '┋sc-news': 1, '┋youtube-news': 1, '┋tips und tricks': 1, '┋issue-council': 1, '┋leaks': 1,
-      '┋screenshots': 1, '┋chat': 1, '┋wer streamt gerade': 1, '┋Lobby': 0, '┋Gruppe 1': 0, '┋Gruppe 2': 0, '┋Gaming 1': 0, '┋Gaming 2': 0,
+      '┋patchnotes': 7, '┋sc-news': 7, '┋youtube-news': 7, '┋tips und tricks': 7, '┋issue-council': 7, '┋leaks': 7,
+      '┋screenshots': 7, '┋chat': 7, '┋wer streamt gerade': 7, '┋Lobby': 6, '┋Gruppe 1': 6, '┋Gruppe 2': 6, '┋Gaming 1': 6, '┋Gaming 2': 6,
       '┋mod-protokoll': 3, '┋bot-einstellungen': 2,
     });
     assert.ok(report.every((l) => !l.startsWith('⚠')), report.join('\n'));

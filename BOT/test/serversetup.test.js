@@ -18,8 +18,8 @@ const SENDS = [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P
 
 test('Die Standard-Struktur: Kategorien, Kanäle und wer sie sieht', () => {
   assert.deepEqual(CATEGORY_DEFS.map((k) => [k.name, k.visibility]), [
-    ['Eingangshalle', 'public'], ['Intern', 'members'], ['Events', 'members'], ['Star Citizen Info', 'public'], ['Öffentlich', 'public'],
-    ['Öffentliche Sprachkanäle', 'public'], ['Gaming Area', 'public'], ['Abteilungen', 'members'], ['Administrative', 'admins'],
+    ['Eingangshalle', 'public'], ['Intern', 'members'], ['Events', 'members'], ['Star Citizen Info', 'visitors'], ['Öffentlich', 'visitors'],
+    ['Öffentliche Sprachkanäle', 'visitors'], ['Gaming Area', 'visitors'], ['Abteilungen', 'members'], ['Administrative', 'admins'],
   ]);
   const inCat = (key) => CHANNEL_DEFS.filter((c) => c.category === key).map((c) => c.name);
   assert.deepEqual(inCat('entrance'), ['! -server-regeln-!', 'willkommen']);
@@ -56,10 +56,11 @@ test('Leerer Server: alles wird neu angelegt, Mitglieds-Rolle mit Warnung', () =
   assert.match(text, /➕ \*\*Eingangshalle\*\* \(alle\): ➕ #┋! -server-regeln-! · ➕ #┋willkommen/);
   assert.match(text, /➕ \*\*Intern\*\* \(nur Mitglieder\): ➕ #┋team · ➕ #┋abteilungen · ➕ #┋recruits/);
   assert.match(text, /➕ \*\*Events\*\* \(nur Mitglieder\): ➕ #┋operations-plan · ➕ #┋op-chat/);
-  assert.match(text, /➕ \*\*Star Citizen Info\*\* \(alle\): ➕ #┋patchnotes · ➕ #┋sc-news · ➕ #┋youtube-news · ➕ #┋tips und tricks · ➕ #┋issue-council · ➕ #┋leaks/);
-  assert.match(text, /➕ \*\*Öffentliche Sprachkanäle\*\* \(alle\): ➕ 🔊┋Lobby · ➕ 🔊┋Gruppe 1 · ➕ 🔊┋Gruppe 2/);
+  assert.match(text, /➕ \*\*Star Citizen Info\*\* \(Besucher und Mitglieder\): ➕ #┋patchnotes · ➕ #┋sc-news · ➕ #┋youtube-news · ➕ #┋tips und tricks · ➕ #┋issue-council · ➕ #┋leaks/);
+  assert.match(text, /➕ \*\*Öffentliche Sprachkanäle\*\* \(Besucher und Mitglieder\): ➕ 🔊┋Lobby · ➕ 🔊┋Gruppe 1 · ➕ 🔊┋Gruppe 2/);
   assert.match(text, /➕ \*\*Abteilungen\*\* \(nur Mitglieder\) \(leer\)/);
   assert.match(text, /➕ \*\*Administrative\*\* \(nur Admins\): ➕ #┋mod-protokoll · ➕ #┋bot-einstellungen/);
+  assert.match(text, /Wer neu auf den Server kommt, sieht nur die Eingangshalle/);
   assert.match(text, /⚠ \*\*Wichtig:\*\* Die Rolle „Mitglied“/);
 });
 
@@ -155,6 +156,19 @@ test('Rechte: öffentlich lesbar, nur Mitglieder, nur Moderatoren, nur Admins', 
   assert.deepEqual(overwritesFor('members', 'bot', ids)[0], { id: 'G', type: 0, deny: [P.ViewChannel, ...SENDS] });
   assert.deepEqual(overwritesFor('members', 'bot', ids)[1], { id: 'R1', type: 0, allow: [P.ViewChannel, P.ReadMessageHistory], deny: SENDS });
   assert.deepEqual(overwritesFor('members', 'bot', ids).at(-1), botEntry); // der Bot darf trotzdem schreiben
+  // Besucher-Bereich: Besucher und Mitglieder sehen ihn, alle anderen nicht
+  const visitorIds = { ...ids, visitors: ['V1'] };
+  assert.deepEqual(overwritesFor('visitors', 'all', visitorIds), [
+    { id: 'G', type: 0, deny: [P.ViewChannel] },
+    { id: 'V1', type: 0, allow: [P.ViewChannel, P.ReadMessageHistory] },
+    { id: 'R1', type: 0, allow: [P.ViewChannel, P.ReadMessageHistory] },
+    { id: 'R2', type: 0, allow: [P.ViewChannel, P.ReadMessageHistory] },
+    botEntry,
+  ]);
+  // dieselbe Rolle in beiden Listen erscheint nur einmal; Sprachkanal ohne Bot-Eintrag
+  assert.deepEqual(overwritesFor('visitors', undefined, { ...ids, visitors: ['R1'] }, true).map((o) => o.id), ['G', 'R1', 'R2']);
+  // Die Eingangshalle bleibt für alle sichtbar
+  assert.deepEqual(overwritesFor('public', 'bot', visitorIds)[0].allow, [P.ViewChannel, P.ReadMessageHistory]);
   // nur Moderatoren (Protokoll)
   assert.deepEqual(overwritesFor('mods', 'bot', ids), [
     { id: 'G', type: 0, deny: [P.ViewChannel, ...SENDS] },
