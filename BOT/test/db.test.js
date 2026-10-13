@@ -16,6 +16,7 @@ import { sendOrgReminders, syncOrgPosts } from '../src/lib/announce.js';
 import { ANNOUNCE_CHANNEL, setSetting } from '../src/lib/settings.js';
 import { confirm, participants, qualifications } from '../src/lib/training.js';
 import { nowDb } from '../src/db.js';
+import { hangarItems, memberAccount, orgFleet, rsiHandleOf, searchShips, shipOwners } from '../src/lib/hangar.js';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
 const R_USE = '111111111111111111';
@@ -240,6 +241,48 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.deepEqual(await syncOrgPosts(pool, client, org, opts), { removed: 1 });
     assert.deepEqual(log.deleted, ['1000']);
     await run(pool, 'DELETE FROM users WHERE id = ?', [anna]);
+  });
+
+  test('Hangar, Flotte, Wer hat, RSI-Handle', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Hangar-Test' }, iconUrl: null });
+    await run(pool, "UPDATE organizations SET rsi_sid = 'HTEST', handle_style = 'round' WHERE id = ?", [org.id]);
+    const stamp = String(Date.now()).slice(-16);
+    let n = 10;
+    const mk = async (name, vis, nick) => {
+      const id = newId();
+      const discordId = `9${stamp}${n++}`;
+      await run(pool, 'INSERT INTO users (id, name, discord_id, hangar_visibility) VALUES (?,?,?,?)', [id, name, discordId, vis]);
+      await run(pool, "INSERT INTO org_memberships (user_id, org_id, role, nick) VALUES (?,?, 'MEMBER', ?)", [id, org.id, nick]);
+      return { id, discordId };
+    };
+    const offen = await mk('Offen', 'MEMBERS', 'Anna (anna_sc)');
+    const privat = await mk('Privat', 'PRIVATE', null);
+    const ship = newId();
+    const slug = `testschiff-${stamp}`;
+    await run(pool, "INSERT INTO catalog_items (id, kind, slug, name, match_key, manufacturer) VALUES (?, 'SHIP', ?, ?, ?, 'Testwerft')", [ship, slug, `Testschiff ${stamp}`, slug]);
+    const own = (userId, q, lti) => run(pool, "INSERT INTO owned_items (id, user_id, catalog_item_id, kind, quantity, lti) VALUES (?,?,?, 'SHIP', ?, ?)", [newId(), userId, ship, q, lti]);
+    await own(offen.id, 2, 1);
+    await own(privat.id, 1, 0);
+    await run(pool, "INSERT INTO owned_items (id, user_id, custom_name, kind, quantity) VALUES (?,?, 'Eigenbau', 'SHIP', 1)", [newId(), privat.id]);
+
+    // Flotte ist anonym und zählt alle, auch private Hangars
+    const fleet = await orgFleet(pool, org.id);
+    assert.deepEqual(fleet.entries.map((e) => [e.name, e.count]), [[`Testschiff ${stamp}`, 3], ['Eigenbau', 1]]);
+    assert.deepEqual([fleet.totalShips, fleet.owners], [4, 2]);
+
+    // Wer hat: nur freigegebene Hangars, der eigene immer
+    assert.deepEqual((await shipOwners(pool, org.id, ship, null)).map((o) => [o.name, o.quantity, o.lti]), [['Anna (anna_sc)', 2, true]]);
+    assert.equal((await shipOwners(pool, org.id, ship, privat.id)).length, 2);
+    assert.equal((await searchShips(pool, `schiff ${stamp}`))[0].id, ship);
+
+    const acc = await memberAccount(pool, org.id, offen.discordId);
+    assert.equal(Number(acc.in_org), 1);
+    assert.equal((await hangarItems(pool, offen.id)).length, 1);
+    // Orga mit RSI-Kürzel: Handle aus dem Nickname (runde Klammern)
+    assert.equal(await rsiHandleOf(pool, acc), 'anna_sc');
+    await run(pool, 'DELETE FROM users WHERE id IN (?, ?)', [offen.id, privat.id]);
+    await run(pool, 'DELETE FROM catalog_items WHERE id = ?', [ship]);
   });
 
   test('/design: Bilder ablegen, alte Dateien entfernen, zurücksetzen', async () => {

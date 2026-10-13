@@ -1,6 +1,6 @@
 // Was darf die aufrufende Person in der Orga dieses Servers? Ermittelt aus den aktuellen Discord-Rollen und -Rechten,
 // nach denselben Regeln wie Orgs::syncMemberships() der Web-App (dort nur alle 24 Stunden geprüft, hier sofort).
-import { one } from '../db.js';
+import { one, orgForGuild } from '../db.js';
 import { isGuildAdmin, memberRoleIds } from './guild.js';
 import { parseRoleIds } from './roles.js';
 
@@ -21,6 +21,15 @@ export function accessIn(org, { admin, roles }) {
 
 export function accessFor(org, interaction) {
   return accessIn(org, { admin: isGuildAdmin(interaction), roles: memberRoleIds(interaction) });
+}
+
+/** Orga des Servers und Rechte der Person; refusal ist gesetzt, wenn es keine Orga gibt oder sie kein Mitglied ist. */
+export async function memberContext(interaction, pool, refusalText = 'Das sehen nur Mitglieder der Orga.') {
+  const org = await orgForGuild(pool, interaction.guildId);
+  if (org === null) return { refusal: 'Für diesen Server ist noch keine Orga eingerichtet. Das erledigt ein Server-Admin mit /einrichten.' };
+  const access = accessFor(org, interaction);
+  if (!access.member) return { refusal: refusalText };
+  return { org, access };
 }
 
 /** Konto der Web-App zu einer Discord-ID, oder null wenn sich die Person dort noch nie angemeldet hat. */

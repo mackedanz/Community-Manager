@@ -42,6 +42,11 @@ client.once(Events.ClientReady, (c) => {
 /** Welche Funktion bearbeitet diese Interaktion? null = keine (wird ignoriert). */
 function handlerFor(interaction) {
   if (!interaction.inGuild()) return null;
+  // Vorschläge beim Tippen (z. B. Schiffsnamen bei /wer-hat)
+  if (interaction.isAutocomplete()) {
+    const command = byName.get(interaction.commandName);
+    return command?.autocomplete ? { name: `Vorschläge /${interaction.commandName}`, run: command.autocomplete } : null;
+  }
   if (interaction.isChatInputCommand()) {
     const command = byName.get(interaction.commandName);
     if (!command) log.warn(`Unbekannter Befehl /${interaction.commandName}`);
@@ -62,6 +67,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await handler.run(interaction, { pool, config, log });
   } catch (err) {
     log.error(`${handler.name} fehlgeschlagen`, err);
+    // Auf Vorschläge beim Tippen kann man nicht mit einer Nachricht antworten
+    if (interaction.isAutocomplete()) return;
     const reply = { content: 'Da ist etwas schiefgelaufen. Bitte später noch einmal versuchen.', flags: MessageFlags.Ephemeral };
     try {
       if (interaction.deferred || interaction.replied) await interaction.editReply(reply.content);

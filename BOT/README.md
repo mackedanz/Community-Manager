@@ -16,9 +16,17 @@ an und ändert sie nicht.
 | `/termine` | Mitglieder der Orga | kommende Termine ansehen und mit „Dabei“, „Vielleicht“, „Kann nicht“ antworten (nur für einen selbst sichtbar) |
 | `/termine-kanal` | Server-Admins | Kanal für Terminankündigungen setzen, anzeigen oder mit `aus:True` ausschalten |
 | `/ausbildung` | Mitglieder der Orga | eigene bestandene Ausbildungen; Admins und Ausbilder auch die eines Mitglieds |
+| `/hangar` | Mitglieder der Orga | eigener Hangar (Schiffe und Zahl der übrigen Einträge); mit `mitglied:@…` die Schiffe eines Mitglieds, wenn freigegeben |
+| `/flotte` | Mitglieder der Orga | alle Schiffe der Orga mit Anzahl, anonym; `suche:` filtert nach Name oder Hersteller |
+| `/wer-hat` | Mitglieder der Orga | wer ein Schiff hat (Vorschläge aus dem Katalog beim Tippen); nur freigegebene Hangars |
+| `/profil` | Mitglieder der Orga | RSI-Handle, Schiffe, Errungenschaften, Ausbildungen, letzter RSI-Sync |
 | `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle |
 | `/ping` | alle | Verbindung zu Discord und zur Datenbank prüfen |
 | `/hilfe`, `/help` | alle | Übersicht aller Befehle, erzeugt aus der Befehlsliste; Admin-Befehle sehen nur Admins |
+
+Sichtbarkeit wie auf der Webseite: Den eigenen Hangar sieht man immer. Schiffe und Errungenschaften anderer nur, wenn
+sie das in den Einstellungen der Web-App für Mitglieder freigegeben haben und Mitglied dieser Orga sind. `/flotte`
+ist anonym und zählt alle Schiffe der Mitglieder, ohne zu zeigen, wem sie gehören.
 
 Antworten über `/termine` brauchen ein Konto in der Web-App (einmal dort mit Discord anmelden). Für
 Ausbildungstermine gilt wie auf der Webseite: erst nach bestandener Vorstufe (Admins und Ausbilder ausgenommen).
