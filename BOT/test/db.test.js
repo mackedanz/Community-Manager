@@ -19,6 +19,7 @@ import { nowDb } from '../src/db.js';
 import { createEvent, deleteEvent, setCancelled } from '../src/lib/eventadmin.js';
 import { addCreator, checkCreator, listCreators, removeCreator } from '../src/lib/creators.js';
 import { banGuild, deleteOrg, listAllOrgs, listBans, orgCounts, renameOrg, setDiscordEventsMode, unbanGuild } from '../src/lib/orgadmin.js';
+import { activeWarnings, addCase, listCases, modRoleIds, MOD_ROLES, removeWarning } from '../src/lib/moderation.js';
 import { hangarItems, memberAccount, orgFleet, rsiHandleOf, searchShips, shipOwners } from '../src/lib/hangar.js';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
@@ -384,6 +385,30 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.match((await creator()).last_error, /gibt es nicht/);
     assert.equal(await removeCreator(pool, org.id, a.id), 1);
     assert.deepEqual(await listCreators(pool, org.id), []);
+  });
+
+  test('Moderation: Fälle speichern, Verwarnungen zählen und zurücknehmen, Moderatoren-Rollen', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000003', invokerName: 'Mod', guild: { name: 'Mod-Orga' }, iconUrl: null });
+    assert.deepEqual(await modRoleIds(pool, org.id), []);
+    await setSetting(pool, org.id, MOD_ROLES, '111111111111111111,222222222222222222');
+    assert.deepEqual(await modRoleIds(pool, org.id), ['111111111111111111', '222222222222222222']);
+
+    const target = '400000000000000001';
+    const w1 = await addCase(pool, { orgId: org.id, targetId: target, targetName: 'Anna', moderatorId: '300000000000000003', action: 'WARN', reason: 'Ton' });
+    const w2 = await addCase(pool, { orgId: org.id, targetId: target, targetName: 'Anna', moderatorId: '300000000000000003', action: 'WARN', reason: 'Spam' });
+    await addCase(pool, { orgId: org.id, targetId: target, targetName: 'Anna', moderatorId: '300000000000000003', action: 'TIMEOUT', detail: '1 Stunde' });
+    assert.ok(w2 > w1);
+    assert.equal(await activeWarnings(pool, org.id, target), 2);
+    assert.deepEqual((await listCases(pool, org.id, target)).map((c) => c.action), ['TIMEOUT', 'WARN', 'WARN']);
+    await removeWarning(pool, org.id, w1);
+    assert.equal(await activeWarnings(pool, org.id, target), 1);
+    await assert.rejects(removeWarning(pool, org.id, w1), /gibt es nicht/); // schon zurückgenommen
+    await assert.rejects(removeWarning(pool, org.id, 999999999), /gibt es nicht/);
+    // Fälle einer anderen Orga lassen sich nicht zurücknehmen
+    const other = await ensureOrg(pool, config, { guildId: freshGuild(), invokerId: '300000000000000004', invokerName: 'X', guild: { name: 'Andere' }, iconUrl: null });
+    await assert.rejects(removeWarning(pool, other.id, w2), /gibt es nicht/);
+    assert.equal(await activeWarnings(pool, org.id, target), 1);
   });
 
   test('/design: Bilder ablegen, alte Dateien entfernen, zurücksetzen', async () => {

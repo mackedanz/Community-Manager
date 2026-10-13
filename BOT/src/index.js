@@ -4,6 +4,7 @@ import { readConfig, ConfigError } from './config.js';
 import { createPool, checkDatabase } from './db.js';
 import { byName, componentOwners } from './commands/index.js';
 import { registerMemberEvents } from './events/members.js';
+import { registerModLog } from './events/modlog.js';
 import { startAnnouncer } from './workers/announcer.js';
 import { startCreatorWatch } from './workers/creators.js';
 import { log } from './log.js';
@@ -33,6 +34,8 @@ const client = new Client({
   partials: [Partials.GuildMember],
 });
 const memberSync = registerMemberEvents(client, { pool, config, log });
+// Beitritte und Austritte im Moderations-Protokoll
+registerModLog(client, { pool, log });
 // Terminankündigungen und Erinnerungen (jede Minute)
 const announcer = startAnnouncer(client, { pool, config, log });
 // Neue Videos der Creator (alle 10 Minuten)

@@ -1,12 +1,15 @@
 // /help und /hilfe: Übersicht aller Befehle, erzeugt aus der Befehlsliste (neue Befehle erscheinen von selbst).
 // Gruppiert nach "Für alle", "Für Mitglieder der Orga" und "Für Server-Admins"; Admin-Befehle sieht nur, wer sie nutzen darf.
 import { MessageFlags } from 'discord.js';
-import { isGuildAdmin } from '../lib/guild.js';
+import { orgForGuild } from '../db.js';
+import { isGuildAdmin, memberRoleIds } from '../lib/guild.js';
+import { canModerate, modRoleIds } from '../lib/moderation.js';
 
 const GROUPS = [
   ['everyone', 'Für alle'],
   ['members', 'Für Mitglieder der Orga'],
   ['planners', 'Für Planer und Admins'],
+  ['mods', 'Für Moderatoren und Admins'],
   ['admins', 'Für Server-Admins'],
   ['operator', 'Für den Betreiber der Installation'],
 ];
@@ -25,11 +28,12 @@ export function usage(data) {
 }
 
 /** Text der Übersicht. ids: Befehlsname => ID bei Discord (dann sind die Befehle anklickbar). */
-export function helpText(commands, { admin, operator = false, ids = new Map(), appUrl }) {
+export function helpText(commands, { admin, mod = false, operator = false, ids = new Map(), appUrl }) {
   const seen = new Set();
   const sections = [];
   for (const [group, title] of GROUPS) {
     if (group === 'admins' && !admin) continue;
+    if (group === 'mods' && !admin && !mod) continue;
     if (group === 'operator' && !operator) continue;
     const lines = commands
       .filter((c) => audienceOf(c) === group && !c.hideInHelp && !seen.has(c.data.name))
@@ -67,9 +71,19 @@ export function makeHelp(name, description, getCommands) {
     audience: 'everyone',
     // /help und /hilfe stehen als eine Zeile in der Übersicht
     hideInHelp: name === 'help',
-    async execute(interaction, { config }) {
+    async execute(interaction, { config, pool }) {
+      const admin = isGuildAdmin(interaction);
+      // Moderatoren sehen die Moderationsbefehle auch ohne Admin-Rechte; fehlt die Tabelle noch, bleibt es bei Admins
+      let mod = false;
+      try {
+        const org = await orgForGuild(pool, interaction.guildId);
+        mod = org !== null && canModerate({ admin, roles: memberRoleIds(interaction) }, await modRoleIds(pool, org.id));
+      } catch {
+        mod = false;
+      }
       const text = helpText(getCommands(), {
-        admin: isGuildAdmin(interaction),
+        admin,
+        mod,
         operator: config.serverAdminIds.includes(interaction.user.id),
         ids: await commandIds(interaction.client),
         appUrl: config.appUrl,
