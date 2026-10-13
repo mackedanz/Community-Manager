@@ -5,6 +5,7 @@ import { createPool, checkDatabase } from './db.js';
 import { byName, componentOwners } from './commands/index.js';
 import { registerMemberEvents } from './events/members.js';
 import { startAnnouncer } from './workers/announcer.js';
+import { startCreatorWatch } from './workers/creators.js';
 import { log } from './log.js';
 
 let config;
@@ -34,6 +35,8 @@ const client = new Client({
 const memberSync = registerMemberEvents(client, { pool, config, log });
 // Terminankündigungen und Erinnerungen (jede Minute)
 const announcer = startAnnouncer(client, { pool, config, log });
+// Neue Videos der Creator (alle 10 Minuten)
+const creatorWatch = startCreatorWatch(client, { pool, log });
 
 client.once(Events.ClientReady, (c) => {
   log.info(`Angemeldet als ${c.user.tag} auf ${c.guilds.cache.size} Server(n)`);
@@ -85,6 +88,7 @@ async function shutdown(signal) {
   log.info(`${signal} erhalten, Bot wird beendet`);
   memberSync.stop();
   announcer.stop();
+  creatorWatch.stop();
   await client.destroy();
   await pool.end();
 }
@@ -103,6 +107,7 @@ try {
   }
   memberSync.stop();
   announcer.stop();
+  creatorWatch.stop();
   await client.destroy();
   await pool.end();
   process.exitCode = 1;

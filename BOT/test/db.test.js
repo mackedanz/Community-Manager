@@ -17,6 +17,7 @@ import { ANNOUNCE_CHANNEL, setSetting } from '../src/lib/settings.js';
 import { confirm, participants, qualifications } from '../src/lib/training.js';
 import { nowDb } from '../src/db.js';
 import { createEvent, deleteEvent, setCancelled } from '../src/lib/eventadmin.js';
+import { addCreator, checkCreator, listCreators, removeCreator } from '../src/lib/creators.js';
 import { banGuild, deleteOrg, listAllOrgs, listBans, orgCounts, renameOrg, setDiscordEventsMode, unbanGuild } from '../src/lib/orgadmin.js';
 import { hangarItems, memberAccount, orgFleet, rsiHandleOf, searchShips, shipOwners } from '../src/lib/hangar.js';
 
@@ -330,6 +331,40 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.ok((await listAllOrgs(pool)).some((o) => o.id === org2.id));
     assert.equal(await deleteOrg(pool, org2.id), 1);
     await run(pool, 'DELETE FROM users WHERE id = ?', [planer]);
+  });
+
+  test('Creator: vorhandene Videos gelten als bekannt, neue werden genau einmal gepostet', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Creator-Test' }, iconUrl: null });
+    const UC = 'UC' + 'x'.repeat(22);
+    let videos = [['vid0000001', false]];
+    const feed = () => `<feed><author><name>Testkanal</name></author>${videos.map(([id, short]) =>
+      `<entry><yt:videoId>${id}</yt:videoId><title>Video ${id}</title><link rel="alternate" href="https://www.youtube.com/${short ? 'shorts/' : 'watch?v='}${id}"/></entry>`).join('')}</feed>`;
+    const fetchFn = async () => ({ status: 200, text: async () => feed() });
+    const sent = [];
+    const client = { channels: { fetch: async () => ({ send: async (m) => sent.push(m) }) } };
+
+    const a = await addCreator(pool, org.id, { channelId: UC, name: 'Testkanal', discordChannelId: '901', mentionRoleId: null, skipShorts: true }, fetchFn);
+    assert.equal(a.updated, false);
+    const creator = async () => (await listCreators(pool, org.id))[0];
+    assert.equal(await checkCreator(pool, client, await creator(), { fetchFn }), 0, 'schon vorhandene Videos nicht posten');
+
+    // Neues Video und neuer Short (Shorts sind ausgeschaltet); Feed liefert neueste zuerst
+    videos = [['short00001', true], ['vid0000002', false], ['vid0000001', false]];
+    assert.equal(await checkCreator(pool, client, await creator(), { fetchFn }), 1);
+    assert.match(sent[0].content, /\*\*Testkanal\*\* hat ein neues Video veröffentlicht: \*\*Video vid0000002\*\*/);
+    assert.equal(await checkCreator(pool, client, await creator(), { fetchFn }), 0, 'kein zweites Mal');
+
+    // Erneut hinzufügen ändert nur Kanal und Rolle
+    const b = await addCreator(pool, org.id, { channelId: UC, name: 'Testkanal', discordChannelId: '902', mentionRoleId: '42', skipShorts: false }, fetchFn);
+    assert.deepEqual([b.updated, b.id], [true, a.id]);
+    assert.deepEqual([(await creator()).discord_channel_id, (await creator()).mention_role_id], ['902', '42']);
+
+    // Feed nicht erreichbar: Fehler wird gemerkt, nichts gepostet
+    assert.equal(await checkCreator(pool, client, await creator(), { fetchFn: async () => ({ status: 404, text: async () => '' }) }), 0);
+    assert.match((await creator()).last_error, /gibt es nicht/);
+    assert.equal(await removeCreator(pool, org.id, a.id), 1);
+    assert.deepEqual(await listCreators(pool, org.id), []);
   });
 
   test('/design: Bilder ablegen, alte Dateien entfernen, zurücksetzen', async () => {

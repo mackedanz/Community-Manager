@@ -2,6 +2,7 @@
 import * as abgleichen from './abgleichen.js';
 import * as ausbildung from './ausbildung.js';
 import * as betreiber from './betreiber.js';
+import * as creator from './creator.js';
 import * as design from './design.js';
 import * as einrichten from './einrichten.js';
 import * as flotte from './flotte.js';
@@ -17,7 +18,7 @@ import * as termine from './termine.js';
 import * as termineKanal from './termine-kanal.js';
 import * as werHat from './wer-hat.js';
 
-export const commands = [einrichten, design, abgleichen, termine, terminNeu, termineKanal, ausbildung, hangar, flotte, werHat, profil, orga, serverregeln, betreiber, ping];
+export const commands = [einrichten, design, abgleichen, termine, terminNeu, termineKanal, ausbildung, hangar, flotte, werHat, profil, orga, creator, serverregeln, betreiber, ping];
 // /hilfe und /help zeigen alle Befehle dieser Liste (auch sich selbst)
 commands.push(
   makeHelp('hilfe', 'Übersicht aller Befehle des Bots (auch als /help)', () => commands),

@@ -23,6 +23,7 @@ an und ändert sie nicht.
 | `/termin-neu` | Planer und Admins | Termin anlegen: Optionen für Ausbildung, Abteilung, Entwurf und Discord-Event, danach ein Fenster für Titel, Beginn, Ende, Ort und Beschreibung (Zeiten in deutscher Zeit, z. B. `14.10.2026 20:00`) |
 | `/orga` | Server-Admins | Einstellungen der Orga ansehen; `name:` benennt sie um, `discord_events:` schaltet die Übernahme der Discord-Events |
 | `/betreiber` | nur `SERVER_ADMIN_DISCORD_ID` | `orgas` (alle Orgas und Sperren), `sperren`, `entsperren`, `loeschen` (mit Rückfrage) |
+| `/creator` | Server-Admins | YouTube-Creator: `hinzufuegen` (Link oder @Name, Discord-Kanal, optional Rolle zum Erwähnen und ohne Shorts), `entfernen`, `liste` |
 | `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle |
 | `/ping` | alle | Verbindung zu Discord und zur Datenbank prüfen |
 | `/hilfe`, `/help` | alle | Übersicht aller Befehle, erzeugt aus der Befehlsliste; Admin-Befehle sehen nur Admins |
@@ -56,6 +57,14 @@ Für `/serverregeln` braucht der Bot das Recht „Rollen verwalten“, und seine
 
 Die früheren Slash-Befehle der PHP-App (Interactions Endpoint `POST /discord/interactions`) gibt es nicht mehr; alle
 Befehle laufen über diesen Bot.
+
+## Neue Videos von Creatorn
+
+Ersatz für die YouTube-Benachrichtigungen von MEE6: Alle 10 Minuten liest der Bot den öffentlichen Feed jedes mit
+`/creator hinzufuegen` eingetragenen YouTube-Kanals (ohne API-Schlüssel) und postet neue Videos in den gewählten Kanal,
+auf Wunsch mit Erwähnung einer Rolle. Beim Hinzufügen gelten alle vorhandenen Videos als bekannt, gepostet wird erst das
+nächste. Jedes Video erscheint nur einmal, auch nach einem Neustart. Braucht Migration `021_bot_creators.sql`.
+Twitch-Livestreams sind noch nicht dabei (bräuchten einen Twitch-API-Zugang).
 
 ## Automatischer Abgleich
 
