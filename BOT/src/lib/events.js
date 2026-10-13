@@ -1,5 +1,5 @@
 // Termine einer Orga lesen und Zu-/Absagen speichern (wie Events.php und Training.php der Web-App).
-import { all, nowDb, one, run, val } from '../db.js';
+import { all, nowDb, one, run, transaction, val } from '../db.js';
 import { OrgError } from './errors.js';
 
 export const RSVP_STATUSES = ['YES', 'MAYBE', 'NO'];
@@ -59,8 +59,8 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
   // Schiffe mit ihren Plätzen (wie in der Web-App; Plätze einnehmen geht nur dort)
   const slots = await all(
     db,
-    `SELECT s.id AS ship_id, s.task, COALESCE(c.name, s.custom_name, 'Unbekanntes Schiff') AS ship_name, x.label,
-            COALESCE(om.nick, u.name) AS holder
+    `SELECT s.id AS ship_id, s.task, COALESCE(c.name, s.custom_name, 'Unbekanntes Schiff') AS ship_name, x.id AS slot_id, x.label,
+            x.user_id AS holder_id, COALESCE(om.nick, u.name) AS holder
        FROM event_ships s
        LEFT JOIN catalog_items c ON c.id = s.catalog_item_id
        LEFT JOIN event_slots x ON x.event_ship_id = s.id
@@ -73,7 +73,7 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
   for (const r of slots) {
     let ship = ships.find((s) => s.id === r.ship_id);
     if (!ship) ships.push(ship = { id: r.ship_id, name: r.ship_name, task: r.task, slots: [] });
-    if (r.label !== null) ship.slots.push({ label: r.label, holder: r.holder });
+    if (r.label !== null) ship.slots.push({ id: r.slot_id, label: r.label, userId: r.holder_id, holder: r.holder });
   }
   rsvps.sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? ''), 'de', { sensitivity: 'base' }));
   return {
@@ -86,7 +86,7 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
     status: e.status,
     course: course === null ? null : { ...course, level: Number(course.level), areaName: AREAS[course.area] ?? course.area },
     department: department === null ? null : `${DEPARTMENT_KINDS[e.department_kind] ?? 'Termin'}: ${department}`,
-    ships: ships.map(({ name, task, slots: list }) => ({ name, task, slots: list.map((s) => ({ label: s.label, holder: s.holder ?? null })) })),
+    ships: ships.map(({ name, task, slots: list }) => ({ name, task, slots: list.map((s) => ({ id: s.id, label: s.label, userId: s.userId ?? null, holder: s.holder ?? null })) })),
     rsvps: rsvps.map((r) => ({ userId: r.user_id, status: r.status, name: r.name ?? 'Unbekannt' })),
   };
 }
@@ -117,6 +117,33 @@ async function releaseSlots(db, userId, eventId) {
     'UPDATE event_slots x JOIN event_ships s ON s.id = x.event_ship_id SET x.user_id = NULL WHERE s.event_id = ? AND x.user_id = ?',
     [eventId, userId],
   );
+}
+
+/**
+ * Platz auf einem Schiff einnehmen (Events::claimSlot); slotId null gibt den eigenen Platz frei. Der Platz wechselt
+ * nur, wenn der neue frei ist. Voraussetzung ist die Zusage "Dabei".
+ * @throws {OrgError}
+ */
+export async function claimSlot(db, orgId, userId, eventId, slotId, access) {
+  const e = await one(db, 'SELECT status FROM events WHERE id = ? AND org_id = ?', [eventId, orgId]);
+  if (e === null || (e.status === 'DRAFT' && !access.admin && !access.canPlan)) throw new OrgError('Termin nicht gefunden.');
+  if (slotId === null) {
+    await releaseSlots(db, userId, eventId);
+    return;
+  }
+  if (e.status === 'CANCELLED') throw new OrgError('Der Termin ist abgesagt.');
+  if (await val(db, "SELECT 1 FROM event_rsvps WHERE event_id = ? AND user_id = ? AND status = 'YES'", [eventId, userId]) === null) {
+    throw new OrgError('Sage zuerst mit „Dabei“ zu.');
+  }
+  await transaction(db, async (conn) => {
+    const ok = await val(conn, 'SELECT 1 FROM event_slots x JOIN event_ships s ON s.id = x.event_ship_id WHERE x.id = ? AND s.event_id = ?', [slotId, eventId]);
+    if (ok === null) throw new OrgError('Platz nicht gefunden.');
+    if (await val(conn, 'SELECT 1 FROM event_slots WHERE id = ? AND user_id = ?', [slotId, userId]) !== null) return; // schon dein Platz
+    await releaseSlots(conn, userId, eventId);
+    if (await run(conn, 'UPDATE event_slots SET user_id = ? WHERE id = ? AND user_id IS NULL', [userId, slotId]) === 0) {
+      throw new OrgError('Der Platz ist schon vergeben.');
+    }
+  });
 }
 
 /**

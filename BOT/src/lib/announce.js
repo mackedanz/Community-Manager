@@ -62,7 +62,7 @@ export function shipsField(ships) {
     return `**${s.name}**${s.task ? ` (${s.task})` : ''}${s.slots.length ? ` ${taken}/${s.slots.length} belegt` : ''}${places}`;
   });
   if (ships.length > 8) lines.push(`… und ${ships.length - 8} weitere`);
-  const hint = '_Einen Platz auf einem Schiff wählst du im Community-Manager (Knopf „Im Community-Manager öffnen“)._';
+  const hint = '_Einen Platz wählst du mit dem Knopf „Platz wählen“ oder im Community-Manager._';
   return { name: `Schiffe (${ships.length})`, value: cut(lines.join('\n'), 1024 - hint.length - 2) + '\n' + hint };
 }
 
@@ -77,14 +77,19 @@ export function announceView(org, e, appUrl, now = Date.now()) {
   const button = (status, label, style) => ({
     type: 2, style, label, custom_id: `evt:pub:${e.id}:${status}`, disabled: past || (cancelled && status !== 'NO'),
   });
+  const components = [{ type: 1, components: [
+    button('YES', RSVP_LABELS.YES, 3), button('MAYBE', RSVP_LABELS.MAYBE, 1), button('NO', RSVP_LABELS.NO, 4),
+    { type: 2, style: 5, label: 'Im Community-Manager öffnen', url: eventUrl(org, e, appUrl) },
+  ] }];
+  // Gibt es Schiffe mit Plätzen, öffnet dieser Knopf die persönliche Ansicht mit der Platzwahl
+  if (!past && !cancelled && (e.ships ?? []).some((s) => s.slots.length > 0)) {
+    components.push({ type: 1, components: [{ type: 2, style: 1, label: 'Platz wählen', custom_id: `evt:seat:${e.id}` }] });
+  }
   return {
     content: '',
     allowedMentions: { parse: [] },
     embeds: [eventEmbed(org, e, appUrl, { past })],
-    components: [{ type: 1, components: [
-      button('YES', RSVP_LABELS.YES, 3), button('MAYBE', RSVP_LABELS.MAYBE, 1), button('NO', RSVP_LABELS.NO, 4),
-      { type: 2, style: 5, label: 'Im Community-Manager öffnen', url: eventUrl(org, e, appUrl) },
-    ] }],
+    components,
   };
 }
 

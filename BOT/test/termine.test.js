@@ -74,3 +74,18 @@ test('Serverregeln: Nachricht und Prüfung der Voraussetzungen', () => {
   assert.match(setupProblem({ ...ok, botCanPost: false }), /nicht schreiben/);
   assert.ok(rulesHandles('rules:ok:1') && rulesHandles('rules:modal:1:2') && !rulesHandles('evt:list'));
 });
+
+test('Platzwahl: freie Plätze, eigener Platz mit Freigeben, nichts bei Absage', async () => {
+  const { seatMenu } = await import('../src/commands/termine.js');
+  const ev = { id: 'a'.repeat(24), status: 'PLANNED', ships: [{ name: 'Phoenix', task: null, slots: [
+    { id: 's1', label: 'Pilot', userId: 'me', holder: 'Ich' }, { id: 's2', label: 'Copilot', userId: 'u2', holder: 'Bert' }, { id: 's3', label: 'Crew 3', userId: null, holder: null },
+  ] }] };
+  const menu = seatMenu(ev, 'me').components[0];
+  assert.equal(menu.custom_id, `evt:slot:${ev.id}`);
+  assert.deepEqual(menu.options.map((o) => o.value), ['s1', 's3', 'NONE']);
+  assert.deepEqual(seatMenu(ev, 'neu').components[0].options.map((o) => o.value), ['s3']);
+  assert.equal(seatMenu({ ...ev, status: 'CANCELLED' }, 'me'), null);
+  assert.equal(seatMenu({ ...ev, ships: [] }, 'me'), null);
+  const many = { ...ev, ships: [{ name: 'X', slots: Array.from({ length: 40 }, (_, i) => ({ id: `p${i}`, label: `P${i}`, userId: null, holder: null })) }] };
+  assert.equal(seatMenu(many, 'me').components[0].options.length, 25);
+});

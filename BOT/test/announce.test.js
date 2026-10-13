@@ -13,11 +13,16 @@ const e = {
 const at = (iso) => Date.parse(iso);
 
 test('Ankündigung: Schiffe mit Plätzen und Hinweis auf den Community-Manager', () => {
-  const withShips = { ...e, ships: [{ name: 'Constellation Phoenix', task: 'Lazarett', slots: [{ label: 'Pilot', holder: 'Anna' }, { label: 'Copilot', holder: null }] }] };
+  const withShips = { ...e, ships: [{ name: 'Constellation Phoenix', task: 'Lazarett', slots: [{ id: 's1', label: 'Pilot', userId: 'u1', holder: 'Anna' }, { id: 's2', label: 'Copilot', userId: null, holder: null }] }] };
   const f = announceView(org, withShips, 'https://cm.example', at('2026-10-10T12:00:00Z')).embeds[0].fields.find((x) => x.name === 'Schiffe (1)');
   assert.match(f.value, /\*\*Constellation Phoenix\*\* \(Lazarett\) 1\/2 belegt – Pilot: Anna, Copilot: offen/);
-  assert.match(f.value, /wählst du im Community-Manager/);
+  assert.match(f.value, /Platz wählen“ oder im Community-Manager/);
   assert.ok(f.value.length <= 1024);
+  // Knopf zur Platzwahl nur mit Schiffen, nicht bei abgesagten Terminen
+  const seat = (view) => view.components.flatMap((r) => r.components).find((b) => b.custom_id === `evt:seat:${id}`);
+  assert.ok(seat(announceView(org, withShips, 'https://cm.example', at('2026-10-10T12:00:00Z'))));
+  assert.ok(!seat(announceView(org, e, 'https://cm.example', at('2026-10-10T12:00:00Z'))));
+  assert.ok(!seat(announceView(org, { ...withShips, status: 'CANCELLED' }, 'https://cm.example', at('2026-10-10T12:00:00Z'))));
   // ohne Schiffe kein Feld
   assert.ok(!announceView(org, e, 'https://cm.example', at('2026-10-10T12:00:00Z')).embeds[0].fields.some((x) => x.name.startsWith('Schiffe')));
   assert.notEqual(fingerprint(announceView(org, e, 'https://cm.example')), fingerprint(announceView(org, withShips, 'https://cm.example')));

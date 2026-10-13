@@ -7,7 +7,7 @@ import { orgForGuild } from '../db.js';
 import { accessFor, userByDiscordId } from '../lib/access.js';
 import { eventEmbed, eventUrl, syncPost } from '../lib/announce.js';
 import { OrgError } from '../lib/errors.js';
-import { eventDetail, RSVP_LABELS, setRsvp, upcomingEvents } from '../lib/events.js';
+import { claimSlot, eventDetail, RSVP_LABELS, setRsvp, upcomingEvents } from '../lib/events.js';
 import { ANNOUNCE_CHANNEL, getSetting, isMissingTable } from '../lib/settings.js';
 import { cut } from '../lib/text.js';
 import { confirm, participants } from '../lib/training.js';
@@ -72,7 +72,30 @@ export function listView(org, events, note = null) {
 }
 
 /** Ein Termin mit Antworten und Knöpfen (persönliche Ansicht). */
-export function detailView(org, e, { appUrl, myStatus = null, note = null, canConfirm = false, canPlan = false }) {
+/** Auswahl für die Platzwahl: freie Plätze und der eigene (zum Freigeben); null, wenn es nichts zu wählen gibt. */
+export function seatMenu(e, myUserId) {
+  if (e.status === 'CANCELLED') return null;
+  const mine = [];
+  const open = [];
+  for (const ship of e.ships ?? []) {
+    for (const s of ship.slots) {
+      const label = cut(`${ship.name} – ${s.label}`, 100);
+      if (myUserId && s.userId === myUserId) mine.push({ label, value: s.id, description: 'Dein Platz', default: true });
+      else if (!s.userId) open.push({ label, value: s.id });
+    }
+  }
+  if (mine.length + open.length === 0) return null;
+  const options = [...mine, ...open].slice(0, mine.length > 0 ? MAX_OPTIONS - 1 : MAX_OPTIONS);
+  if (mine.length > 0) options.push({ label: 'Platz freigeben', value: 'NONE' });
+  return { type: 1, components: [{
+    type: 3,
+    custom_id: `evt:slot:${e.id}`,
+    placeholder: 'Platz auf einem Schiff wählen (erst „Dabei“ zusagen)',
+    options,
+  }] };
+}
+
+export function detailView(org, e, { appUrl, myStatus = null, myUserId = null, note = null, canConfirm = false, canPlan = false }) {
   const cancelled = e.status === 'CANCELLED';
   const button = (status, label, style) => ({ type: 2, style, label, custom_id: `evt:rsvp:${e.id}:${status}`, disabled: cancelled && status !== 'NO' && status !== 'NONE' });
   const second = [{ type: 2, style: 2, label: 'Zurück zur Liste', custom_id: 'evt:list' }];
@@ -82,6 +105,8 @@ export function detailView(org, e, { appUrl, myStatus = null, note = null, canCo
     { type: 1, components: [button('YES', RSVP_LABELS.YES, 3), button('MAYBE', RSVP_LABELS.MAYBE, 1), button('NO', RSVP_LABELS.NO, 4), button('NONE', 'Antwort entfernen', 2)] },
     { type: 1, components: second },
   ];
+  const seats = seatMenu(e, myUserId);
+  if (seats) rows.splice(1, 0, seats);
   // Planer und Admins: absagen bzw. wieder aktivieren und löschen
   if (canPlan) {
     rows.push({ type: 1, components: [
@@ -158,7 +183,7 @@ async function renderDetail(pool, config, org, access, eventId, discordId, note 
   const user = await userByDiscordId(pool, discordId);
   const myStatus = user === null ? null : e.rsvps.find((r) => r.userId === user.id)?.status ?? null;
   const hint = user === null ? `Zum Zu- oder Absagen melde dich einmal auf ${config.appUrl} an.` : null;
-  return detailView(org, e, { appUrl: config.appUrl, myStatus, note: note ?? hint, canConfirm: access.admin || access.canInstruct, canPlan: access.admin || access.canPlan });
+  return detailView(org, e, { appUrl: config.appUrl, myStatus, myUserId: user?.id ?? null, note: note ?? hint, canConfirm: access.admin || access.canInstruct, canPlan: access.admin || access.canPlan });
 }
 
 /** Kommende Termine; Planer und Admins sehen auch Entwürfe. */
@@ -200,7 +225,7 @@ export async function execute(interaction, { pool }) {
 }
 
 export function handles(customId) {
-  return customId === 'evt:show' || customId === 'evt:list' || /^evt:(rsvp|pub|conf|passed|open|cancel|del|delok):/.test(customId);
+  return customId === 'evt:show' || customId === 'evt:list' || /^evt:(rsvp|pub|seat|slot|conf|passed|open|cancel|del|delok):/.test(customId);
 }
 
 export async function handleComponent(interaction, { pool, config, log }) {
@@ -225,6 +250,36 @@ export async function handleComponent(interaction, { pool, config, log }) {
   if (kind === 'open') {
     const view = await renderDetail(pool, config, org, access, eventId, interaction.user.id);
     await interaction.update(view ?? (await goneView(pool, org)));
+    return;
+  }
+
+  // Knopf "Platz wählen" unter der Ankündigung: persönliche Ansicht mit der Platzwahl, nur für die Person sichtbar
+  if (kind === 'seat') {
+    await interaction.deferReply({ flags: EPHEMERAL });
+    const view = await renderDetail(pool, config, org, access, eventId, interaction.user.id);
+    await interaction.editReply(view ?? { content: 'Diesen Termin gibt es nicht mehr.', components: [], embeds: [] });
+    return;
+  }
+
+  if (kind === 'slot') {
+    await interaction.deferUpdate();
+    const user = await userByDiscordId(pool, interaction.user.id);
+    let note;
+    if (user === null) {
+      note = `Zum Platzwählen melde dich einmal auf ${config.appUrl} an. Danach klappt es auch hier.`;
+    } else {
+      const choice = interaction.values[0];
+      try {
+        await claimSlot(pool, org.id, user.id, eventId, choice === 'NONE' ? null : choice, access);
+        note = choice === 'NONE' ? 'Dein Platz ist freigegeben.' : 'Platz gespeichert.';
+      } catch (err) {
+        if (!(err instanceof OrgError)) throw err;
+        note = err.message;
+      }
+    }
+    const view = await renderDetail(pool, config, org, access, eventId, interaction.user.id, note);
+    await interaction.editReply(view ?? (await goneView(pool, org)));
+    await refreshAnnouncement(pool, interaction.client, config, org, eventId, log);
     return;
   }
 

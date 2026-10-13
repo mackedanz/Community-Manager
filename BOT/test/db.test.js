@@ -11,7 +11,7 @@ import { ensureOrg, setRoles, syncAllowlist } from '../src/lib/onboarding.js';
 import { connect, sync } from '../src/lib/rsi.js';
 import { current, reset, setImage, setOpacity } from '../src/lib/branding.js';
 import { newId } from '../src/lib/text.js';
-import { eventDetail, setRsvp, upcomingEvents } from '../src/lib/events.js';
+import { claimSlot, eventDetail, setRsvp, upcomingEvents } from '../src/lib/events.js';
 import { sendOrgReminders, syncOrgPosts } from '../src/lib/announce.js';
 import { ANNOUNCE_CHANNEL, setSetting } from '../src/lib/settings.js';
 import { confirm, participants, qualifications } from '../src/lib/training.js';
@@ -172,10 +172,26 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     await run(pool, 'INSERT INTO event_ships (id, event_id, custom_name) VALUES (?,?,?)', [shipId, kurs, 'Prospector']);
     await run(pool, 'INSERT INTO event_slots (id, event_ship_id, label, user_id) VALUES (?,?,?,?)', [slotId, shipId, 'Pilot', userId]);
     await run(pool, 'UPDATE event_ships SET task = ? WHERE id = ?', ['Erz abbauen', shipId]);
-    assert.deepEqual((await eventDetail(pool, org.id, kurs)).ships, [{ name: 'Prospector', task: 'Erz abbauen', slots: [{ label: 'Pilot', holder: 'Anna' }] }]);
+    assert.deepEqual((await eventDetail(pool, org.id, kurs)).ships, [{ name: 'Prospector', task: 'Erz abbauen', slots: [{ id: slotId, label: 'Pilot', userId, holder: 'Anna' }] }]);
     await setRsvp(pool, org.id, userId, kurs, 'MAYBE', member);
     assert.equal(await val(pool, 'SELECT user_id FROM event_slots WHERE id = ?', [slotId]), null);
-    assert.deepEqual((await eventDetail(pool, org.id, kurs)).ships[0].slots, [{ label: 'Pilot', holder: null }]);
+    assert.deepEqual((await eventDetail(pool, org.id, kurs)).ships[0].slots, [{ id: slotId, label: 'Pilot', userId: null, holder: null }]);
+
+    // Platz einnehmen: erst mit "Dabei", ein Platz pro Person, Wechsel nur auf freie Plätze
+    const slot2 = newId();
+    await run(pool, 'INSERT INTO event_slots (id, event_ship_id, label, sort) VALUES (?,?,?,1)', [slot2, shipId, 'Copilot']);
+    await assert.rejects(claimSlot(pool, org.id, userId, kurs, slotId, member), /zuerst mit „Dabei“/);
+    await setRsvp(pool, org.id, userId, kurs, 'YES', member);
+    await claimSlot(pool, org.id, userId, kurs, slotId, member);
+    assert.equal(await val(pool, 'SELECT user_id FROM event_slots WHERE id = ?', [slotId]), userId);
+    await claimSlot(pool, org.id, userId, kurs, slot2, member); // wechselt: alter Platz wird frei
+    assert.equal(await val(pool, 'SELECT user_id FROM event_slots WHERE id = ?', [slotId]), null);
+    assert.equal(await val(pool, 'SELECT user_id FROM event_slots WHERE id = ?', [slot2]), userId);
+    await assert.rejects(claimSlot(pool, org.id, userId, kurs, 'x'.repeat(24), member), /Platz nicht gefunden/);
+    assert.equal(await val(pool, 'SELECT user_id FROM event_slots WHERE id = ?', [slot2]), userId); // Fehler lässt den Platz unberührt
+    await claimSlot(pool, org.id, userId, kurs, null, member);
+    assert.equal(await val(pool, 'SELECT user_id FROM event_slots WHERE id = ?', [slot2]), null);
+    await setRsvp(pool, org.id, userId, kurs, 'MAYBE', member);
 
     const detail = await eventDetail(pool, org.id, kurs);
     assert.deepEqual(detail.rsvps, [{ userId, status: 'MAYBE', name: 'Anna' }]);
