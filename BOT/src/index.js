@@ -1,9 +1,10 @@
 // Startpunkt des Bots: verbindet sich mit der Datenbank und mit Discord und verteilt die Slash-Befehle.
-import { Client, Events, GatewayIntentBits, MessageFlags } from 'discord.js';
+import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from 'discord.js';
 import { readConfig, ConfigError } from './config.js';
 import { createPool, checkDatabase } from './db.js';
 import { byName } from './commands/index.js';
 import * as panel from './commands/panel.js';
+import { registerMemberEvents } from './events/members.js';
 import { log } from './log.js';
 
 let config;
@@ -24,7 +25,13 @@ try {
   log.warn(`Datenbank beim Start nicht erreichbar: ${err.code ?? err.message}`);
 }
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+// GuildMembers ist ein privilegierter Intent: im Developer Portal unter Bot -> "Server Members Intent" einschalten
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+  // Änderungen an Mitgliedern melden, auch wenn ihr alter Stand nicht im Cache ist
+  partials: [Partials.GuildMember],
+});
+const memberSync = registerMemberEvents(client, { pool, config, log });
 
 client.once(Events.ClientReady, (c) => {
   log.info(`Angemeldet als ${c.user.tag} auf ${c.guilds.cache.size} Server(n)`);
@@ -65,6 +72,7 @@ client.on(Events.Error, (err) => log.error('Discord-Fehler', err));
 
 async function shutdown(signal) {
   log.info(`${signal} erhalten, Bot wird beendet`);
+  memberSync.stop();
   await client.destroy();
   await pool.end();
 }
@@ -74,9 +82,14 @@ process.once('SIGTERM', () => shutdown('SIGTERM'));
 try {
   await client.login(config.token);
 } catch (err) {
-  log.error(err.code === 'TokenInvalid'
-    ? 'Discord lehnt DISCORD_BOT_TOKEN ab. Token im Developer Portal (Bot -> Reset Token) neu erzeugen und eintragen.'
-    : 'Anmeldung bei Discord fehlgeschlagen', err.code === 'TokenInvalid' ? undefined : err);
+  if (err.code === 'TokenInvalid') {
+    log.error('Discord lehnt DISCORD_BOT_TOKEN ab. Token im Developer Portal (Bot -> Reset Token) neu erzeugen und eintragen.');
+  } else if (/disallowed intents/i.test(String(err.message)) || err.code === 4014) {
+    log.error('Discord verweigert den Zugriff auf die Mitglieder. Im Developer Portal unter Bot den "Server Members Intent" einschalten.');
+  } else {
+    log.error('Anmeldung bei Discord fehlgeschlagen', err);
+  }
+  memberSync.stop();
   await client.destroy();
   await pool.end();
   process.exitCode = 1;

@@ -17,6 +17,15 @@ an und ändert sie nicht.
 
 Die Befehle verhalten sich wie die gleichnamigen Befehle der PHP-App (`src/Controllers/DiscordController.php`).
 
+## Automatischer Abgleich
+
+Tritt jemand dem Server bei oder verlässt ihn, bekommt oder verliert jemand eine Rolle der Orga oder ändert seinen
+Namen, gleicht der Bot die Zugangsliste etwa 15 Sekunden später ab. Viele Änderungen kurz hintereinander werden zu
+einem Abgleich zusammengefasst (spätestens nach einer Minute), damit die Sicherheitsbremse gegen das Löschen vieler
+Konten auch hier greift. Nach dem Start gleicht der Bot alle Server einmal ab. Wessen Rollen sich ändern, dessen
+Rechte (Planen, Ausbilden usw.) prüft die Web-App beim nächsten Seitenaufruf neu. Der stündliche Abgleich der
+PHP-App läuft zur Sicherheit weiter.
+
 ## Lokal starten
 
 Voraussetzung: Node.js 22.9 oder neuer und die lokale Datenbank (`start-db.ps1` oder `dev.ps1` im Hauptordner).
@@ -43,7 +52,12 @@ Der Dienst `bot` in der `docker-compose.yml` startet nur, wenn in der `.env` `CO
 Er nutzt dieselben Werte wie die App (`DOMAIN`, `AUTH_DISCORD_ID`, `DISCORD_BOT_TOKEN`, `DB_PASSWORD` usw.) und
 dasselbe Bilder-Volume, damit `/design` die Bilder dort ablegt, wo die App sie ausliefert.
 
-Im Developer Portal muss unter "Bot" der Intent **Server Members** eingeschaltet sein (wie schon für die PHP-App).
+Im Developer Portal muss unter "Bot" der Intent **Server Members** eingeschaltet sein (wie schon für die PHP-App),
+sonst startet der Bot nicht.
+
+Der Bot muss mit den Scopes `bot` und `applications.commands` eingeladen sein. Fehlen die Befehle in Discord, obwohl
+sie angemeldet sind, den Bot neu einladen (OAuth2 → URL Generator, beide Scopes, Rechte "Kanäle ansehen" und
+"Events verwalten").
 
 ## Umstieg von der PHP-App auf den Bot
 
