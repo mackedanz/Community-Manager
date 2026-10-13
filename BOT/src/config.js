@@ -1,5 +1,6 @@
 // Liest die Einstellungen aus den Umgebungsvariablen. Die Namen sind dieselben wie in der PHP-App,
 // damit beide aus derselben .env versorgt werden können.
+import { fileURLToPath } from 'node:url';
 
 export class ConfigError extends Error {}
 
@@ -16,7 +17,7 @@ function value(env, name) {
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
 }
 
-/** @returns {{token: string, applicationId: string, devGuildId: string|null, db: {host: string, port: number, database: string, user: string, password: string}}} */
+/** Prüft die Pflichtwerte und liefert alle Einstellungen als Objekt. @throws {ConfigError} */
 export function readConfig(env = process.env) {
   const missing = Object.keys(REQUIRED).filter((name) => value(env, name) === null);
   if (missing.length > 0) {
@@ -29,8 +30,25 @@ export function readConfig(env = process.env) {
     throw new ConfigError(`DB_PORT ist keine gültige Portnummer: ${env.DB_PORT}`);
   }
 
+  const list = (name) => (value(env, name) ?? '').split(',').map((s) => s.trim()).filter((s) => s !== '');
+  let appUrl = value(env, 'AUTH_URL') ?? value(env, 'APP_URL');
+  if (appUrl === null) {
+    const domain = value(env, 'DOMAIN');
+    appUrl = domain !== null ? `https://${domain}` : 'http://localhost:8080';
+  }
+
   return {
     token: value(env, 'DISCORD_BOT_TOKEN'),
+    // Adresse der Web-App (für Hinweise in den Antworten)
+    appUrl: appUrl.replace(/\/+$/, ''),
+    // Nur diese Server dürfen per /einrichten eine Orga anlegen (leer = jeder Server)
+    onboardingGuildIds: list('ONBOARDING_GUILD_IDS'),
+    // Betreiber der Installation; ihre Konten werden beim Abgleich nie gelöscht
+    serverAdminIds: list('SERVER_ADMIN_DISCORD_ID'),
+    // Anmeldung nur mit Eintrag auf einer Zugangsliste; nur dann löscht der Abgleich Konten ehemaliger Mitglieder
+    loginRequiresAllowlist: ['1', 'true', 'yes', 'on'].includes((value(env, 'LOGIN_REQUIRES_ALLOWLIST') ?? '').toLowerCase()),
+    // Bilderordner der Web-App (im Docker-Stack dasselbe Volume); hier legt /design Logo und Hintergrund ab
+    imageDir: (value(env, 'IMAGE_DIR') ?? fileURLToPath(new URL('../../storage/images', import.meta.url))).replace(/[\\/]+$/, ''),
     applicationId: value(env, 'AUTH_DISCORD_ID'),
     // Nur für die Entwicklung: Befehle sofort auf diesem einen Server statt global registrieren
     devGuildId: value(env, 'BOT_DEV_GUILD_ID'),

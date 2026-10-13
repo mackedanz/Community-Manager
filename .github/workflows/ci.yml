@@ -46,18 +46,46 @@ jobs:
 
   bot-test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: BOT
+    services:
+      db:
+        image: mariadb:11.8
+        env:
+          MARIADB_DATABASE: hangar_test
+          MARIADB_USER: hangar
+          MARIADB_PASSWORD: hangar
+          MARIADB_RANDOM_ROOT_PASSWORD: "1"
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_NAME: hangar_test
+      DB_USER: hangar
+      DB_PASSWORD: hangar
+      TEST_DB_HOST: 127.0.0.1
+      TEST_DB_PORT: "3306"
+      TEST_DB_NAME: hangar_test
     steps:
       - uses: actions/checkout@v5
+      # Das Schema kommt aus den PHP-Migrationen, wie im Betrieb
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: intl, pdo_mysql, mbstring, sodium
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist --no-dev
+      - run: php bin/migrate.php
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: BOT/package-lock.json
       - run: npm ci
+        working-directory: BOT
       - run: npm test
+        working-directory: BOT
 
   bot-image:
     needs: bot-test

@@ -73,13 +73,23 @@ services:
       # Die App spielt beim Start die Migrationen ein
       app:
         condition: service_started
+    # Gleicher Benutzer wie der Webserver der App (www-data), damit beide die Bilder im gemeinsamen Volume lesen und ersetzen dürfen
+    user: "33:33"
     environment:
+      DOMAIN: ${DOMAIN:?DOMAIN fehlt (z. B. hangar.example.de)}
       AUTH_DISCORD_ID: ${AUTH_DISCORD_ID:?AUTH_DISCORD_ID fehlt}
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DB_HOST: db
       DB_NAME: hangar
       DB_USER: hangar
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt}
+      SERVER_ADMIN_DISCORD_ID: ${SERVER_ADMIN_DISCORD_ID:-}
+      LOGIN_REQUIRES_ALLOWLIST: ${LOGIN_REQUIRES_ALLOWLIST:-0}
+      ONBOARDING_GUILD_IDS: ${ONBOARDING_GUILD_IDS:-}
+      IMAGE_DIR: /data/images
+    volumes:
+      # Logo und Hintergrund aus /design landen dort, wo die App sie ausliefert
+      - ship-images:/data/images
     mem_limit: 256m
     pids_limit: 100
 

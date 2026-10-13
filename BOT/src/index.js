@@ -3,6 +3,7 @@ import { Client, Events, GatewayIntentBits, MessageFlags } from 'discord.js';
 import { readConfig, ConfigError } from './config.js';
 import { createPool, checkDatabase } from './db.js';
 import { byName } from './commands/index.js';
+import * as panel from './commands/panel.js';
 import { log } from './log.js';
 
 let config;
@@ -29,17 +30,27 @@ client.once(Events.ClientReady, (c) => {
   log.info(`Angemeldet als ${c.user.tag} auf ${c.guilds.cache.size} Server(n)`);
 });
 
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  const command = byName.get(interaction.commandName);
-  if (!command) {
-    log.warn(`Unbekannter Befehl /${interaction.commandName}`);
-    return;
+/** Welche Funktion bearbeitet diese Interaktion? null = keine (wird ignoriert). */
+function handlerFor(interaction) {
+  if (!interaction.inGuild()) return null;
+  if (interaction.isChatInputCommand()) {
+    const command = byName.get(interaction.commandName);
+    if (!command) log.warn(`Unbekannter Befehl /${interaction.commandName}`);
+    return command ? { name: `/${interaction.commandName}`, run: command.execute } : null;
   }
+  if ((interaction.isRoleSelectMenu() || interaction.isButton()) && panel.handles(interaction.customId)) {
+    return { name: `Panel ${interaction.customId}`, run: panel.handleComponent };
+  }
+  return null;
+}
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  const handler = handlerFor(interaction);
+  if (handler === null) return;
   try {
-    await command.execute(interaction, { pool, config });
+    await handler.run(interaction, { pool, config });
   } catch (err) {
-    log.error(`/${interaction.commandName} fehlgeschlagen`, err);
+    log.error(`${handler.name} fehlgeschlagen`, err);
     const reply = { content: 'Da ist etwas schiefgelaufen. Bitte später noch einmal versuchen.', flags: MessageFlags.Ephemeral };
     try {
       if (interaction.deferred || interaction.replied) await interaction.editReply(reply.content);
