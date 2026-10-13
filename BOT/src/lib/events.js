@@ -17,16 +17,16 @@ export const AREAS = {
 };
 const DEPARTMENT_KINDS = { TRAINING: 'Training', EXERCISE: 'Übung' };
 
-/** Die nächsten geplanten Termine (laufende eingeschlossen, ohne Entwürfe und abgesagte). */
-export async function upcomingEvents(db, orgId, take = 10, now = nowDb()) {
+/** Die nächsten geplanten Termine (laufende eingeschlossen, ohne abgesagte; Entwürfe nur mit drafts für Planer). */
+export async function upcomingEvents(db, orgId, take = 10, now = nowDb(), { drafts = false } = {}) {
   const rows = await all(
     db,
-    `SELECT e.id, e.title, e.starts_at, e.ends_at,
+    `SELECT e.id, e.title, e.starts_at, e.ends_at, e.status,
             (SELECT CONCAT(tc.topic, ' · Stufe ', tc.level) FROM training_courses tc WHERE tc.id = e.course_id) AS training,
             (SELECT d.name FROM departments d WHERE d.id = e.department_id) AS department, e.department_kind,
             (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'YES') AS yes_count
        FROM events e
-      WHERE e.org_id = ? AND e.status = 'PLANNED' AND (e.starts_at >= ? OR e.ends_at >= ?)
+      WHERE e.org_id = ? AND e.status IN ('PLANNED'${drafts ? ", 'DRAFT'" : ''}) AND (e.starts_at >= ? OR e.ends_at >= ?)
       ORDER BY e.starts_at ASC LIMIT ${Number(take)}`,
     [orgId, now, now],
   );
@@ -38,6 +38,7 @@ export async function upcomingEvents(db, orgId, take = 10, now = nowDb()) {
     training: e.training,
     department: e.department === null ? null : `${DEPARTMENT_KINDS[e.department_kind] ?? 'Termin'}: ${e.department}`,
     yes: Number(e.yes_count),
+    draft: e.status === 'DRAFT',
   }));
 }
 

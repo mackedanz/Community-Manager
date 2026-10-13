@@ -20,6 +20,9 @@ an und ändert sie nicht.
 | `/flotte` | Mitglieder der Orga | alle Schiffe der Orga mit Anzahl, anonym; `suche:` filtert nach Name oder Hersteller |
 | `/wer-hat` | Mitglieder der Orga | wer ein Schiff hat (Vorschläge aus dem Katalog beim Tippen); nur freigegebene Hangars |
 | `/profil` | Mitglieder der Orga | RSI-Handle, Schiffe, Errungenschaften, Ausbildungen, letzter RSI-Sync |
+| `/termin-neu` | Planer und Admins | Termin anlegen: Optionen für Ausbildung, Abteilung, Entwurf und Discord-Event, danach ein Fenster für Titel, Beginn, Ende, Ort und Beschreibung (Zeiten in deutscher Zeit, z. B. `14.10.2026 20:00`) |
+| `/orga` | Server-Admins | Einstellungen der Orga ansehen; `name:` benennt sie um, `discord_events:` schaltet die Übernahme der Discord-Events |
+| `/betreiber` | nur `SERVER_ADMIN_DISCORD_ID` | `orgas` (alle Orgas und Sperren), `sperren`, `entsperren`, `loeschen` (mit Rückfrage) |
 | `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle |
 | `/ping` | alle | Verbindung zu Discord und zur Datenbank prüfen |
 | `/hilfe`, `/help` | alle | Übersicht aller Befehle, erzeugt aus der Befehlsliste; Admin-Befehle sehen nur Admins |
@@ -30,6 +33,9 @@ ist anonym und zählt alle Schiffe der Mitglieder, ohne zu zeigen, wem sie gehö
 
 Antworten über `/termine` brauchen ein Konto in der Web-App (einmal dort mit Discord anmelden). Für
 Ausbildungstermine gilt wie auf der Webseite: erst nach bestandener Vorstufe (Admins und Ausbilder ausgenommen).
+
+Planer und Admins sehen in `/termine` auch Entwürfe und unter jedem Termin „Absagen“ bzw. „Wieder aktivieren“ und
+„Löschen“ (mit Rückfrage). Schiffe und Plätze eines Termins sowie das Bearbeiten bleiben auf der Webseite.
 
 Admins und Ausbilder sehen bei Ausbildungsterminen in `/termine` zusätzlich „Teilnahme bestätigen“: eine Auswahl
 der Zusagen, in der sie markieren, wer bestanden hat (wie auf der Webseite).

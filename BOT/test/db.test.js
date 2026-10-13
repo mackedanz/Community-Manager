@@ -16,6 +16,8 @@ import { sendOrgReminders, syncOrgPosts } from '../src/lib/announce.js';
 import { ANNOUNCE_CHANNEL, setSetting } from '../src/lib/settings.js';
 import { confirm, participants, qualifications } from '../src/lib/training.js';
 import { nowDb } from '../src/db.js';
+import { createEvent, deleteEvent, setCancelled } from '../src/lib/eventadmin.js';
+import { banGuild, deleteOrg, listAllOrgs, listBans, orgCounts, renameOrg, setDiscordEventsMode, unbanGuild } from '../src/lib/orgadmin.js';
 import { hangarItems, memberAccount, orgFleet, rsiHandleOf, searchShips, shipOwners } from '../src/lib/hangar.js';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
@@ -283,6 +285,51 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.equal(await rsiHandleOf(pool, acc), 'anna_sc');
     await run(pool, 'DELETE FROM users WHERE id IN (?, ?)', [offen.id, privat.id]);
     await run(pool, 'DELETE FROM catalog_items WHERE id = ?', [ship]);
+  });
+
+  test('Termin anlegen, absagen, löschen; Orga verwalten; Betreiber sperrt und löscht', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Admin-Test' }, iconUrl: null });
+    const planer = newId();
+    await run(pool, 'INSERT INTO users (id, name) VALUES (?, ?)', [planer, 'Planer']);
+    const dept = newId();
+    await run(pool, 'INSERT INTO departments (id, org_id, name) VALUES (?,?,?)', [dept, org.id, 'Bergbau']);
+
+    const evId = await createEvent(pool, org.id, planer, { title: 'Übung', startsAt: '14.10.2099 20:00' }, { departmentId: dept, departmentKind: 'EXERCISE', discord: true });
+    const ev = await one(pool, 'SELECT status, starts_at, department_kind, discord_push, discord_dirty FROM events WHERE id = ?', [evId]);
+    assert.deepEqual({ ...ev }, { status: 'PLANNED', starts_at: '2099-10-14 18:00:00', department_kind: 'EXERCISE', discord_push: 1, discord_dirty: 1 });
+    await assert.rejects(createEvent(pool, org.id, planer, { title: 'X', startsAt: '14.10.2099 20:00' }, {}), /Titel zu kurz/);
+    await assert.rejects(createEvent(pool, org.id, planer, { title: 'Xyz', startsAt: '14.10.2099 20:00' }, { courseId: newId() }), /Ausbildung gibt es/);
+    const draftId = await createEvent(pool, org.id, planer, { title: 'Entwurf', startsAt: '15.10.2099 20:00' }, { draft: true });
+    assert.equal(await val(pool, 'SELECT status FROM events WHERE id = ?', [draftId]), 'DRAFT');
+    assert.deepEqual((await upcomingEvents(pool, org.id, 10, undefined, { drafts: true })).map((e) => [e.title, e.draft]), [['Übung', false], ['Entwurf', true]]);
+
+    await setCancelled(pool, org.id, evId, true);
+    assert.equal(await val(pool, 'SELECT status FROM events WHERE id = ?', [evId]), 'CANCELLED');
+    await setCancelled(pool, org.id, evId, false);
+    // Von der Web-App angelegtes Discord-Event: beim Löschen vormerken, damit der Abgleich es in Discord entfernt
+    await run(pool, "UPDATE events SET discord_origin = 'PUSH', discord_event_id = '123456789012345678' WHERE id = ?", [evId]);
+    await deleteEvent(pool, org.id, evId);
+    assert.equal(await val(pool, 'SELECT 1 FROM events WHERE id = ?', [evId]), null);
+    assert.equal(await val(pool, "SELECT discord_event_id FROM discord_event_deletions WHERE org_id = ?", [org.id]), '123456789012345678');
+    await assert.rejects(deleteEvent(pool, org.id, evId), /nicht gefunden/);
+
+    await renameOrg(pool, org.id, '  Neuer Name ');
+    await setDiscordEventsMode(pool, org.id, 'PUBLISHED');
+    assert.deepEqual({ ...(await one(pool, 'SELECT name, discord_events_mode FROM organizations WHERE id = ?', [org.id])) }, { name: 'Neuer Name', discord_events_mode: 'PUBLISHED' });
+    await assert.rejects(setDiscordEventsMode(pool, org.id, 'IRGENDWAS'), /Ungültige Auswahl/);
+    assert.equal((await orgCounts(pool, org.id)).events, 0);
+
+    // Betreiber: Sperren löscht die Orga, Entsperren hebt die Sperre auf
+    assert.equal(await banGuild(pool, guildId, null, 'Test', planer), 'Neuer Name');
+    assert.equal(await val(pool, 'SELECT 1 FROM organizations WHERE id = ?', [org.id]), null);
+    assert.ok((await listBans(pool)).some((b) => b.discord_guild_id === guildId));
+    await assert.rejects(banGuild(pool, 'abc', null, null, planer), /Ungültige Discord-Server-ID/);
+    assert.equal(await unbanGuild(pool, guildId), 1);
+    const org2 = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Wieder da' }, iconUrl: null });
+    assert.ok((await listAllOrgs(pool)).some((o) => o.id === org2.id));
+    assert.equal(await deleteOrg(pool, org2.id), 1);
+    await run(pool, 'DELETE FROM users WHERE id = ?', [planer]);
   });
 
   test('/design: Bilder ablegen, alte Dateien entfernen, zurücksetzen', async () => {

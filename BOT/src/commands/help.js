@@ -6,7 +6,9 @@ import { isGuildAdmin } from '../lib/guild.js';
 const GROUPS = [
   ['everyone', 'Für alle'],
   ['members', 'Für Mitglieder der Orga'],
+  ['planners', 'Für Planer und Admins'],
   ['admins', 'Für Server-Admins'],
+  ['operator', 'Für den Betreiber der Installation'],
 ];
 
 /** Wer darf den Befehl nutzen? Aus help.audience, sonst aus den Standardrechten des Befehls. */
@@ -14,18 +16,21 @@ export function audienceOf(command) {
   return command.audience ?? (command.data.default_member_permissions ? 'admins' : 'everyone');
 }
 
-/** "/termine-kanal [kanal] [aus]": Pflichtangaben in <>, freiwillige in []. */
+/** "/termine-kanal [kanal] [aus]": Pflichtangaben in <>, freiwillige in []; Unterbefehle mit | getrennt. */
 export function usage(data) {
+  const subs = (data.options ?? []).filter((o) => o.type === 1);
+  if (subs.length > 0) return `/${data.name} ${subs.map((s) => s.name).join('|')}`;
   const opts = (data.options ?? []).map((o) => (o.required ? `<${o.name}>` : `[${o.name}]`));
   return [`/${data.name}`, ...opts].join(' ');
 }
 
 /** Text der Übersicht. ids: Befehlsname => ID bei Discord (dann sind die Befehle anklickbar). */
-export function helpText(commands, { admin, ids = new Map(), appUrl }) {
+export function helpText(commands, { admin, operator = false, ids = new Map(), appUrl }) {
   const seen = new Set();
   const sections = [];
   for (const [group, title] of GROUPS) {
     if (group === 'admins' && !admin) continue;
+    if (group === 'operator' && !operator) continue;
     const lines = commands
       .filter((c) => audienceOf(c) === group && !c.hideInHelp && !seen.has(c.data.name))
       .map((c) => {
@@ -65,6 +70,7 @@ export function makeHelp(name, description, getCommands) {
     async execute(interaction, { config }) {
       const text = helpText(getCommands(), {
         admin: isGuildAdmin(interaction),
+        operator: config.serverAdminIds.includes(interaction.user.id),
         ids: await commandIds(interaction.client),
         appUrl: config.appUrl,
       });

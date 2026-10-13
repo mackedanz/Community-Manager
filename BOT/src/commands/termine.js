@@ -11,6 +11,7 @@ import { eventDetail, RSVP_LABELS, setRsvp, upcomingEvents } from '../lib/events
 import { ANNOUNCE_CHANNEL, getSetting, isMissingTable } from '../lib/settings.js';
 import { cut } from '../lib/text.js';
 import { confirm, participants } from '../lib/training.js';
+import { deleteEvent, setCancelled } from '../lib/eventadmin.js';
 
 /** Für /hilfe: nutzbar für Mitglieder der Orga */
 export const audience = 'members';
@@ -47,7 +48,7 @@ export function listView(org, events, note = null) {
     return { content: `**Kommende Termine – ${org.name}**\nGerade ist nichts geplant.${note ? `\n\n${note}` : ''}`, embeds: [], components: [], allowedMentions: { parse: [] } };
   }
   const lines = events.map((e) => {
-    const tag = e.training ? ` · Ausbildung ${e.training}` : e.department ? ` · ${e.department}` : '';
+    const tag = (e.draft ? ' · Entwurf' : '') + (e.training ? ` · Ausbildung ${e.training}` : e.department ? ` · ${e.department}` : '');
     return `• <t:${unix(e.startsAt)}:f> **${e.title}**${tag} – ${e.yes} dabei`;
   });
   return {
@@ -71,20 +72,42 @@ export function listView(org, events, note = null) {
 }
 
 /** Ein Termin mit Antworten und Knöpfen (persönliche Ansicht). */
-export function detailView(org, e, { appUrl, myStatus = null, note = null, canConfirm = false }) {
+export function detailView(org, e, { appUrl, myStatus = null, note = null, canConfirm = false, canPlan = false }) {
   const cancelled = e.status === 'CANCELLED';
   const button = (status, label, style) => ({ type: 2, style, label, custom_id: `evt:rsvp:${e.id}:${status}`, disabled: cancelled && status !== 'NO' && status !== 'NONE' });
   const second = [{ type: 2, style: 2, label: 'Zurück zur Liste', custom_id: 'evt:list' }];
   if (canConfirm && e.course) second.push({ type: 2, style: 1, label: 'Teilnahme bestätigen', custom_id: `evt:conf:${e.id}` });
   second.push({ type: 2, style: 5, label: 'Im Community-Manager öffnen', url: eventUrl(org, e, appUrl) });
+  const rows = [
+    { type: 1, components: [button('YES', RSVP_LABELS.YES, 3), button('MAYBE', RSVP_LABELS.MAYBE, 1), button('NO', RSVP_LABELS.NO, 4), button('NONE', 'Antwort entfernen', 2)] },
+    { type: 1, components: second },
+  ];
+  // Planer und Admins: absagen bzw. wieder aktivieren und löschen
+  if (canPlan) {
+    rows.push({ type: 1, components: [
+      { type: 2, style: 2, label: cancelled ? 'Wieder aktivieren' : 'Absagen', custom_id: `evt:cancel:${e.id}` },
+      { type: 2, style: 4, label: 'Löschen', custom_id: `evt:del:${e.id}` },
+    ] });
+  }
+  const draft = e.status === 'DRAFT' ? 'Entwurf: Nur Planer sehen diesen Termin.' : null;
   return {
-    content: note ?? '',
+    content: [draft, note].filter(Boolean).join('\n'),
     allowedMentions: { parse: [] },
     embeds: [eventEmbed(org, e, appUrl, { myStatus })],
-    components: [
-      { type: 1, components: [button('YES', RSVP_LABELS.YES, 3), button('MAYBE', RSVP_LABELS.MAYBE, 1), button('NO', RSVP_LABELS.NO, 4), button('NONE', 'Antwort entfernen', 2)] },
-      { type: 1, components: second },
-    ],
+    components: rows,
+  };
+}
+
+/** Rückfrage vor dem Löschen. */
+export function deleteConfirmView(e) {
+  return {
+    content: `**„${e.title}“ wirklich löschen?** Antworten und Plätze gehen dabei verloren. Absagen statt Löschen hält den Termin sichtbar.`,
+    embeds: [],
+    allowedMentions: { parse: [] },
+    components: [{ type: 1, components: [
+      { type: 2, style: 4, label: 'Ja, löschen', custom_id: `evt:delok:${e.id}` },
+      { type: 2, style: 2, label: 'Abbrechen', custom_id: `evt:open:${e.id}` },
+    ] }],
   };
 }
 
@@ -135,8 +158,11 @@ async function renderDetail(pool, config, org, access, eventId, discordId, note 
   const user = await userByDiscordId(pool, discordId);
   const myStatus = user === null ? null : e.rsvps.find((r) => r.userId === user.id)?.status ?? null;
   const hint = user === null ? `Zum Zu- oder Absagen melde dich einmal auf ${config.appUrl} an.` : null;
-  return detailView(org, e, { appUrl: config.appUrl, myStatus, note: note ?? hint, canConfirm: access.admin || access.canInstruct });
+  return detailView(org, e, { appUrl: config.appUrl, myStatus, note: note ?? hint, canConfirm: access.admin || access.canInstruct, canPlan: access.admin || access.canPlan });
 }
+
+/** Kommende Termine; Planer und Admins sehen auch Entwürfe. */
+const upcomingFor = (pool, org, access) => upcomingEvents(pool, org.id, 10, undefined, { drafts: access.admin || access.canPlan });
 
 const goneView = async (pool, org) => listView(org, await upcomingEvents(pool, org.id), 'Diesen Termin gibt es nicht mehr.');
 
@@ -164,17 +190,17 @@ async function refreshAnnouncement(pool, client, config, org, eventId, log) {
 }
 
 export async function execute(interaction, { pool }) {
-  const { org, refusal } = await context(interaction, pool);
+  const { org, access, refusal } = await context(interaction, pool);
   if (refusal) {
     await interaction.reply({ content: refusal, flags: EPHEMERAL });
     return;
   }
   await interaction.deferReply({ flags: EPHEMERAL });
-  await interaction.editReply(listView(org, await upcomingEvents(pool, org.id)));
+  await interaction.editReply(listView(org, await upcomingFor(pool, org, access)));
 }
 
 export function handles(customId) {
-  return customId === 'evt:show' || customId === 'evt:list' || /^evt:(rsvp|pub|conf|passed|open):/.test(customId);
+  return customId === 'evt:show' || customId === 'evt:list' || /^evt:(rsvp|pub|conf|passed|open|cancel|del|delok):/.test(customId);
 }
 
 export async function handleComponent(interaction, { pool, config, log }) {
@@ -184,7 +210,7 @@ export async function handleComponent(interaction, { pool, config, log }) {
     return;
   }
   if (interaction.customId === 'evt:list') {
-    await interaction.update(listView(org, await upcomingEvents(pool, org.id)));
+    await interaction.update(listView(org, await upcomingFor(pool, org, access)));
     return;
   }
   if (interaction.customId === 'evt:show') {
@@ -216,6 +242,36 @@ export async function handleComponent(interaction, { pool, config, log }) {
     const note = await answer(pool, config, org, access, interaction.user.id, eventId, status);
     const view = await renderDetail(pool, config, org, access, eventId, interaction.user.id, note);
     await interaction.editReply(view ?? (await goneView(pool, org)));
+    await refreshAnnouncement(pool, interaction.client, config, org, eventId, log);
+    return;
+  }
+
+  // Absagen, wieder aktivieren, löschen: nur Planer und Admins
+  if (kind === 'cancel' || kind === 'del' || kind === 'delok') {
+    if (!access.admin && !access.canPlan) {
+      await interaction.reply({ content: 'Das dürfen nur Planer und Admins.', flags: EPHEMERAL });
+      return;
+    }
+    const current = await eventDetail(pool, org.id, eventId, access);
+    if (current === null) {
+      await interaction.update(await goneView(pool, org));
+      return;
+    }
+    if (kind === 'del') {
+      await interaction.update(deleteConfirmView(current));
+      return;
+    }
+    await interaction.deferUpdate();
+    if (kind === 'delok') {
+      await deleteEvent(pool, org.id, eventId);
+      await interaction.editReply(listView(org, await upcomingFor(pool, org, access), `„${current.title}“ ist gelöscht.`));
+    } else {
+      const cancel = current.status !== 'CANCELLED';
+      await setCancelled(pool, org.id, eventId, cancel);
+      const note = cancel ? 'Termin abgesagt. Alle sehen ihn weiter als abgesagt.' : 'Termin ist wieder aktiv.';
+      await interaction.editReply(await renderDetail(pool, config, org, access, eventId, interaction.user.id, note));
+    }
+    // Ankündigung im Kanal anpassen bzw. entfernen
     await refreshAnnouncement(pool, interaction.client, config, org, eventId, log);
     return;
   }
