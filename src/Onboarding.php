@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Hangar;
 
 /**
- * Onboarding-Bot: Orga per /einrichten anlegen, Rollen wählen, Mitglieder mit diesen Rollen in die
- * Zugangsliste (org_allowed_members) übernehmen. Mit LOGIN_REQUIRES_ALLOWLIST=1 dürfen sich nur
- * Personen anmelden, die in mindestens einer Zugangsliste stehen (oder Server-Admin sind).
+ * Zugangsliste (org_allowed_members): Mitglieder mit den Rollen der Orga. Orga anlegen und Rollen wählen erledigt der
+ * Discord-Bot (BOT/, /einrichten); hier laufen der stündliche Abgleich, der Abgleich aus "Orga verwalten" und die
+ * Anmelde-Sperre. Mit LOGIN_REQUIRES_ALLOWLIST=1 dürfen sich nur Personen anmelden, die in mindestens einer
+ * Zugangsliste stehen (oder Server-Admin sind).
  */
 final class Onboarding
 {
@@ -30,74 +31,6 @@ final class Onboarding
         }
         return in_array($discordId, Config::serverAdminIds(), true)
             || Db::val('SELECT 1 FROM org_allowed_members WHERE discord_id = ? LIMIT 1', [$discordId]) !== null;
-    }
-
-    /**
-     * Orga zum Server; wird beim ersten Aufruf angelegt. Die aufrufende Person kommt dauerhaft auf die Liste.
-     * @return array<string,mixed>
-     */
-    public static function ensureOrg(string $guildId, string $invokerId, string $invokerName): array
-    {
-        $allowed = Config::onboardingGuildIds();
-        if ($allowed !== [] && !in_array($guildId, $allowed, true)) {
-            throw new OrgError("Dieser Server ist nicht freigeschaltet. Bitte den Betreiber, die Server-ID $guildId freizugeben.");
-        }
-        $org = Db::one('SELECT * FROM organizations WHERE discord_guild_id = ?', [$guildId]);
-        if ($org === null) {
-            if (Db::val('SELECT 1 FROM banned_guilds WHERE discord_guild_id = ?', [$guildId]) !== null) {
-                throw new OrgError('Dieser Discord-Server wurde vom Betreiber gesperrt.');
-            }
-            $guild = null;
-            try {
-                $guild = DiscordBot::guild($guildId);
-            } catch (DiscordUnavailableError) {
-                // Name fällt auf einen Platzhalter zurück und lässt sich später ändern.
-            }
-            $name = mb_substr(trim($guild['name'] ?? ''), 0, 60);
-            if (mb_strlen($name) < 2) {
-                $name = 'Orga ' . substr($guildId, -4);
-            }
-            $id = new_id();
-            Db::insert('organizations', [
-                'id' => $id,
-                'slug' => Orgs::uniqueSlug($name),
-                'name' => $name,
-                'discord_guild_id' => $guildId,
-                'icon_url' => $guild !== null ? Discord::guildIconUrl(['id' => $guildId, 'icon' => $guild['icon']]) : null,
-                'created_by_id' => $invokerId,
-            ]);
-            $org = Orgs::find($id) ?? throw new OrgError('Orga konnte nicht angelegt werden.');
-        }
-        Db::run(
-            'INSERT INTO org_allowed_members (org_id, discord_id, name, fixed, synced_at) VALUES (?,?,?,1,?)
-             ON DUPLICATE KEY UPDATE fixed = 1, name = VALUES(name)',
-            [$org['id'], $invokerId, mb_substr($invokerName, 0, 190), Time::nowDb()],
-        );
-        return $org;
-    }
-
-    /**
-     * Speichert die gewählten Rollen. $kind: 'use' (darf nutzen), 'plan' (darf Events planen) 'recruit' (sieht die RSI-Zugehörigkeit) 'instruct' (pflegt die Ausbildung) oder 'lead' (pflegt die Abteilungen).
-     * @param list<string> $ids @param array<string,string> $names Rollen-ID => Name
-     */
-    public static function setRoles(string $orgId, string $kind, array $ids, array $names): void
-    {
-        $org = Orgs::find($orgId) ?? throw new OrgError('Orga nicht gefunden.');
-        $clean = Orgs::cleanRoleIds($ids);
-        $member = $kind === 'use' ? $clean : $org['member_role_ids'];
-        $planner = $kind === 'plan' ? $clean : $org['planner_role_ids'];
-        $recruiter = $kind === 'recruit' ? $clean : ($org['recruiter_role_ids'] ?? null);
-        $instructor = $kind === 'instruct' ? $clean : ($org['instructor_role_ids'] ?? null);
-        $lead = $kind === 'lead' ? $clean : ($org['lead_role_ids'] ?? null);
-        $labels = Orgs::buildRoleLabels(
-            [...Orgs::parseRoleIds($member), ...Orgs::parseRoleIds($planner), ...Orgs::parseRoleIds($recruiter), ...Orgs::parseRoleIds($instructor), ...Orgs::parseRoleIds($lead)],
-            $names + Orgs::parseRoleLabels($org['role_labels']),
-        );
-        Db::run('UPDATE organizations SET member_role_ids = ?, planner_role_ids = ?, recruiter_role_ids = ?, instructor_role_ids = ?, lead_role_ids = ?, role_labels = ? WHERE id = ?', [$member, $planner, $recruiter, $instructor, $lead, $labels, $orgId]);
-        if ($org['member_role_ids'] !== $member || $org['planner_role_ids'] !== $planner || ($org['recruiter_role_ids'] ?? null) !== $recruiter || ($org['instructor_role_ids'] ?? null) !== $instructor || ($org['lead_role_ids'] ?? null) !== $lead) {
-            // Alle bisherigen Mitglieder beim nächsten Seitenaufruf neu prüfen.
-            Db::run('UPDATE users SET membership_checked_at = NULL WHERE id IN (SELECT user_id FROM org_memberships WHERE org_id = ?)', [$orgId]);
-        }
     }
 
     /** Speichert, wo im Server-Nickname der RSI-Handle steht (RsiOrg::HANDLE_STYLES). */

@@ -8,7 +8,6 @@ use Hangar\Controllers\AdminController;
 use Hangar\Controllers\ApiController;
 use Hangar\Controllers\CatalogController;
 use Hangar\Controllers\DevController;
-use Hangar\Controllers\DiscordController;
 use Hangar\Controllers\EventController;
 use Hangar\Controllers\HangarController;
 use Hangar\Controllers\HomeController;
@@ -74,8 +73,7 @@ final class App
         $r->get('/sync/receive', [SyncController::class, 'receive']);
         $r->post('/api/v1/import/hangar', [ApiController::class, 'importHangar'], false);
         $r->get('/api/v1/me/items', [ApiController::class, 'myItems']);
-        // Onboarding-Bot (Discord ruft diesen Endpunkt auf; Schutz durch Ed25519-Signatur statt CSRF)
-        $r->post('/discord/interactions', [DiscordController::class, 'interactions'], false);
+        // Die Slash-Befehle bedient der Discord-Bot im Ordner BOT/ (früher POST /discord/interactions)
 
         // Orgas
         $r->post('/orgs/update', [OrgController::class, 'update']);

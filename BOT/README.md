@@ -54,7 +54,8 @@ die die Web-App beim Start einspielt.
 Für `/serverregeln` braucht der Bot das Recht „Rollen verwalten“, und seine Rolle muss in den Servereinstellungen
 über der Rolle stehen, die er vergeben soll. Der Befehl prüft das vorher und sagt, was fehlt.
 
-Die Befehle verhalten sich wie die gleichnamigen Befehle der PHP-App (`src/Controllers/DiscordController.php`).
+Die früheren Slash-Befehle der PHP-App (Interactions Endpoint `POST /discord/interactions`) gibt es nicht mehr; alle
+Befehle laufen über diesen Bot.
 
 ## Automatischer Abgleich
 
@@ -91,7 +92,7 @@ Der Dienst `bot` in der `docker-compose.yml` startet nur, wenn in der `.env` `CO
 Er nutzt dieselben Werte wie die App (`DOMAIN`, `AUTH_DISCORD_ID`, `DISCORD_BOT_TOKEN`, `DB_PASSWORD` usw.) und
 dasselbe Bilder-Volume, damit `/design` die Bilder dort ablegt, wo die App sie ausliefert.
 
-Im Developer Portal muss unter "Bot" der Intent **Server Members** eingeschaltet sein (wie schon für die PHP-App),
+Im Developer Portal muss unter "Bot" der Intent **Server Members** eingeschaltet sein ,
 sonst startet der Bot nicht.
 
 Der Bot muss mit den Scopes `bot` und `applications.commands` eingeladen sein. Fehlen die Befehle in Discord, obwohl
@@ -104,20 +105,13 @@ Links einbetten, Dateien anhängen, Nachrichtenverlauf lesen, Reaktionen hinzuf�
 Rollen erwähnen, Rollen verwalten, Spitznamen verwalten, Events erstellen und verwalten. Bewusst nicht: Administrator,
 Kicken, Bannen, Timeout, Kanäle oder Server verwalten.
 
-## Umstieg von der PHP-App auf den Bot
-
-Solange im Developer Portal eine "Interactions Endpoint URL" eingetragen ist, schickt Discord alle Slash-Befehle an die
-PHP-App und nicht an den Bot. Zum Entwickeln deshalb eine eigene Test-Anwendung nutzen.
-
-Umstieg auf dem Server:
+## Einrichten auf dem Server
 
 1. Bot starten: `COMPOSE_PROFILES=bot` in die `.env`, dann `docker compose up -d`.
-2. Befehle des Bots für alle Server anmelden (ersetzt die Befehle der PHP-App):
-   `docker compose exec bot node src/register.js --global`
-3. Im Developer Portal unter "General Information" die "Interactions Endpoint URL" leeren und speichern.
-
-Danach `bin/register-commands.php` der PHP-App nicht mehr ausführen: es würde die Befehle des Bots wieder
-überschreiben. Zurück geht es in umgekehrter Reihenfolge (URL wieder eintragen, `php bin/register-commands.php`).
+2. Befehle für alle Server anmelden: `docker compose exec bot node src/register.js --global`
+   (nach Updates mit neuen Befehlen noch einmal).
+3. Im Developer Portal unter "General Information" muss die "Interactions Endpoint URL" **leer** sein. Steht dort eine
+   Adresse, schickt Discord die Befehle dorthin und nicht an den Bot.
 
 ## Befehle anmelden
 

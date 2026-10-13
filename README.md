@@ -29,9 +29,9 @@ Die vollständige Anleitung mit allen Discord-Einstellungen steht im PDF oben. I
 ```bash
 curl -O https://raw.githubusercontent.com/mackedanz/Community-Manager/main/docker-compose.yml
 curl -o .env https://raw.githubusercontent.com/mackedanz/Community-Manager/main/.env.docker.example
-nano .env                         # DOMAIN, AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, DB_PASSWORD, APP_KEY (openssl rand -base64 32), Bot-Werte
+nano .env                         # DOMAIN, AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, DB_PASSWORD, APP_KEY (openssl rand -base64 32), DISCORD_BOT_TOKEN, COMPOSE_PROFILES=bot
 docker compose up -d
-docker compose exec app php bin/register-commands.php
+docker compose exec bot node src/register.js --global
 ```
 
 Davor muss ein Reverse-Proxy HTTPS übernehmen (Port 8181, `HANGAR_PORT`). Der Container wartet auf die Datenbank,
@@ -66,22 +66,20 @@ Sitzungen werden nicht übernommen (alle melden sich einmal neu an), Hangar-Eint
 Katalog verknüpft. Schiffe, die es in der Ship Matrix nicht gibt, bleiben als freier Name erhalten. E-Mail-Adressen
 aus der alten Datenbank werden nicht übernommen.
 
-## Onboarding-Bot
+## Discord-Bot
 
-Der Bot ist ein Discord-„Interactions Endpoint“ (`POST /discord/interactions`, Ed25519-signiert, kein Dauerprozess) und
-braucht keine Rechte auf dem Server (`permissions=0`).
+Der Discord-Bot liegt im Ordner [`BOT/`](BOT/README.md) (Node.js, eigener Container `bot`, startet mit
+`COMPOSE_PROFILES=bot`). Er bedient alle Slash-Befehle (`/einrichten`, `/abgleichen`, `/termine`, `/hangar`, … – Übersicht
+mit `/hilfe`) und greift direkt auf dieselbe Datenbank zu. Die frühere Variante als „Interactions Endpoint“ der
+PHP-App (`POST /discord/interactions`, `DISCORD_PUBLIC_KEY`, `bin/register-commands.php`) gibt es nicht mehr.
 
-| Befehl | Wer darf | Was er tut |
-|---|---|---|
-| `/einrichten` | Server-Admins | legt die Orga an, zwei Rollenauswahlen (nutzen / planen, je bis 10), gleicht die Mitglieder ab |
-| `/abgleichen` | Mitglieder mit Nutzungs-Rolle, Server-Admins | gleicht sofort ab (nie eine neue Orga), mindestens 30 Sekunden Abstand |
-
-1. Developer Portal → eure Anwendung: *Öffentlicher Schlüssel* → `DISCORD_PUBLIC_KEY`, *Bot → Token* → `DISCORD_BOT_TOKEN`,
-   *Installation → Installations-Link* auf „Keine“, *Server Members Intent* einschalten, *Öffentlicher Bot* ausschalten,
-   *Interaktions-Endpunkt-URL* = `https://<DOMAIN>/discord/interactions`.
-2. Bot mit Scope `applications.commands` + `bot` auf den Server einladen, dann `php bin/register-commands.php`.
-3. Der Abgleich schreibt Discord-ID, Name und Avatar aller Rolleninhaber in `org_allowed_members`, danach stündlich
-   (`bin/sync-allowlist.php`), per Knopf in den Orga-Einstellungen und per `/abgleichen`.
+1. Developer Portal → eure Anwendung: *Bot → Token* → `DISCORD_BOT_TOKEN`, *Installation → Installations-Link* auf
+   „Keine“, *Server Members Intent* einschalten, *Öffentlicher Bot* ausschalten. Die *Interaktions-Endpunkt-URL* bleibt leer.
+2. Bot mit Scope `applications.commands` + `bot` einladen (Rechte siehe `BOT/README.md`), dann
+   `docker compose exec bot node src/register.js --global`.
+3. Der Abgleich schreibt Discord-ID, Name und Avatar aller Rolleninhaber in `org_allowed_members`: im Bot nach jeder
+   Rollenänderung und per `/abgleichen`, in der Web-App stündlich (`bin/sync-allowlist.php`) und per Knopf in den
+   Orga-Einstellungen.
 4. `LOGIN_REQUIRES_ALLOWLIST=1`: Nur wer auf einer Zugangsliste steht (oder `SERVER_ADMIN_DISCORD_ID` ist), kann sich anmelden.
    Wer beim Abgleich auf keiner Liste mehr steht, verliert die laufenden Sitzungen und sein Konto samt Hangar wird gelöscht
    (nicht: Server-Admins, fest eingetragene Personen, eine leere Mitgliederliste von Discord). **Sicherheitsbremse:** Fallen auf
@@ -120,7 +118,7 @@ Einstellungen löschen.
 | `src/Controllers/` + `views/` | Seiten (PHP-Templates, immer mit `e()` escapen) |
 | `src/App.php` | alle Routen |
 | `migrations/` | nummerierte SQL-Migrationen (`bin/migrate.php`) |
-| `bin/` | `migrate.php`, `catalog-sync.php`, `enrich-items.php`, `warm-images.php`, `register-commands.php`, `sync-allowlist.php`, `purge-former-members.php`, `migrate-from-sqlite.php` |
+| `bin/` | `migrate.php`, `catalog-sync.php`, `enrich-items.php`, `warm-images.php`, `sync-allowlist.php`, `purge-former-members.php`, `migrate-from-sqlite.php` |
 | `tests/` | PHPUnit (Datenbank `hangar_test`, nie die Entwicklungsdatenbank) |
 | `bookmarklet/rsi-sync.js` | Quelle des RSI-Lesezeichens |
 | `docs/` | Installationsanleitung (PDF und HTML mit Bildern) |

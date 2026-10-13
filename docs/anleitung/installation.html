@@ -119,7 +119,7 @@ Die Namen in diesem Heft sind deutsch, die englischen stehen daneben:
   <tr><th>Deutsch</th><th>Englisch</th></tr>
   <tr><td>App erstellen</td><td>New Application</td></tr>
   <tr><td>Allgemeine Informationen</td><td>General Information</td></tr>
-  <tr><td>Anwendungs-ID · Öffentlicher Schlüssel</td><td>Application ID · Public Key</td></tr>
+  <tr><td>Anwendungs-ID</td><td>Application ID</td></tr>
   <tr><td>Geheimen Schlüssel zurücksetzen</td><td>Reset Secret</td></tr>
   <tr><td>Weiterleitungen</td><td>Redirects</td></tr>
   <tr><td>Token zurücksetzen · Öffentlicher Bot</td><td>Reset Token · Public Bot</td></tr>
@@ -131,11 +131,10 @@ Die Namen in diesem Heft sind deutsch, die englischen stehen daneben:
 
 <h2 class="pb"><span class="no">2</span>Discord-Anwendung anlegen</h2>
 <p>Gehe auf <code>https://discord.com/developers/applications</code> und melde dich an. Während dieses Teils sammelst du
-vier Werte in einer Textdatei auf deinem Rechner. Du trägst sie später in die <code>.env</code> auf dem Server ein.</p>
+drei Werte in einer Textdatei auf deinem Rechner. Du trägst sie später in die <code>.env</code> auf dem Server ein.</p>
 <table>
   <tr><th>Wert</th><th>Woher</th><th>Geheim?</th></tr>
   <tr><td><code>AUTH_DISCORD_ID</code></td><td>Allgemeine Informationen → Anwendungs-ID</td><td>nein</td></tr>
-  <tr><td><code>DISCORD_PUBLIC_KEY</code></td><td>Allgemeine Informationen → Öffentlicher Schlüssel</td><td>nein</td></tr>
   <tr><td><code>AUTH_DISCORD_SECRET</code></td><td>OAuth2 → Geheimer Client-Schlüssel</td><td><b>ja</b></td></tr>
   <tr><td><code>DISCORD_BOT_TOKEN</code></td><td>Bot → Token</td><td><b>ja</b></td></tr>
 </table>
@@ -147,10 +146,11 @@ vier Werte in einer Textdatei auf deinem Rechner. Du trägst sie später in die 
 Nutzungsbedingungen (das bestätigst du selbst) und klicke auf <b>Erstellen</b>.</p>
 <figure class="small"><img src="bilder/s24.png" alt="Name eintragen, Bedingungen bestätigen, „Erstellen“."><figcaption>Name eintragen, Bedingungen bestätigen, „Erstellen“.</figcaption></figure>
 
-<h3>2.2 Anwendungs-ID und Öffentlichen Schlüssel kopieren</h3>
-<p>Es öffnet sich die Seite <b>Allgemeine Informationen</b>. Kopiere mit den Knöpfen <b>Kopieren</b> die <b>Anwendungs-ID</b> und den <b>Öffentlichen Schlüssel</b>
-in deine Textdatei. Das Feld „Interaktions-Endpunkt-URL“ bleibt noch leer, es kommt erst in Schritt 7 dran.</p>
-<figure><img src="bilder/s55.jpg" alt="Allgemeine Informationen: Anwendungs-ID und Öffentlicher Schlüssel (hier geschwärzt)."><figcaption>Allgemeine Informationen: Anwendungs-ID und Öffentlicher Schlüssel (hier geschwärzt).</figcaption></figure>
+<h3>2.2 Anwendungs-ID kopieren</h3>
+<p>Es öffnet sich die Seite <b>Allgemeine Informationen</b>. Kopiere mit dem Knopf <b>Kopieren</b> die <b>Anwendungs-ID</b> in deine Textdatei.
+Den Öffentlichen Schlüssel brauchst du nicht. Das Feld <b>„Interaktions-Endpunkt-URL“ bleibt leer</b>: Die Befehle empfängt der Bot selbst.
+Steht dort eine Adresse, kommen die Befehle nicht beim Bot an.</p>
+<figure><img src="bilder/s55.jpg" alt="Allgemeine Informationen: die Anwendungs-ID (hier geschwärzt). Den Öffentlichen Schlüssel brauchst du nicht."><figcaption>Allgemeine Informationen: die Anwendungs-ID (hier geschwärzt). Den Öffentlichen Schlüssel brauchst du nicht.</figcaption></figure>
 
 <h3>2.3 OAuth2: Geheimnis und Redirect</h3>
 <p>Öffne im Menü links <b>OAuth2</b>.</p>
@@ -211,7 +211,7 @@ Sonst meldet das Portal beim Speichern des privaten Bots: <i>„Private Anwendun
 </ul>
 <h3>Befehl 2: Docker-Compose-Datei herunterladen</h3>
 <pre class="file">curl -O https://raw.githubusercontent.com/mackedanz/Community-Manager/main/docker-compose.yml</pre>
-<p><code>curl</code> lädt eine Datei aus dem Internet, <code>-O</code> speichert sie unter ihrem Namen. Die Datei beschreibt, welche Container Docker startet (die App und die Datenbank) und welche Daten sie behalten.
+<p><code>curl</code> lädt eine Datei aus dem Internet, <code>-O</code> speichert sie unter ihrem Namen. Die Datei beschreibt, welche Container Docker startet (die App, die Datenbank und den Discord-Bot) und welche Daten sie behalten.
 Fehlt <code>curl</code> („command not found“), installiere es mit <code>sudo apt install curl</code>.</p>
 <h3>Befehl 3: Vorlage für die Einstellungen herunterladen</h3>
 <pre class="file">curl -o .env https://raw.githubusercontent.com/mackedanz/Community-Manager/main/.env.docker.example</pre>
@@ -223,9 +223,9 @@ unsichtbar; <code>ls -la</code> zeigt sie.</p>
 <pre class="file">nano .env</pre>
 <figure class="small"><img src="bilder/s42.png" alt="Die Datei mit dem Texteditor nano öffnen."><figcaption>Die Datei mit dem Texteditor nano öffnen.</figcaption></figure>
 <figure><img src="bilder/s43.jpg" alt="Die Vorlage. Die Umlaute sehen im Terminal kaputt aus („f r“): Das ist nur die Darstellung und kein Fehler."><figcaption>Die Vorlage. Die Umlaute sehen im Terminal kaputt aus („f r“): Das ist nur die Darstellung und kein Fehler.</figcaption></figure>
-<p>Vier Zeilen sind in der Vorlage <b>auskommentiert</b> (<code>#</code> am Anfang): <code>DISCORD_PUBLIC_KEY</code>, <code>DISCORD_BOT_TOKEN</code>, <code>LOGIN_REQUIRES_ALLOWLIST</code> und <code>ONBOARDING_GUILD_IDS</code>.
+<p>Vier Zeilen sind in der Vorlage <b>auskommentiert</b> (<code>#</code> am Anfang): <code>COMPOSE_PROFILES</code>, <code>DISCORD_BOT_TOKEN</code>, <code>LOGIN_REQUIRES_ALLOWLIST</code> und <code>ONBOARDING_GUILD_IDS</code>.
 Entferne dort das <code>#</code>, sonst werden sie ignoriert.</p>
-<figure><img src="bilder/s44.jpg" alt="So sieht die Vorlage aus, wenn die Zeilen aktiviert sind. Jetzt trägst du deine Werte ein."><figcaption>So sieht die Vorlage aus, wenn die Zeilen aktiviert sind. Jetzt trägst du deine Werte ein.</figcaption></figure>
+<figure><img src="bilder/s44.jpg" alt="So sieht die Vorlage aus, wenn die Zeilen aktiviert sind (das Bild zeigt eine ältere Vorlage mit DISCORD_PUBLIC_KEY, diese Zeile gibt es nicht mehr)."><figcaption>So sieht die Vorlage aus, wenn die Zeilen aktiviert sind (das Bild zeigt eine ältere Vorlage mit DISCORD_PUBLIC_KEY, diese Zeile gibt es nicht mehr).</figcaption></figure>
 <table>
   <tr><th>Zeile</th><th>Wert</th></tr>
   <tr><td><code>DOMAIN=</code></td><td>deine Adresse ohne <code>https://</code>, z. B. <code>expg.mcdance.de</code></td></tr>
@@ -233,7 +233,7 @@ Entferne dort das <code>#</code>, sonst werden sie ignoriert.</p>
   <tr><td><code>AUTH_DISCORD_SECRET=</code></td><td>Geheimer Client-Schlüssel</td></tr>
   <tr><td><code>DB_PASSWORD=</code></td><td>frei wählbar, lang und zufällig. Erzeugen mit: <code>openssl rand -base64 24 | tr -d '/+='</code></td></tr>
   <tr><td><code>SERVER_ADMIN_DISCORD_ID=</code></td><td>deine Discord-ID</td></tr>
-  <tr><td><code>DISCORD_PUBLIC_KEY=</code></td><td>Öffentlicher Schlüssel</td></tr>
+  <tr><td><code>COMPOSE_PROFILES=</code></td><td><code>bot</code> (startet den Discord-Bot)</td></tr>
   <tr><td><code>DISCORD_BOT_TOKEN=</code></td><td>Bot-Token</td></tr>
   <tr><td><code>LOGIN_REQUIRES_ALLOWLIST=</code></td><td><code>1</code>: Nur wer auf der Zugangsliste des Bots steht (oder Server-Admin ist), darf sich anmelden</td></tr>
   <tr><td><code>ONBOARDING_GUILD_IDS=</code></td><td>Server-ID deines Discord-Servers</td></tr>
@@ -272,6 +272,9 @@ Beim ersten Mal lädt Docker außerdem die Images herunter, das dauert deutlich 
 <pre class="file">docker compose logs --tail 40 app</pre>
 <figure><img src="bilder/s51.png" alt="Beim ersten Start steht „Eingespielt“ mit den Datenbank-Migrationen. Nach einem Neustart ohne Änderungen steht „Datenbank ist aktuell.“. Die Apache-Warnung AH00558 ist harmlos. „GET /healthz … 200“ ist der Gesundheitstest."><figcaption>Beim ersten Start steht „Eingespielt“ mit den Datenbank-Migrationen. Nach einem Neustart ohne Änderungen steht „Datenbank ist aktuell.“. Die Apache-Warnung AH00558 ist harmlos. „GET /healthz … 200“ ist der Gesundheitstest.</figcaption></figure>
 <p>Nach etwa 20 Sekunden beginnt im Hintergrund der Abgleich des Schiffskatalogs aus der RSI Ship Matrix (ein bis zwei Minuten).</p>
+<p>Dann das Protokoll des Bots:</p>
+<pre class="file">docker compose logs --tail 20 bot</pre>
+<p>Dort müssen „Datenbank verbunden …“ und „Angemeldet als …“ stehen. Fehlt der Bot ganz, steht <code>COMPOSE_PROFILES=bot</code> nicht (oder mit <code>#</code>) in der <code>.env</code>.</p>
 <h3>Auf die neueste Version bringen</h3>
 <pre class="file">docker compose pull &amp;&amp; docker compose up -d</pre>
 <p><code>pull</code> holt die neueste Version des Images, <code>up -d</code> startet die Container damit neu. <code>&amp;&amp;</code> führt den zweiten Befehl nur aus, wenn der erste geklappt hat.
@@ -282,37 +285,37 @@ Das nutzt du auch später für jedes Update. Die Datenbank bleibt dabei erhalten
 <p>Öffne im Browser <code>https://expg.mcdance.de/healthz</code>. Dort muss <b>ok</b> stehen. Erst wenn das klappt, geht es mit Discord weiter.</p>
 <figure class="half"><img src="bilder/s54.png" alt="Zeigt die Seite „ok“, läuft die App, der Proxy ist richtig eingestellt und das Zertifikat greift."><figcaption>Zeigt die Seite „ok“, läuft die App, der Proxy ist richtig eingestellt und das Zertifikat greift.</figcaption></figure>
 
-<h2 class="pb"><span class="no">7</span>Endpunkt bei Discord eintragen</h2>
-<p>Im Developer Portal: <b>Allgemeine Informationen → Interaktions-Endpunkt-URL</b>. Trage ein (statt <code>expg.mcdance.de</code> deine Adresse) und speichere:</p>
-<pre class="file">https://expg.mcdance.de/discord/interactions</pre>
-<figure><img src="bilder/s56.jpg" alt="Interaktions-Endpunkt-URL eintragen und auf „Änderungen speichern“ klicken."><figcaption>Interaktions-Endpunkt-URL eintragen und auf „Änderungen speichern“ klicken.</figcaption></figure>
-<p>Beim Speichern schickt Discord eine Testanfrage an deinen Server. Klappt sie, erscheint die grüne Meldung:</p>
-<figure><img src="bilder/s57.png" alt="Erfolg: Discord hat den Endpunkt geprüft und gespeichert."><figcaption>Erfolg: Discord hat den Endpunkt geprüft und gespeichert.</figcaption></figure>
-<p>Meldet das Portal einen Fehler, ist meist <code>DISCORD_PUBLIC_KEY</code> falsch oder die Seite nicht erreichbar (Kapitel 6 prüfen). Nach jeder Änderung an der <code>.env</code> gilt: <code>docker compose up -d</code>.</p>
+<h2 class="pb"><span class="no">7</span>Interaktions-Endpunkt-URL leer lassen</h2>
+<p>Im Developer Portal unter <b>Allgemeine Informationen</b> muss das Feld <b>Interaktions-Endpunkt-URL</b> <b>leer</b> sein. Der Bot empfängt die Befehle selbst über seine Verbindung zu Discord.
+Steht dort noch eine Adresse aus einer älteren Version (<code>…/discord/interactions</code>), lösche sie und klicke auf <b>„Änderungen speichern“</b>.</p>
 
 <h2><span class="no">8</span>Befehle registrieren</h2>
-<pre class="file">docker compose exec app php bin/register-commands.php</pre>
-<figure><img src="bilder/s58.png" alt="Erscheint „Befehle registriert.“, kennt Discord die Slash-Befehle /einrichten und /abgleichen."><figcaption>Erscheint „Befehle registriert.“, kennt Discord die Slash-Befehle /einrichten und /abgleichen.</figcaption></figure>
+<pre class="file">docker compose exec bot node src/register.js --global</pre>
+<p>Erscheint „… Befehl(e) registriert für alle Server: /einrichten, /design, …“, kennt Discord alle Slash-Befehle des Bots. Nach einem Update mit neuen Befehlen führst du diesen Befehl noch einmal aus.</p>
 
 <h2 class="pb"><span class="no">9</span>Bot auf den Server einladen</h2>
 <p>Öffne diesen Link im Browser und ersetze <code>&lt;DEINE CLIENT-ID&gt;</code> durch deine eigene ID:</p>
-<pre class="file">https://discord.com/oauth2/authorize?client_id=&lt;DEINE CLIENT-ID&gt;&amp;scope=bot%20applications.commands&amp;permissions=0</pre>
+<pre class="file">https://discord.com/oauth2/authorize?client_id=&lt;DEINE CLIENT-ID&gt;&amp;scope=bot%20applications.commands&amp;permissions=17910416788544</pre>
 <p>Die Client-ID findest du im Developer Portal unter <b>OAuth2</b> im Feld <b>Client-ID</b>. Das ist dieselbe Zahl wie die Anwendungs-ID.</p>
 <figure class="half"><img src="bilder/s60.jpg" alt="Die Client-ID auf der Seite OAuth2 (hier geschwärzt)."><figcaption>Die Client-ID auf der Seite OAuth2 (hier geschwärzt).</figcaption></figure>
 <figure><img src="bilder/s59.jpg" alt="Den Link in die Adresszeile einfügen und mit Enter bestätigen, nicht auf einen Suchvorschlag klicken."><figcaption>Den Link in die Adresszeile einfügen und mit Enter bestätigen, nicht auf einen Suchvorschlag klicken.</figcaption></figure>
-<p>Der Bot braucht keine Rechte (<code>permissions=0</code>), nur zwei Zugriffe: Bot hinzufügen und Befehle erstellen. Wähle im Dropdown deinen Server.
+<p>Der Link gibt dem Bot genau die Rechte, die er braucht: Kanäle ansehen, Nachrichten senden (auch in Threads), öffentliche Threads erstellen, Links einbetten, Dateien anhängen,
+Nachrichtenverlauf lesen, Reaktionen und externe Emojis, @everyone und alle Rollen erwähnen, Rollen verwalten, Spitznamen verwalten sowie Events erstellen und verwalten.
+Administrator, Kicken, Bannen und Kanäle verwalten bekommt er bewusst nicht. Wähle im Dropdown deinen Server.
 Es erscheinen nur Server, auf denen du das Recht „Server verwalten“ hast. Wähle den Server, dessen ID du in <code>ONBOARDING_GUILD_IDS</code> eingetragen hast.
 Eine eventuelle Captcha-Abfrage bestätigst du selbst.</p>
 <figure class="tall"><img src="bilder/s61.jpg" alt="Einladungsseite: scrollen, bis „Autorisieren“ aktiv wird."><figcaption>Einladungsseite: scrollen, bis „Autorisieren“ aktiv wird.</figcaption></figure>
 <figure class="half"><img src="bilder/s62.png" alt="Dem Server hinzufügen: den Server wählen (hier geschwärzt)."><figcaption>Dem Server hinzufügen: den Server wählen (hier geschwärzt).</figcaption></figure>
 <figure class="half"><img src="bilder/s63.png" alt="Erfolg: Der Bot ist auf deinem Server."><figcaption>Erfolg: Der Bot ist auf deinem Server.</figcaption></figure>
-<p>Der Bot erscheint in der Mitgliederliste des Servers (online oder offline, beides ist in Ordnung). Er antwortet nur auf Befehle.</p>
+<p>Der Bot erscheint in der Mitgliederliste des Servers und ist online, solange sein Container läuft.</p>
+<div class="note"><b>Rolle des Bots nach oben ziehen.</b> Discord legt für den Bot eine Rolle mit seinem Namen an. Der Bot kann nur Rollen vergeben, die in der Liste
+<b>unter</b> seiner Rolle stehen (z. B. mit <code>/serverregeln</code>). Ziehe sie unter Servereinstellungen → Rollen direkt unter die Führungsrollen.</div>
 <figure class="small"><img src="bilder/s64.png" alt="Der Bot in der Mitgliederliste."><figcaption>Der Bot in der Mitgliederliste.</figcaption></figure>
 
 <h2 class="pb"><span class="no">10</span>Orga einrichten</h2>
 <p>Tippe in Discord in einem beliebigen Kanal <code>/einrichten</code> (als Admin oder mit „Server verwalten“). Erscheint der Befehl nicht, lade Discord mit <kbd>Strg</kbd>+<kbd>R</kbd> neu; es kann ein paar Minuten dauern.</p>
 <figure><img src="bilder/s65.png" alt="Der Befehl /einrichten im Vorschlagsmenü."><figcaption>Der Befehl /einrichten im Vorschlagsmenü.</figcaption></figure>
-<p>Es erscheint eine Nachricht, die nur du siehst. Die Orga wird mit dem Servernamen angelegt, du stehst automatisch auf der Zugangsliste.</p>
+<p>Es erscheint eine Nachricht, die nur du siehst. Die Orga wird mit dem Servernamen angelegt, du stehst automatisch auf der Zugangsliste. Die Nachricht hat fünf Rollenauswahlen: Nutzung, Planer, Recruiter, Ausbilder und Abteilungsleiter.</p>
 <figure><img src="bilder/s66.jpg" alt="Die Einrichtungsnachricht mit zwei Rollenauswahlen und dem Knopf „Mitglieder jetzt abgleichen“."><figcaption>Die Einrichtungsnachricht mit zwei Rollenauswahlen und dem Knopf „Mitglieder jetzt abgleichen“.</figcaption></figure>
 <ol class="steps">
   <li><b>„Wer darf das Tool nutzen?“</b>: Wähle die Rollen deiner Mitglieder (bis zu 10). Rechts neben dem Rollennamen steht, wie viele Mitglieder sie hat. Wähle keine Bot-Rollen und keine Rollen von Personen, die noch keinen Zugang bekommen sollen.</li>
@@ -321,7 +324,7 @@ Eine eventuelle Captcha-Abfrage bestätigst du selbst.</p>
 </ol>
 <figure class="half"><img src="bilder/s67.png" alt="Rollenauswahl: Häkchen bei den Rollen, die das Tool nutzen dürfen (Namen auf dem Bild teilweise geschwärzt)."><figcaption>Rollenauswahl: Häkchen bei den Rollen, die das Tool nutzen dürfen (Namen auf dem Bild teilweise geschwärzt).</figcaption></figure>
 <figure><img src="bilder/s68.jpg" alt="Fertig-Meldung: „9 Mitglieder dürfen sich anmelden“. Die Zahlen in Klammern sind die Änderungen seit dem letzten Abgleich. Nach der zweiten Auswahl steht dort „+0, −0“, weil schon beim ersten Mal abgeglichen wurde."><figcaption>Fertig-Meldung: „9 Mitglieder dürfen sich anmelden“. Die Zahlen in Klammern sind die Änderungen seit dem letzten Abgleich. Nach der zweiten Auswahl steht dort „+0, −0“, weil schon beim ersten Mal abgeglichen wurde.</figcaption></figure>
-<p>Der Befehl lässt sich beliebig oft wiederholen. Der Bot gleicht außerdem automatisch <b>einmal pro Stunde</b> ab. Wer die Rolle bekommt, darf sich anmelden. Wer sie verliert, darf es nicht mehr
+<p>Der Befehl lässt sich beliebig oft wiederholen. Der Bot gleicht außerdem automatisch ab, sobald jemand eine Rolle bekommt oder verliert, und die App zusätzlich <b>einmal pro Stunde</b>. Wer die Rolle bekommt, darf sich anmelden. Wer sie verliert, darf es nicht mehr
 (laufende Sitzungen enden sofort, sein Konto wird gelöscht). Mit <code>/abgleichen</code> kann jede Person mit einer Nutzungs-Rolle (und jeder Server-Admin) sofort abgleichen.</p>
 <figure class="half"><img src="bilder/s69.png" alt="/abgleichen: die nur für dich sichtbare Antwort des Bots."><figcaption>/abgleichen: die nur für dich sichtbare Antwort des Bots.</figcaption></figure>
 
@@ -454,7 +457,6 @@ PasswordAuthentication no</pre>
   <tr><td><code>curl -m 5 http://&lt;SERVER-IP&gt;:8181/healthz</code></td><td>keine Antwort (Port zu)</td></tr>
   <tr><td>7-MB-Anfrage (siehe 14.2)</td><td><code>413</code></td></tr>
   <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" https://&lt;DOMAIN&gt;/catalog</code></td><td><code>303</code> (Katalog nur nach der Anmeldung)</td></tr>
-  <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" -X POST https://&lt;DOMAIN&gt;/discord/interactions</code></td><td><code>401</code> (ohne gültige Signatur von Discord)</td></tr>
   <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" https://&lt;DOMAIN&gt;/dev/login</code></td><td><code>404</code></td></tr>
   <tr><td><code>docker inspect community-hangar-app-1 --format 'mem={{.HostConfig.Memory}} pids={{.HostConfig.PidsLimit}}'</code></td><td><code>mem=1073741824 pids=300</code> (auf dem Server)</td></tr>
 </table>
@@ -468,9 +470,9 @@ PasswordAuthentication no</pre>
   <tr><td><code>/healthz</code> zeigt „502 Bad Gateway“</td><td>Der Proxy erreicht die App nicht: Port, IP und Schema <code>http</code> im Proxy-Host prüfen, <code>docker compose ps</code> (läuft <code>app</code>?).</td></tr>
   <tr><td>Discord meldet „Invalid redirect_uri“</td><td>Die Redirect-Adresse im Portal muss genau <code>https://&lt;DOMAIN&gt;/api/auth/callback/discord</code> lauten und <b>gespeichert</b> sein.</td></tr>
   <tr><td>Discord meldet „client_id … snowflake“</td><td><code>AUTH_DISCORD_ID</code> fehlt oder ist leer.</td></tr>
-  <tr><td>Portal lehnt die Endpunkt-URL ab</td><td><code>DISCORD_PUBLIC_KEY</code> prüfen (Zeile ohne <code>#</code>?), Seite von außen erreichbar? Nach <code>.env</code>-Änderung <code>docker compose up -d</code>.</td></tr>
-  <tr><td><code>/einrichten</code> erscheint nicht</td><td>Befehle registrieren (Kapitel 8), Bot eingeladen (Kapitel 9)? Discord mit <kbd>Strg</kbd>+<kbd>R</kbd> neu laden, es kann ein paar Minuten dauern.</td></tr>
-  <tr><td>„Die Anwendung reagiert nicht“</td><td>Die Interaktions-Endpunkt-URL fehlt im Portal oder ist falsch (Kapitel 7). <code>docker compose logs app | grep interactions</code> zeigt, ob Anfragen ankommen.</td></tr>
+  <tr><td><code>/einrichten</code> erscheint nicht</td><td>Befehle registrieren (Kapitel 8), Bot mit dem Link aus Kapitel 9 eingeladen (Scope <code>applications.commands</code>)? Discord mit <kbd>Strg</kbd>+<kbd>R</kbd> neu laden, es kann ein paar Minuten dauern.</td></tr>
+  <tr><td>„Die Anwendung reagiert nicht“</td><td>Läuft der Bot? <code>docker compose logs --tail 30 bot</code>. Steht im Portal noch eine Interaktions-Endpunkt-URL, löschen (Kapitel 7).</td></tr>
+  <tr><td>Bot startet nicht: „Server Members Intent“</td><td>Im Portal unter <b>Bot</b> den <b>Server Members Intent</b> einschalten und speichern, dann <code>docker compose up -d</code>.</td></tr>
   <tr><td>„Der Bot darf die Mitgliederliste nicht lesen“</td><td>Im Portal unter <b>Bot</b> den <b>Server Members Intent</b> einschalten und speichern.</td></tr>
   <tr><td>„Dieser Server ist nicht freigeschaltet“</td><td>Die Server-ID in <code>ONBOARDING_GUILD_IDS</code> eintragen, dann <code>docker compose up -d</code>. Prüfe, dass du beim Einladen den richtigen Server gewählt hast.</td></tr>
   <tr><td>Anmeldung: „nicht auf der Zugangsliste“</td><td>Die Person hat keine der gewählten Rollen, oder der Abgleich lief noch nicht (<code>/abgleichen</code>). Du selbst kommst über <code>SERVER_ADMIN_DISCORD_ID</code> immer herein.</td></tr>

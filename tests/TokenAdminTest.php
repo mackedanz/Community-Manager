@@ -151,7 +151,7 @@ final class TokenAdminTest extends DbTestCase
         $this->assertFalse(ServerAdmin::isGuildBanned('800000000000000001'));
     }
 
-    public function testRejectsInvalidGuildIdsAndPreventsCreatingBannedGuilds(): void
+    public function testRejectsInvalidGuildIdsAndMarksBannedGuilds(): void
     {
         try {
             ServerAdmin::banGuild($this->userId, 'abc', 'x');
@@ -159,10 +159,9 @@ final class TokenAdminTest extends DbTestCase
         } catch (OrgError) {
             $this->addToAssertionCount(1);
         }
+        // Den gesperrten Server lehnt /einrichten im Discord-Bot ab (BOT/test/db.test.js)
         ServerAdmin::banGuild($this->userId, '800000000000000009', 'Fremd');
-        $this->expectException(OrgError::class);
-        $this->expectExceptionMessageMatches('/gesperrt/');
-        \Hangar\Onboarding::ensureOrg('800000000000000009', $this->otherId, 'Neu');
+        $this->assertTrue(ServerAdmin::isGuildBanned('800000000000000009'));
     }
 
     public function testMultipleAdminsAsCommaSeparatedListTakeEffectImmediately(): void

@@ -45,9 +45,9 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
 
   <?php if (!empty($botReady) || !empty($allowed)): ?>
   <section class="space-y-3 border-t border-zinc-800 pt-6">
-    <h2 class="text-lg font-semibold">Zugangsliste (Onboarding-Bot)</h2>
+    <h2 class="text-lg font-semibold">Zugangsliste (Discord-Bot)</h2>
     <p class="text-sm text-zinc-400">
-      Wer eine der Rollen oben hat, wird vom Bot auf die Liste gesetzt (stündlich und per Knopf).
+      Wer eine der Rollen oben hat, wird vom Bot auf die Liste gesetzt (sobald sich Rollen ändern, stündlich und per Knopf).
       <?= !empty($gate) ? 'Nur Personen auf dieser Liste können sich anmelden.' : 'Die Anmeldung ist noch für alle offen (LOGIN_REQUIRES_ALLOWLIST ist aus).' ?>
       Die Rollen kannst du hier oder im Discord mit <b>/einrichten</b> ändern.
     </p>

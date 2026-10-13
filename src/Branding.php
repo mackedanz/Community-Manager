@@ -9,8 +9,8 @@ use Hangar\Images\ShipImages;
 /**
  * Aussehen der Installation: Logo, Hintergrundbild und Deckkraft des Hintergrunds (getrennt für dunkel und hell).
  * Gilt für die ganze Installation. Geändert wird es von Server-Admins, per Discord-Befehl /design oder in "Orga verwalten".
- * Bilder werden nur von Discord geladen bzw. hochgeladen, geprüft, neu kodiert (PNG bzw. JPEG) und unter ihrem
- * Inhalts-Hash abgelegt; ohne eigene Auswahl gelten die mitgelieferten Bilder.
+ * Bilder werden hochgeladen, geprüft, neu kodiert (PNG bzw. JPEG) und unter ihrem Inhalts-Hash abgelegt; ohne eigene
+ * Auswahl gelten die mitgelieferten Bilder. /design im Discord-Bot (BOT/) legt die Dateien im selben Ordner ab.
  */
 final class Branding
 {
@@ -23,8 +23,6 @@ final class Branding
     public const MIN_SIDE = 64;
     public const LOGO_SIDE = 256;
     public const BACKGROUND_WIDTH = 2000;
-    /** Von hier lädt der Bot Anhänge (Discord-Bildserver). */
-    public const HOSTS = ['cdn.discordapp.com', 'media.discordapp.net'];
     private const FILE = '/^(logo|bg)-[a-f0-9]{16}\.(png|jpg)$/';
 
     /** @var array{logoUrl:string,backgroundUrl:string,logoCustom:bool,backgroundCustom:bool,opacityDark:int,opacityLight:int}|null */
@@ -106,16 +104,6 @@ final class Branding
         return ':root{' . ($c['backgroundCustom'] ? '--bg-image:url("' . $c['backgroundUrl'] . '");' : '')
             . '--bg-overlay:rgb(10 10 10 / ' . $alpha($c['opacityDark']) . ')}'
             . ':root[data-theme="light"]{--bg-overlay:rgb(250 250 250 / ' . $alpha($c['opacityLight']) . ')}';
-    }
-
-    /** Lädt einen Discord-Anhang (nur von Discords Bildservern). @throws OrgError */
-    public static function fetch(string $url): string
-    {
-        $img = ShipImages::download($url, self::HOSTS);
-        if ($img === null) {
-            throw new OrgError('Das Bild konnte nicht von Discord geladen werden (erlaubt: PNG, JPG, WebP bis 5 MB).');
-        }
-        return $img['body'];
     }
 
     /**

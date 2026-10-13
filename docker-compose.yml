@@ -41,8 +41,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt}
       # Server-Admin (Discord-ID, mehrere mit Komma); Wechsel: in .env ändern, dann docker compose up -d
       SERVER_ADMIN_DISCORD_ID: ${SERVER_ADMIN_DISCORD_ID:-}
-      # Onboarding-Bot und Zugangsliste (optional, siehe .env.docker.example)
-      DISCORD_PUBLIC_KEY: ${DISCORD_PUBLIC_KEY:-}
+      # Bot-Token für den stündlichen Abgleich der Zugangsliste und die Discord-Events (siehe .env.docker.example)
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       LOGIN_REQUIRES_ALLOWLIST: ${LOGIN_REQUIRES_ALLOWLIST:-0}
       # Nur diese Discord-Server dürfen per /einrichten eine Orga anlegen (leer = jeder Server)

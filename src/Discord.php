@@ -46,12 +46,6 @@ final class Discord
         return ($r & 0x8) !== 0 || ($r & 0x20) !== 0;
     }
 
-    /** @param array{id:string,icon?:?string} $guild */
-    public static function guildIconUrl(array $guild): ?string
-    {
-        return !empty($guild['icon']) ? "https://cdn.discordapp.com/icons/{$guild['id']}/{$guild['icon']}.png" : null;
-    }
-
     public static function hasRequiredScopes(?string $scope): bool
     {
         $granted = preg_split('/\s+/', trim((string) $scope)) ?: [];

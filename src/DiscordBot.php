@@ -7,33 +7,15 @@ namespace Hangar;
 use Hangar\Http\Client;
 use Hangar\Http\NetworkError;
 
-/** Discord-API mit dem Bot-Token (Onboarding-Bot): Servername, Mitgliederliste, Antworten auf Interaktionen. */
+/**
+ * Discord-API mit dem Bot-Token: Mitgliederliste (stündlicher Abgleich) und Server-Events.
+ * Die Slash-Befehle bedient der Discord-Bot im Ordner BOT/.
+ */
 final class DiscordBot
 {
     public static function configured(): bool
     {
-        return Env::get('DISCORD_BOT_TOKEN') !== null && Env::get('DISCORD_PUBLIC_KEY') !== null;
-    }
-
-    /** Prüft die Ed25519-Signatur einer Interaktion (Header X-Signature-Ed25519 / X-Signature-Timestamp). */
-    public static function verifySignature(string $body, ?string $signature, ?string $timestamp): bool
-    {
-        $key = Env::get('DISCORD_PUBLIC_KEY');
-        if ($key === null || $signature === null || $timestamp === null) {
-            return false;
-        }
-        // Veraltete Anfragen ablehnen (Schutz vor erneutem Senden abgefangener Anfragen)
-        if (!ctype_digit($timestamp) || abs(time() - (int) $timestamp) > 300) {
-            return false;
-        }
-        if (!ctype_xdigit($signature) || strlen($signature) !== 128 || !ctype_xdigit($key) || strlen($key) !== 64) {
-            return false;
-        }
-        try {
-            return sodium_crypto_sign_verify_detached((string) hex2bin($signature), $timestamp . $body, (string) hex2bin($key));
-        } catch (\SodiumException) {
-            return false;
-        }
+        return Env::get('DISCORD_BOT_TOKEN') !== null;
     }
 
     /** @return array{status:int,body:string,headers:array<string,string>} */
@@ -50,20 +32,6 @@ final class DiscordBot
         } catch (NetworkError) {
             throw new DiscordUnavailableError('Discord ist nicht erreichbar.');
         }
-    }
-
-    /** @return array{name:string,icon:?string}|null null, wenn der Bot nicht auf dem Server ist */
-    public static function guild(string $guildId): ?array
-    {
-        $res = self::call('GET', '/guilds/' . rawurlencode($guildId));
-        if ($res['status'] === 403 || $res['status'] === 404) {
-            return null;
-        }
-        if ($res['status'] < 200 || $res['status'] >= 300) {
-            throw new DiscordUnavailableError("Discord antwortet mit Status {$res['status']}.");
-        }
-        $g = json_decode($res['body'], true);
-        return is_array($g) && isset($g['name']) ? ['name' => (string) $g['name'], 'icon' => $g['icon'] ?? null] : null;
     }
 
     /**
@@ -188,19 +156,5 @@ final class DiscordBot
         if ($res['status'] !== 404) {
             self::checkEventWrite($res);
         }
-    }
-
-    /** Ändert die Antwortnachricht einer Interaktion nachträglich (nach "wird bearbeitet"). @param array<string,mixed> $data */
-    public static function editOriginal(string $token, array $data): void
-    {
-        $appId = rawurlencode((string) Env::get('AUTH_DISCORD_ID', ''));
-        self::call('PATCH', "/webhooks/$appId/" . rawurlencode($token) . '/messages/@original', $data);
-    }
-
-    /** Registriert die Slash-Befehle (global). @param list<array<string,mixed>> $commands */
-    public static function registerCommands(array $commands): int
-    {
-        $appId = rawurlencode((string) Env::get('AUTH_DISCORD_ID', ''));
-        return self::call('PUT', "/applications/$appId/commands", $commands)['status'];
     }
 }

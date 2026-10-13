@@ -247,12 +247,12 @@ final class DepartmentsTest extends DbTestCase
         $this->assertSame(404, $this->call('GET', '/img/dept/..%2Fx.png', $member, $mCsrf)->status);
     }
 
-    public function testLeaderRoleIsStoredFromTheBot(): void
+    public function testDepartmentsAreEnabledByALeaderRole(): void
     {
-        \Hangar\Onboarding::setRoles($this->orgId, 'lead', ['11111111111111111', '22222222222222222'], ['11111111111111111' => 'Leiter', '22222222222222222' => 'Chef']);
-        $this->assertSame('11111111111111111,22222222222222222', Db::val('SELECT lead_role_ids FROM organizations WHERE id = ?', [$this->orgId]));
+        // Die Rolle wählt ein Server-Admin per /einrichten im Discord-Bot; der Bot schreibt lead_role_ids
+        Db::run("UPDATE organizations SET lead_role_ids = '11111111111111111,22222222222222222' WHERE id = ?", [$this->orgId]);
         $this->assertTrue(Departments::enabled($this->orgId));
-        \Hangar\Onboarding::setRoles($this->orgId, 'lead', [], []);
+        Db::run('UPDATE organizations SET lead_role_ids = NULL WHERE id = ?', [$this->orgId]);
         $this->assertFalse(Departments::enabled($this->orgId));
     }
 }

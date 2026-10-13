@@ -1,8 +1,7 @@
 // Meldet die Slash-Befehle bei Discord an. Nutzung:
 //   npm run register              -> nur auf dem Server BOT_DEV_GUILD_ID (sofort sichtbar, zum Testen)
 //   npm run register -- --global  -> für alle Server der Anwendung
-// Achtung: --global ersetzt ALLE globalen Befehle der Anwendung, auch /einrichten, /design und /abgleichen
-// der PHP-App. Erst verwenden, wenn der Bot diese Befehle selbst kann.
+// --global ersetzt alle globalen Befehle der Anwendung durch die Befehle dieses Bots.
 import { REST, Routes } from 'discord.js';
 import { readConfig, ConfigError } from './config.js';
 import { commands } from './commands/index.js';
