@@ -10,6 +10,9 @@ import { parseRoleIds } from '../lib/roles.js';
 /** Mindestabstand zwischen zwei Abgleichen derselben Orga per /abgleichen (Sekunden). */
 const COOLDOWN_SECONDS = 30;
 
+/** Für /hilfe: nutzbar für Mitglieder der Orga */
+export const audience = 'members';
+
 export const data = {
   name: 'abgleichen',
   description: 'Mitglieder mit den Discord-Rollen abgleichen: wer darf sich im Community-Hangar anmelden',

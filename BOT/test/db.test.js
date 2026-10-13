@@ -12,6 +12,10 @@ import { connect, sync } from '../src/lib/rsi.js';
 import { current, reset, setImage, setOpacity } from '../src/lib/branding.js';
 import { newId } from '../src/lib/text.js';
 import { eventDetail, setRsvp, upcomingEvents } from '../src/lib/events.js';
+import { sendOrgReminders, syncOrgPosts } from '../src/lib/announce.js';
+import { ANNOUNCE_CHANNEL, setSetting } from '../src/lib/settings.js';
+import { confirm, participants, qualifications } from '../src/lib/training.js';
+import { nowDb } from '../src/db.js';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
 const R_USE = '111111111111111111';
@@ -177,6 +181,65 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     await assert.rejects(setRsvp(pool, org.id, userId, kurs, 'YES', member), /abgesagt/);
     await assert.rejects(setRsvp(pool, org.id, userId, entwurf, 'YES', member), /nicht gefunden/);
     await run(pool, 'DELETE FROM users WHERE id = ?', [userId]);
+  });
+
+  test('Ankündigungen posten, anpassen, entfernen; Erinnerungen nur einmal; Ausbilder bestätigen', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Ankündigungs-Test' }, iconUrl: null });
+    const anna = newId();
+    const annaDiscord = `7${String(Date.now()).slice(-17)}`;
+    await run(pool, 'INSERT INTO users (id, name, discord_id) VALUES (?,?,?)', [anna, 'Anna', annaDiscord]);
+    await run(pool, "INSERT INTO org_memberships (user_id, org_id, role) VALUES (?,?, 'MEMBER')", [anna, org.id]);
+
+    // Discord-Ersatz: merkt sich gesendete, geänderte und gelöschte Nachrichten
+    const log = { sent: [], edited: [], deleted: [], dms: [] };
+    let nextId = 1000;
+    const channel = {
+      send: async (m) => { log.sent.push(m); return { id: String(nextId++) }; },
+      messages: { edit: async (id, m) => log.edited.push([id, m]), delete: async (id) => log.deleted.push(id) },
+    };
+    const client = {
+      channels: { fetch: async () => channel },
+      users: { fetch: async (id) => ({ send: async (m) => log.dms.push([id, m]) }) },
+    };
+    const opts = { appUrl: 'https://cm.example' };
+
+    const c1 = newId();
+    await run(pool, "INSERT INTO training_courses (id, org_id, area, topic, level, title) VALUES (?,?, 'space', 'Jagd', 1, 'Grundlagen')", [c1, org.id]);
+    const soon = nowDb(new Date(Date.now() + 2 * 3600_000));
+    const ev = newId();
+    await run(pool, "INSERT INTO events (id, org_id, title, starts_at, status, created_by_id, course_id) VALUES (?,?,?,?, 'PLANNED', ?, ?)", [ev, org.id, 'Jagdflug', soon, anna, c1]);
+
+    // Ohne Kanal wird nichts gepostet
+    assert.deepEqual(await syncOrgPosts(pool, client, org, opts), { skipped: 1 });
+    await setSetting(pool, org.id, ANNOUNCE_CHANNEL, '900000000000000123');
+    assert.deepEqual(await syncOrgPosts(pool, client, org, opts), { posted: 1 });
+    assert.deepEqual(await syncOrgPosts(pool, client, org, opts), { unchanged: 1 });
+
+    await setRsvp(pool, org.id, anna, ev, 'YES', { admin: false, canPlan: false, canInstruct: false });
+    assert.deepEqual(await syncOrgPosts(pool, client, org, opts), { edited: 1 });
+    assert.match(JSON.stringify(log.edited[0][1].embeds[0].fields), /Dabei \(1\)/);
+
+    // Erinnerung (2 Stunden vorher = 24h-Erinnerung) genau einmal, als DM und unter der Ankündigung
+    assert.equal(await sendOrgReminders(pool, client, org, opts), 1);
+    assert.equal(await sendOrgReminders(pool, client, org, opts), 0);
+    assert.equal(log.dms.length, 1);
+    assert.equal(log.dms[0][0], annaDiscord);
+    assert.match(log.sent.at(-1).content, new RegExp(`<@${annaDiscord}>`));
+    assert.equal(log.sent.at(-1).reply.messageReference, '1000');
+
+    // Ausbilder bestätigt: bestanden, dann wieder zurückgenommen
+    await confirm(pool, org.id, ev, null, [anna], [anna]);
+    assert.deepEqual((await participants(pool, org.id, ev, c1)).map((p) => [p.name, p.passed]), [['Anna', true]]);
+    assert.deepEqual((await qualifications(pool, org.id, anna)).map((q) => [q.areaName, q.topic, q.level]), [['Raumkampf', 'Jagd', 1]]);
+    await confirm(pool, org.id, ev, null, [], [anna]);
+    assert.deepEqual(await qualifications(pool, org.id, anna), []);
+
+    // Gelöschter Termin: Nachricht verschwindet
+    await run(pool, 'DELETE FROM events WHERE id = ?', [ev]);
+    assert.deepEqual(await syncOrgPosts(pool, client, org, opts), { removed: 1 });
+    assert.deepEqual(log.deleted, ['1000']);
+    await run(pool, 'DELETE FROM users WHERE id = ?', [anna]);
   });
 
   test('/design: Bilder ablegen, alte Dateien entfernen, zurücksetzen', async () => {

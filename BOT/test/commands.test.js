@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { panelData, handles } from '../src/commands/panel.js';
 import { refusal } from '../src/commands/abgleichen.js';
 import { commands } from '../src/commands/index.js';
+import { audienceOf, helpText, usage } from '../src/commands/help.js';
 
 const R1 = '111111111111111111';
 const R2 = '222222222222222222';
@@ -40,9 +41,26 @@ test('/abgleichen: Gründe für eine Ablehnung', () => {
   assert.match(refusal({ member_role_ids: null }, { ...base, admin: true }), /noch keine Rolle gewählt/);
 });
 
+test('/hilfe: Übersicht nach Zielgruppe, Admin-Befehle nur für Admins', () => {
+  const forMember = helpText(commands, { admin: false, appUrl: 'https://cm.example' });
+  const forAdmin = helpText(commands, { admin: true, ids: new Map([['termine', '123']]), appUrl: 'https://cm.example' });
+  assert.match(forMember, /\*\*Für alle\*\*\n.*`\/ping`/);
+  assert.match(forMember, /\*\*Für Mitglieder der Orga\*\*[\s\S]*`\/termine`/);
+  assert.doesNotMatch(forMember, /serverregeln|Für Server-Admins/);
+  assert.match(forMember, /zeigt \/hilfe, wenn ein Admin/);
+  assert.match(forAdmin, /\*\*Für Server-Admins\*\*[\s\S]*`\/serverregeln` – .* · `\/serverregeln <kanal> <rolle>`/);
+  assert.match(forAdmin, /<\/termine:123> – /);
+  assert.match(forAdmin, /`\/termine-kanal \[kanal\] \[aus\]`/);
+  // /help und /hilfe erscheinen als eine Zeile
+  assert.equal((forAdmin.match(/hilfe/g) ?? []).length >= 1 && !/`\/help`/.test(forAdmin), true);
+  assert.ok(forAdmin.length < 4096);
+  assert.equal(audienceOf(commands.find((c) => c.data.name === 'design')), 'admins');
+  assert.equal(usage({ name: 'x', options: [{ name: 'a', required: true }, { name: 'b' }] }), '/x <a> [b]');
+});
+
 test('Befehle: eindeutige Namen und gültige Beschreibungen', () => {
   const names = commands.map((c) => c.data.name);
-  assert.deepEqual(names.sort(), ['abgleichen', 'design', 'einrichten', 'ping', 'serverregeln', 'termine']);
+  assert.deepEqual(names.sort(), ['abgleichen', 'ausbildung', 'design', 'einrichten', 'help', 'hilfe', 'ping', 'serverregeln', 'termine', 'termine-kanal']);
   for (const c of commands) {
     assert.ok(c.data.description.length <= 100, c.data.name);
     for (const o of c.data.options ?? []) assert.ok(o.description.length <= 100, `${c.data.name}.${o.name}`);

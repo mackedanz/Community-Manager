@@ -4,6 +4,7 @@ import { readConfig, ConfigError } from './config.js';
 import { createPool, checkDatabase } from './db.js';
 import { byName, componentOwners } from './commands/index.js';
 import { registerMemberEvents } from './events/members.js';
+import { startAnnouncer } from './workers/announcer.js';
 import { log } from './log.js';
 
 let config;
@@ -31,6 +32,8 @@ const client = new Client({
   partials: [Partials.GuildMember],
 });
 const memberSync = registerMemberEvents(client, { pool, config, log });
+// Terminankündigungen und Erinnerungen (jede Minute)
+const announcer = startAnnouncer(client, { pool, config, log });
 
 client.once(Events.ClientReady, (c) => {
   log.info(`Angemeldet als ${c.user.tag} auf ${c.guilds.cache.size} Server(n)`);
@@ -56,7 +59,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const handler = handlerFor(interaction);
   if (handler === null) return;
   try {
-    await handler.run(interaction, { pool, config });
+    await handler.run(interaction, { pool, config, log });
   } catch (err) {
     log.error(`${handler.name} fehlgeschlagen`, err);
     const reply = { content: 'Da ist etwas schiefgelaufen. Bitte später noch einmal versuchen.', flags: MessageFlags.Ephemeral };
@@ -74,6 +77,7 @@ client.on(Events.Error, (err) => log.error('Discord-Fehler', err));
 async function shutdown(signal) {
   log.info(`${signal} erhalten, Bot wird beendet`);
   memberSync.stop();
+  announcer.stop();
   await client.destroy();
   await pool.end();
 }
@@ -91,6 +95,7 @@ try {
     log.error('Anmeldung bei Discord fehlgeschlagen', err);
   }
   memberSync.stop();
+  announcer.stop();
   await client.destroy();
   await pool.end();
   process.exitCode = 1;

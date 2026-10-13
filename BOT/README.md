@@ -14,11 +14,28 @@ an und ändert sie nicht.
 | `/design` | Server-Admins | Logo, Hintergrundbild und Deckkraft der Web-App setzen oder zurücksetzen |
 | `/abgleichen` | Server-Admins und Mitglieder mit Nutzungs-Rolle | Zugangsliste mit den Discord-Rollen abgleichen |
 | `/termine` | Mitglieder der Orga | kommende Termine ansehen und mit „Dabei“, „Vielleicht“, „Kann nicht“ antworten (nur für einen selbst sichtbar) |
+| `/termine-kanal` | Server-Admins | Kanal für Terminankündigungen setzen, anzeigen oder mit `aus:True` ausschalten |
+| `/ausbildung` | Mitglieder der Orga | eigene bestandene Ausbildungen; Admins und Ausbilder auch die eines Mitglieds |
 | `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle |
 | `/ping` | alle | Verbindung zu Discord und zur Datenbank prüfen |
+| `/hilfe`, `/help` | alle | Übersicht aller Befehle, erzeugt aus der Befehlsliste; Admin-Befehle sehen nur Admins |
 
 Antworten über `/termine` brauchen ein Konto in der Web-App (einmal dort mit Discord anmelden). Für
 Ausbildungstermine gilt wie auf der Webseite: erst nach bestandener Vorstufe (Admins und Ausbilder ausgenommen).
+
+Admins und Ausbilder sehen bei Ausbildungsterminen in `/termine` zusätzlich „Teilnahme bestätigen“: eine Auswahl
+der Zusagen, in der sie markieren, wer bestanden hat (wie auf der Webseite).
+
+## Ankündigungen und Erinnerungen
+
+Ist mit `/termine-kanal` ein Kanal gesetzt, kündigt der Bot dort jeden geplanten Termin der nächsten 30 Tage an,
+mit Knöpfen für „Dabei“, „Vielleicht“ und „Kann nicht“ (die Rückmeldung sieht nur, wer drückt). Ändert sich der
+Termin oder eine Antwort, passt der Bot die Nachricht an; wird der Termin gelöscht oder wieder Entwurf, verschwindet
+sie. Löscht jemand die Nachricht in Discord, postet der Bot sie nicht erneut.
+
+24 Stunden und 1 Stunde vor Beginn erinnert der Bot alle mit „Dabei“ oder „Vielleicht“ per Direktnachricht und
+mit einem Hinweis unter der Ankündigung. Der Bot prüft das jede Minute. Beides braucht Migration `020_bot.sql`,
+die die Web-App beim Start einspielt.
 
 Für `/serverregeln` braucht der Bot das Recht „Rollen verwalten“, und seine Rolle muss in den Servereinstellungen
 über der Rolle stehen, die er vergeben soll. Der Befehl prüft das vorher und sagt, was fehlt.
@@ -66,7 +83,12 @@ sonst startet der Bot nicht.
 Der Bot muss mit den Scopes `bot` und `applications.commands` eingeladen sein. Fehlen die Befehle in Discord, obwohl
 sie angemeldet sind, den Bot neu einladen (OAuth2 → URL Generator, beide Scopes, Rechte "Kanäle ansehen",
 "Nachrichten senden", "Links einbetten", "Rollen verwalten" und "Events verwalten"):
-`https://discord.com/oauth2/authorize?client_id=<AUTH_DISCORD_ID>&scope=bot+applications.commands&permissions=8858389504`
+`https://discord.com/oauth2/authorize?client_id=<AUTH_DISCORD_ID>&scope=bot+applications.commands&permissions=17910416788544`
+
+Die Rechte darin: Kanäle ansehen, Nachrichten senden, Nachrichten in Threads senden, öffentliche Threads erstellen,
+Links einbetten, Dateien anhängen, Nachrichtenverlauf lesen, Reaktionen hinzufügen, externe Emojis, @everyone und alle
+Rollen erwähnen, Rollen verwalten, Spitznamen verwalten, Events erstellen und verwalten. Bewusst nicht: Administrator,
+Kicken, Bannen, Timeout, Kanäle oder Server verwalten.
 
 ## Umstieg von der PHP-App auf den Bot
 
