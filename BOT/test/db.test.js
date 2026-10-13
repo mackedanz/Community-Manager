@@ -22,7 +22,7 @@ import { banGuild, deleteOrg, listAllOrgs, listBans, orgCounts, renameOrg, setDi
 import { activeWarnings, addCase, listCases, modRoleIds, MOD_ROLES, removeWarning } from '../src/lib/moderation.js';
 import { AUTOMOD_SETTING, DEFAULTS, guildContext, loadConfig, saveConfig } from '../src/lib/automod.js';
 import { planSetup, runSetup } from '../src/lib/serversetup.js';
-import { RULES_CHANNEL, WELCOME_CHANNEL, WELCOME_TEXT, welcomeMessage } from '../src/lib/welcome.js';
+import { RULES_CHANNEL, VISITOR_ROLE, WELCOME_CHANNEL, WELCOME_TEXT, welcomeMessage } from '../src/lib/welcome.js';
 import { MOD_LOG_CHANNEL } from '../src/lib/moderation.js';
 import { getSetting } from '../src/lib/settings.js';
 import { hangarItems, memberAccount, orgFleet, rsiHandleOf, searchShips, shipOwners } from '../src/lib/hangar.js';
@@ -450,9 +450,9 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     };
     const state = async () => {
       const settings = {};
-      for (const [key, name] of [['rules', RULES_CHANNEL], ['welcome', WELCOME_CHANNEL], ['announce', ANNOUNCE_CHANNEL], ['modlog', MOD_LOG_CHANNEL]]) settings[key] = await getSetting(pool, org.id, name);
+      for (const [key, name] of [['rules', RULES_CHANNEL], ['welcome', WELCOME_CHANNEL], ['announce', ANNOUNCE_CHANNEL], ['modlog', MOD_LOG_CHANNEL], ['admin', 'admin_channel_id']]) settings[key] = await getSetting(pool, org.id, name);
       const fresh = await one(pool, 'SELECT * FROM organizations WHERE id = ?', [org.id]);
-      return { org: fresh, modRoles: await modRoleIds(pool, org.id), settings, roles: [...rolesCache.values()], channels: createdChannels };
+      return { org: fresh, modRoles: await modRoleIds(pool, org.id), visitorRoles: [await getSetting(pool, org.id, VISITOR_ROLE)].filter(Boolean), settings, roles: [...rolesCache.values()], channels: createdChannels };
     };
     const createdChannels = [];
     const origCreate = guild.channels.create;
@@ -460,11 +460,32 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
 
     const plan = planSetup(await state());
     const report = await runSetup({ pool, guild, org, plan, botId: '999999999999999999' });
-    assert.deepEqual(created.map((c) => c[1]), ['Mitglied', 'Planer', 'Ausbilder', 'Moderator', 'Community', 'regeln', 'willkommen', 'termine', 'mod-protokoll']);
-    assert.ok(created.slice(5).every((c) => c[2] !== null)); // Kanäle liegen in der Kategorie
-    assert.equal(created[8][3], 3); // mod-protokoll: everyone gesperrt, die Moderatoren-Rolle, der Bot
+    // Rollen, dann alle Kategorien, dann die Kanäle
+    assert.deepEqual(created.slice(0, 5).map((c) => c[1]), ['Mitglied', 'Planer', 'Ausbilder', 'Moderator', 'Besucher']);
+    assert.deepEqual(created.slice(5, 14).map((c) => c[1]), ['Eingangshalle', 'Intern', 'Events', 'Star Citizen Info', 'Öffentlich', 'Öffentliche Sprachkanäle', 'Gaming Area', 'Abteilungen', 'Administrative']);
+    assert.equal(created.length, 37);
+    const parentOf = (name) => createdChannels.find((c) => c.id === created.find((x) => x[1] === name)[2])?.name;
+    const expected = [
+      ['┋! -server-regeln-!', 'Eingangshalle'], ['┋willkommen', 'Eingangshalle'], ['┋team', 'Intern'], ['┋abteilungen', 'Intern'], ['┋recruits', 'Intern'],
+      ['┋operations-plan', 'Events'], ['┋op-chat', 'Events'],
+      ['┋patchnotes', 'Star Citizen Info'], ['┋sc-news', 'Star Citizen Info'], ['┋youtube-news', 'Star Citizen Info'], ['┋tips und tricks', 'Star Citizen Info'],
+      ['┋issue-council', 'Star Citizen Info'], ['┋leaks', 'Star Citizen Info'], ['┋screenshots', 'Öffentlich'], ['┋chat', 'Öffentlich'], ['┋wer streamt gerade', 'Öffentlich'],
+      ['┋Lobby', 'Öffentliche Sprachkanäle'], ['┋Gruppe 1', 'Öffentliche Sprachkanäle'], ['┋Gruppe 2', 'Öffentliche Sprachkanäle'],
+      ['┋Gaming 1', 'Gaming Area'], ['┋Gaming 2', 'Gaming Area'], ['┋mod-protokoll', 'Administrative'], ['┋bot-einstellungen', 'Administrative'],
+    ];
+    assert.deepEqual(created.slice(14).map((c) => [c[1], parentOf(c[1])]), expected);
+    // Rechte: Anzahl der Einträge je Kategorie bzw. Kanal (everyone, Rollen, Bot)
+    const overwrites = Object.fromEntries(created.slice(5).map((c) => [c[1], c[3]]));
+    assert.deepEqual(overwrites, {
+      Eingangshalle: 1, Intern: 6, Events: 6, 'Star Citizen Info': 1, Öffentlich: 1, 'Öffentliche Sprachkanäle': 1, 'Gaming Area': 1, Abteilungen: 6, Administrative: 2,
+      '┋! -server-regeln-!': 2, '┋willkommen': 2, '┋team': 6, '┋abteilungen': 6, '┋recruits': 6, '┋operations-plan': 6, '┋op-chat': 6,
+      '┋patchnotes': 1, '┋sc-news': 1, '┋youtube-news': 1, '┋tips und tricks': 1, '┋issue-council': 1, '┋leaks': 1,
+      '┋screenshots': 1, '┋chat': 1, '┋wer streamt gerade': 1, '┋Lobby': 0, '┋Gruppe 1': 0, '┋Gruppe 2': 0, '┋Gaming 1': 0, '┋Gaming 2': 0,
+      '┋mod-protokoll': 3, '┋bot-einstellungen': 2,
+    });
     assert.ok(report.every((l) => !l.startsWith('⚠')), report.join('\n'));
-    assert.equal(sent.length, 1); // Regeln mit Bestätigen-Knopf
+    assert.equal(sent.length, 2); // Regeln mit Bestätigen-Knopf und die Hinweise für Admins
+    assert.match(sent[1].content, /Bot-Einstellungen für Admins/);
     assert.match(sent[0].components[0].components[0].custom_id, /^rules:ok:\d+$/);
 
     const fresh = await one(pool, 'SELECT * FROM organizations WHERE id = ?', [org.id]);
@@ -473,8 +494,11 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.equal(fresh.planner_role_ids, roleId('Planer'));
     assert.equal(fresh.instructor_role_ids, roleId('Ausbilder'));
     assert.deepEqual(await modRoleIds(pool, org.id), [roleId('Moderator')]);
-    assert.equal(sent[0].components[0].components[0].custom_id, `rules:ok:${roleId('Mitglied')}`);
-    for (const [name, key] of [[ANNOUNCE_CHANNEL, 'termine'], [MOD_LOG_CHANNEL, 'mod-protokoll'], [WELCOME_CHANNEL, 'willkommen'], [RULES_CHANNEL, 'regeln']]) {
+    // „Bestätigen“ vergibt die Besucher-Rolle, nicht Mitglied
+    assert.equal(sent[0].components[0].components[0].custom_id, `rules:ok:${roleId('Besucher')}`);
+    assert.equal(await getSetting(pool, org.id, VISITOR_ROLE), roleId('Besucher'));
+    assert.notEqual(roleId('Besucher'), roleId('Mitglied'));
+    for (const [name, key] of [[ANNOUNCE_CHANNEL, '┋operations-plan'], [MOD_LOG_CHANNEL, '┋mod-protokoll'], [WELCOME_CHANNEL, '┋willkommen'], [RULES_CHANNEL, '┋! -server-regeln-!'], ['admin_channel_id', '┋bot-einstellungen']]) {
       assert.equal(await getSetting(pool, org.id, name), createdChannels.find((c) => c.name === key).id);
     }
 

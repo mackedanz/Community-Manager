@@ -27,9 +27,9 @@ an und ändert sie nicht.
 | `/mod` | Moderatoren und Admins | `verwarnen`, `timeout`, `timeout-aufheben`, `kick`, `bann`, `entbannen`, `warnungen`, `warnung-entfernen`, `loeschen` (siehe Abschnitt Moderation) |
 | `/mod-einstellungen` | Server-Admins | Moderatoren-Rollen und Protokoll-Kanal festlegen |
 | `/automod` | Server-Admins | automatische Moderation: Spam, Einladungslinks, Links, verbotene Wörter, Massen-Erwähnungen |
-| `/discord-setup` | Server-Admins | legt fehlende Rollen (Mitglied, Planer, Ausbilder, Moderator), Kanäle (#regeln, #willkommen, #termine, #mod-protokoll), Standard-Regeln und die Einstellungen an; erst Vorschau, nie Vorhandenes ändern |
+| `/discord-setup` | Server-Admins | legt fehlende Rollen (Mitglied, Planer, Ausbilder, Moderator, Besucher; „Bestätigen“ unter den Regeln vergibt Besucher), Kategorien und Kanäle an (Struktur siehe Abschnitt Server-Struktur), veröffentlicht Standard-Regeln und trägt die Bot-Kanäle ein; erst Vorschau, nie Vorhandenes ändern |
 | `/willkommen` | Server-Admins | Willkommensnachricht für neue Mitglieder: `kanal:`, eigener `text:` ({user}, {server}, {regeln}) oder `aus:` |
-| `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle |
+| `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle (ohne Angabe: Besucher) |
 | `/ping` | alle | Verbindung zu Discord und zur Datenbank prüfen |
 | `/hilfe`, `/help` | alle | Übersicht aller Befehle, erzeugt aus der Befehlsliste; Admin-Befehle sehen nur Admins |
 
@@ -88,6 +88,25 @@ nichts in der Datenbank.
 
 Zusätzliche Rechte für die Moderation: Mitglieder kicken, Mitglieder bannen, Mitglieder moderieren, Nachrichten verwalten
 (`permissions=19009928424518`). `/discord-setup` braucht zusätzlich „Kanäle verwalten“ (`permissions=19009928424534`).
+
+## Server-Struktur (`/discord-setup`)
+
+| Kategorie | Wer sieht sie | Kanäle |
+| --- | --- | --- |
+| Eingangshalle | alle | `┋! -server-regeln-!` (Regeln mit „Bestätigen“), `┋willkommen` |
+| Intern | Mitglieder | `┋team`, `┋abteilungen`, `┋recruits` |
+| Events | Mitglieder | `┋operations-plan` (Terminankündigungen des Bots), `┋op-chat` |
+| Star Citizen Info | alle | `┋patchnotes`, `┋sc-news`, `┋youtube-news`, `┋tips und tricks`, `┋issue-council`, `┋leaks` |
+| Öffentlich | alle | `┋screenshots`, `┋chat`, `┋wer streamt gerade` |
+| Öffentliche Sprachkanäle | alle | Lobby, Gruppe 1, Gruppe 2 |
+| Gaming Area | alle | Gaming 1, Gaming 2 |
+| Abteilungen | Mitglieder | leer, für die Abteilungskanäle |
+| Administrative | Admins | `┋mod-protokoll` (auch Moderatoren), `┋bot-einstellungen` |
+
+„Mitglieder“ sind alle Rollen mit Zugang zum Tool (Mitglied, Planer, Ausbilder …) und die Moderatoren. Der Befehl zeigt erst eine
+Vorschau und legt nur an, was fehlt: Vorhandene Rollen und Kanäle werden übernommen (Namen ohne Symbole wie „┋“, Groß-/Kleinschreibung
+und Leerzeichen sind egal), nie geändert oder gelöscht. Rechte setzt er nur für Neues. Ist noch keine Rolle für „Mitglied“ eingetragen,
+wird die neue Rolle eingetragen; ab dann nutzen nur ihre Träger das Tool und sehen Intern, Events und Abteilungen.
 
 ## Automatischer Abgleich
 

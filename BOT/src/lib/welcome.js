@@ -6,6 +6,8 @@ import { cut } from './text.js';
 export const WELCOME_CHANNEL = 'welcome_channel_id';
 export const WELCOME_TEXT = 'welcome_text';
 export const RULES_CHANNEL = 'rules_channel_id';
+/** Rolle „Besucher“: bekommt man mit „Bestätigen“ unter den Regeln (vom /discord-setup gesetzt, Standard bei /serverregeln). */
+export const VISITOR_ROLE = 'visitor_role_id';
 export const MAX_WELCOME_TEXT = 500;
 
 export const DEFAULT_WELCOME = 'Willkommen {user} auf **{server}**! Lies bitte {regeln} und bestätige sie, dann bist du dabei.';

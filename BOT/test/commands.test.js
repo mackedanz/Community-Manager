@@ -48,7 +48,7 @@ test('/hilfe: Übersicht nach Zielgruppe, Admin-Befehle nur für Admins', () => 
   assert.match(forMember, /\*\*Für Mitglieder der Orga\*\*[\s\S]*`\/termine`/);
   assert.doesNotMatch(forMember, /serverregeln|Für Server-Admins/);
   assert.match(forMember, /zeigt \/hilfe, wenn ein Admin/);
-  assert.match(forAdmin, /\*\*Für Server-Admins\*\*[\s\S]*`\/serverregeln` – .* · `\/serverregeln <kanal> <rolle>`/);
+  assert.match(forAdmin, /\*\*Für Server-Admins\*\*[\s\S]*`\/serverregeln` – .* · `\/serverregeln <kanal> \[rolle\]`/);
   assert.match(forAdmin, /<\/termine:123> – /);
   assert.match(forAdmin, /`\/termine-kanal \[kanal\] \[aus\]`/);
   // /help und /hilfe erscheinen als eine Zeile

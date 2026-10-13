@@ -5,7 +5,10 @@
 // Die Rollen-ID steckt in der Schaltfläche selbst (custom_id), dafür braucht es keine Tabelle; die Schaltfläche
 // funktioniert auch nach einem Neustart des Bots.
 import { ChannelType, DiscordAPIError, MessageFlags, PermissionFlagsBits } from 'discord.js';
+import { orgForGuild } from '../db.js';
 import { isGuildAdmin, memberRoleIds } from '../lib/guild.js';
+import { getSetting } from '../lib/settings.js';
+import { VISITOR_ROLE } from '../lib/welcome.js';
 
 export const data = {
   name: 'serverregeln',
@@ -13,7 +16,7 @@ export const data = {
   type: 1,
   options: [
     { type: 7, name: 'kanal', description: 'Kanal, in dem die Regeln erscheinen', required: true, channel_types: [ChannelType.GuildText, ChannelType.GuildAnnouncement] },
-    { type: 8, name: 'rolle', description: 'Rolle, die man mit „Bestätigen“ bekommt', required: true },
+    { type: 8, name: 'rolle', description: 'Rolle, die man mit „Bestätigen“ bekommt (Standard: Besucher)', required: false },
   ],
   default_member_permissions: '32', // "Server verwalten"; der Bot prüft die Rechte zusätzlich selbst
   contexts: [0],
@@ -49,14 +52,24 @@ async function botMember(guild) {
   return guild.members.me ?? guild.members.fetchMe();
 }
 
-export async function execute(interaction) {
+export async function execute(interaction, { pool }) {
   if (!isGuildAdmin(interaction)) {
     await interaction.reply({ content: 'Das dürfen nur Server-Admins (Administrator oder „Server verwalten“).', flags: EPHEMERAL });
     return;
   }
   const channel = interaction.options.getChannel('kanal', true);
-  const role = interaction.options.getRole('rolle', true);
   const guild = interaction.guild ?? (await interaction.client.guilds.fetch(interaction.guildId));
+  let role = interaction.options.getRole('rolle');
+  if (role === null) {
+    // Ohne Angabe: die Rolle „Besucher“, die /discord-setup angelegt hat
+    const org = await orgForGuild(pool, interaction.guildId).catch(() => null);
+    const id = org === null ? null : await getSetting(pool, org.id, VISITOR_ROLE).catch(() => null);
+    role = id === null ? null : (guild.roles.cache.get(id) ?? (await guild.roles.fetch(id).catch(() => null)));
+    if (role === null) {
+      await interaction.reply({ content: 'Bitte eine Rolle angeben (rolle:@…). Eine Rolle „Besucher“ als Standard legt /discord-setup an.', flags: EPHEMERAL });
+      return;
+    }
+  }
   const me = await botMember(guild);
   const fullChannel = guild.channels.cache.get(channel.id) ?? (await guild.channels.fetch(channel.id));
   const post = fullChannel?.permissionsFor(me);
