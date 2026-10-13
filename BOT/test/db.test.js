@@ -21,6 +21,10 @@ import { addCreator, checkCreator, listCreators, removeCreator } from '../src/li
 import { banGuild, deleteOrg, listAllOrgs, listBans, orgCounts, renameOrg, setDiscordEventsMode, unbanGuild } from '../src/lib/orgadmin.js';
 import { activeWarnings, addCase, listCases, modRoleIds, MOD_ROLES, removeWarning } from '../src/lib/moderation.js';
 import { AUTOMOD_SETTING, DEFAULTS, guildContext, loadConfig, saveConfig } from '../src/lib/automod.js';
+import { planSetup, runSetup } from '../src/lib/serversetup.js';
+import { RULES_CHANNEL, WELCOME_CHANNEL, WELCOME_TEXT, welcomeMessage } from '../src/lib/welcome.js';
+import { MOD_LOG_CHANNEL } from '../src/lib/moderation.js';
+import { getSetting } from '../src/lib/settings.js';
 import { hangarItems, memberAccount, orgFleet, rsiHandleOf, searchShips, shipOwners } from '../src/lib/hangar.js';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
@@ -426,6 +430,66 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     const ctx = await guildContext(pool, guildId, Date.now() + 60_000); // nach Ablauf der 30 Sekunden Zwischenspeicher
     assert.equal(ctx.org.id, org.id);
     assert.deepEqual(ctx.modRoles, []);
+  });
+
+  test('/discord-setup: legt Rollen und Kanäle an, trägt alles ein, zweiter Lauf ist leer', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000006', invokerName: 'S', guild: { name: 'Setup-Orga' }, iconUrl: null });
+    let seq = 100000000000000000n;
+    const next = () => String((seq += 1n));
+    const rolesCache = new Map();
+    const created = [];
+    const sent = [];
+    const guild = {
+      id: guildId,
+      roles: { cache: rolesCache, create: async (o) => { const r = { id: next(), name: o.name }; rolesCache.set(r.id, r); created.push(['role', o.name]); return r; } },
+      channels: {
+        create: async (o) => { created.push(['channel', o.name, o.parent ?? null, o.permissionOverwrites?.length ?? 0]); return { id: next() }; },
+        fetch: async () => ({ send: async (m) => { sent.push(m); } }),
+      },
+    };
+    const state = async () => {
+      const settings = {};
+      for (const [key, name] of [['rules', RULES_CHANNEL], ['welcome', WELCOME_CHANNEL], ['announce', ANNOUNCE_CHANNEL], ['modlog', MOD_LOG_CHANNEL]]) settings[key] = await getSetting(pool, org.id, name);
+      const fresh = await one(pool, 'SELECT * FROM organizations WHERE id = ?', [org.id]);
+      return { org: fresh, modRoles: await modRoleIds(pool, org.id), settings, roles: [...rolesCache.values()], channels: createdChannels };
+    };
+    const createdChannels = [];
+    const origCreate = guild.channels.create;
+    guild.channels.create = async (o) => { const c = await origCreate(o); createdChannels.push({ id: c.id, name: o.name, type: o.type }); return c; };
+
+    const plan = planSetup(await state());
+    const report = await runSetup({ pool, guild, org, plan, botId: '999999999999999999' });
+    assert.deepEqual(created.map((c) => c[1]), ['Mitglied', 'Planer', 'Ausbilder', 'Moderator', 'Community', 'regeln', 'willkommen', 'termine', 'mod-protokoll']);
+    assert.ok(created.slice(5).every((c) => c[2] !== null)); // Kanäle liegen in der Kategorie
+    assert.equal(created[8][3], 3); // mod-protokoll: everyone gesperrt, die Moderatoren-Rolle, der Bot
+    assert.ok(report.every((l) => !l.startsWith('⚠')), report.join('\n'));
+    assert.equal(sent.length, 1); // Regeln mit Bestätigen-Knopf
+    assert.match(sent[0].components[0].components[0].custom_id, /^rules:ok:\d+$/);
+
+    const fresh = await one(pool, 'SELECT * FROM organizations WHERE id = ?', [org.id]);
+    const roleId = (name) => [...rolesCache.values()].find((r) => r.name === name).id;
+    assert.equal(fresh.member_role_ids, roleId('Mitglied'));
+    assert.equal(fresh.planner_role_ids, roleId('Planer'));
+    assert.equal(fresh.instructor_role_ids, roleId('Ausbilder'));
+    assert.deepEqual(await modRoleIds(pool, org.id), [roleId('Moderator')]);
+    assert.equal(sent[0].components[0].components[0].custom_id, `rules:ok:${roleId('Mitglied')}`);
+    for (const [name, key] of [[ANNOUNCE_CHANNEL, 'termine'], [MOD_LOG_CHANNEL, 'mod-protokoll'], [WELCOME_CHANNEL, 'willkommen'], [RULES_CHANNEL, 'regeln']]) {
+      assert.equal(await getSetting(pool, org.id, name), createdChannels.find((c) => c.name === key).id);
+    }
+
+    // Zweiter Lauf: alles vorhanden, nichts zu tun
+    assert.equal(planSetup(await state()).empty, true);
+
+    // Willkommensnachricht nutzt Kanal, Standardtext und den Regeln-Kanal
+    const member = { id: '777', guild: { name: 'Setup-Orga' } };
+    const msg = await welcomeMessage(pool, org.id, member);
+    assert.equal(msg.channelId, await getSetting(pool, org.id, WELCOME_CHANNEL));
+    assert.match(msg.payload.content, /^Willkommen <@777> auf \*\*Setup-Orga\*\*! Lies bitte <#\d+>/);
+    await setSetting(pool, org.id, WELCOME_TEXT, 'Hallo {user}');
+    assert.equal((await welcomeMessage(pool, org.id, member)).payload.content, 'Hallo <@777>');
+    await setSetting(pool, org.id, WELCOME_CHANNEL, null);
+    assert.equal(await welcomeMessage(pool, org.id, member), null);
   });
 
   test('/design: Bilder ablegen, alte Dateien entfernen, zurücksetzen', async () => {

@@ -27,6 +27,8 @@ an und ändert sie nicht.
 | `/mod` | Moderatoren und Admins | `verwarnen`, `timeout`, `timeout-aufheben`, `kick`, `bann`, `entbannen`, `warnungen`, `warnung-entfernen`, `loeschen` (siehe Abschnitt Moderation) |
 | `/mod-einstellungen` | Server-Admins | Moderatoren-Rollen und Protokoll-Kanal festlegen |
 | `/automod` | Server-Admins | automatische Moderation: Spam, Einladungslinks, Links, verbotene Wörter, Massen-Erwähnungen |
+| `/discord-setup` | Server-Admins | legt fehlende Rollen (Mitglied, Planer, Ausbilder, Moderator), Kanäle (#regeln, #willkommen, #termine, #mod-protokoll), Standard-Regeln und die Einstellungen an; erst Vorschau, nie Vorhandenes ändern |
+| `/willkommen` | Server-Admins | Willkommensnachricht für neue Mitglieder: `kanal:`, eigener `text:` ({user}, {server}, {regeln}) oder `aus:` |
 | `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle |
 | `/ping` | alle | Verbindung zu Discord und zur Datenbank prüfen |
 | `/hilfe`, `/help` | alle | Übersicht aller Befehle, erzeugt aus der Befehlsliste; Admin-Befehle sehen nur Admins |
@@ -85,7 +87,7 @@ meldet gelöschte und geänderte Nachrichten, die der Bot seit seinem Start gese
 nichts in der Datenbank.
 
 Zusätzliche Rechte für die Moderation: Mitglieder kicken, Mitglieder bannen, Mitglieder moderieren, Nachrichten verwalten
-(`permissions=19009928424518`).
+(`permissions=19009928424518`). `/discord-setup` braucht zusätzlich „Kanäle verwalten“ (`permissions=19009928424534`).
 
 ## Automatischer Abgleich
 

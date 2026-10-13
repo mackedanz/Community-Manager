@@ -60,7 +60,7 @@ test('/hilfe: Übersicht nach Zielgruppe, Admin-Befehle nur für Admins', () => 
 
 test('Befehle: eindeutige Namen und gültige Beschreibungen', () => {
   const names = commands.map((c) => c.data.name);
-  assert.deepEqual(names.sort(), ['abgleichen', 'ausbildung', 'automod', 'betreiber', 'creator', 'design', 'einrichten', 'flotte', 'hangar', 'help', 'hilfe', 'mod', 'mod-einstellungen', 'orga', 'ping', 'profil', 'serverregeln', 'termin-neu', 'termine', 'termine-kanal', 'wer-hat']);
+  assert.deepEqual(names.sort(), ['abgleichen', 'ausbildung', 'automod', 'betreiber', 'creator', 'design', 'discord-setup', 'einrichten', 'flotte', 'hangar', 'help', 'hilfe', 'mod', 'mod-einstellungen', 'orga', 'ping', 'profil', 'serverregeln', 'termin-neu', 'termine', 'termine-kanal', 'wer-hat', 'willkommen']);
   for (const c of commands) {
     assert.ok(c.data.description.length <= 100, c.data.name);
     for (const o of c.data.options ?? []) assert.ok(o.description.length <= 100, `${c.data.name}.${o.name}`);

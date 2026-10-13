@@ -7,6 +7,7 @@ import { registerAutomod } from './events/automod.js';
 import { registerMemberEvents } from './events/members.js';
 import { registerMessageLog } from './events/messagelog.js';
 import { registerModLog } from './events/modlog.js';
+import { registerWelcome } from './events/welcome.js';
 import { startAnnouncer } from './workers/announcer.js';
 import { startCreatorWatch } from './workers/creators.js';
 import { log } from './log.js';
@@ -43,6 +44,8 @@ const client = new Client({
 const memberSync = registerMemberEvents(client, { pool, config, log });
 // Beitritte und Austritte im Moderations-Protokoll
 registerModLog(client, { pool, log });
+// Willkommensnachricht für neue Mitglieder
+registerWelcome(client, { pool, log });
 if (config.messageContent) {
   registerAutomod(client, { pool, log });
   registerMessageLog(client, { pool, log });
