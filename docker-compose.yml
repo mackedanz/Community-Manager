@@ -85,6 +85,8 @@ services:
       SERVER_ADMIN_DISCORD_ID: ${SERVER_ADMIN_DISCORD_ID:-}
       LOGIN_REQUIRES_ALLOWLIST: ${LOGIN_REQUIRES_ALLOWLIST:-0}
       ONBOARDING_GUILD_IDS: ${ONBOARDING_GUILD_IDS:-}
+      # 1 = Automod und Nachrichten-Protokoll (braucht den "Message Content Intent" im Developer Portal)
+      BOT_MESSAGE_CONTENT: ${BOT_MESSAGE_CONTENT:-}
       IMAGE_DIR: /data/images
     volumes:
       # Logo und Hintergrund aus /design landen dort, wo die App sie ausliefert

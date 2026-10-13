@@ -49,6 +49,8 @@ export function readConfig(env = process.env) {
     loginRequiresAllowlist: ['1', 'true', 'yes', 'on'].includes((value(env, 'LOGIN_REQUIRES_ALLOWLIST') ?? '').toLowerCase()),
     // Bilderordner der Web-App (im Docker-Stack dasselbe Volume); hier legt /design Logo und Hintergrund ab
     imageDir: (value(env, 'IMAGE_DIR') ?? fileURLToPath(new URL('../../storage/images', import.meta.url))).replace(/[\\/]+$/, ''),
+    // Automod und Nachrichten-Protokoll brauchen den Intent "Message Content" (Developer Portal -> Bot); ohne diesen Schalter bleiben sie aus
+    messageContent: ['1', 'true', 'yes', 'on'].includes((value(env, 'BOT_MESSAGE_CONTENT') ?? '').toLowerCase()),
     applicationId: value(env, 'AUTH_DISCORD_ID'),
     // Nur für die Entwicklung: Befehle sofort auf diesem einen Server statt global registrieren
     devGuildId: value(env, 'BOT_DEV_GUILD_ID'),

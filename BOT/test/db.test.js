@@ -20,6 +20,7 @@ import { createEvent, deleteEvent, setCancelled } from '../src/lib/eventadmin.js
 import { addCreator, checkCreator, listCreators, removeCreator } from '../src/lib/creators.js';
 import { banGuild, deleteOrg, listAllOrgs, listBans, orgCounts, renameOrg, setDiscordEventsMode, unbanGuild } from '../src/lib/orgadmin.js';
 import { activeWarnings, addCase, listCases, modRoleIds, MOD_ROLES, removeWarning } from '../src/lib/moderation.js';
+import { AUTOMOD_SETTING, DEFAULTS, guildContext, loadConfig, saveConfig } from '../src/lib/automod.js';
 import { hangarItems, memberAccount, orgFleet, rsiHandleOf, searchShips, shipOwners } from '../src/lib/hangar.js';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
@@ -409,6 +410,22 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     const other = await ensureOrg(pool, config, { guildId: freshGuild(), invokerId: '300000000000000004', invokerName: 'X', guild: { name: 'Andere' }, iconUrl: null });
     await assert.rejects(removeWarning(pool, other.id, w2), /gibt es nicht/);
     assert.equal(await activeWarnings(pool, org.id, target), 1);
+  });
+
+  test('Automod: Einstellungen speichern, kaputte Werte fallen auf Standard, Kontext je Server', async () => {
+    const guildId = freshGuild();
+    assert.equal(await guildContext(pool, guildId), null); // keine Orga
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000005', invokerName: 'A', guild: { name: 'Auto-Orga' }, iconUrl: null });
+    assert.deepEqual(await loadConfig(pool, org.id), DEFAULTS);
+    await saveConfig(pool, org.id, { ...DEFAULTS, spam: true, mentions: 5, words: ['x'], domains: ['a.de'], exemptChannels: ['9'] });
+    assert.deepEqual(await loadConfig(pool, org.id), { spam: true, invites: false, links: false, mentions: 5, words: ['x'], domains: ['a.de'], exemptChannels: ['9'] });
+    await setSetting(pool, org.id, AUTOMOD_SETTING, '{kaputt');
+    assert.deepEqual(await loadConfig(pool, org.id), DEFAULTS);
+    await setSetting(pool, org.id, AUTOMOD_SETTING, JSON.stringify({ spam: 'ja', mentions: -3, words: 'x', domains: [1, 'b.de'] }));
+    assert.deepEqual(await loadConfig(pool, org.id), { ...DEFAULTS, domains: ['b.de'] });
+    const ctx = await guildContext(pool, guildId, Date.now() + 60_000); // nach Ablauf der 30 Sekunden Zwischenspeicher
+    assert.equal(ctx.org.id, org.id);
+    assert.deepEqual(ctx.modRoles, []);
   });
 
   test('/design: Bilder ablegen, alte Dateien entfernen, zurücksetzen', async () => {

@@ -1,9 +1,11 @@
 // Startpunkt des Bots: verbindet sich mit der Datenbank und mit Discord und verteilt die Slash-Befehle.
-import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from 'discord.js';
+import { Client, Events, GatewayIntentBits, MessageFlags, Options, Partials } from 'discord.js';
 import { readConfig, ConfigError } from './config.js';
 import { createPool, checkDatabase } from './db.js';
 import { byName, componentOwners } from './commands/index.js';
+import { registerAutomod } from './events/automod.js';
 import { registerMemberEvents } from './events/members.js';
+import { registerMessageLog } from './events/messagelog.js';
 import { registerModLog } from './events/modlog.js';
 import { startAnnouncer } from './workers/announcer.js';
 import { startCreatorWatch } from './workers/creators.js';
@@ -28,14 +30,25 @@ try {
 }
 
 // GuildMembers ist ein privilegierter Intent: im Developer Portal unter Bot -> "Server Members Intent" einschalten
+// Nachrichten lesen (Automod, Nachrichten-Protokoll) nur mit BOT_MESSAGE_CONTENT=1: "Message Content" ist ebenfalls privilegiert
+const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers];
+if (config.messageContent) intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent);
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+  intents,
   // Änderungen an Mitgliedern melden, auch wenn ihr alter Stand nicht im Cache ist
   partials: [Partials.GuildMember],
+  // Nachrichten nur begrenzt im Speicher halten (für das Protokoll gelöschter und geänderter Nachrichten)
+  makeCache: Options.cacheWithLimits({ ...Options.DefaultMakeCacheSettings, MessageManager: 200 }),
 });
 const memberSync = registerMemberEvents(client, { pool, config, log });
 // Beitritte und Austritte im Moderations-Protokoll
 registerModLog(client, { pool, log });
+if (config.messageContent) {
+  registerAutomod(client, { pool, log });
+  registerMessageLog(client, { pool, log });
+} else {
+  log.info('Automod und Nachrichten-Protokoll sind aus (BOT_MESSAGE_CONTENT=1 setzen und "Message Content Intent" im Developer Portal einschalten)');
+}
 // Terminankündigungen und Erinnerungen (jede Minute)
 const announcer = startAnnouncer(client, { pool, config, log });
 // Neue Videos der Creator (alle 10 Minuten)
@@ -104,7 +117,8 @@ try {
   if (err.code === 'TokenInvalid') {
     log.error('Discord lehnt DISCORD_BOT_TOKEN ab. Token im Developer Portal (Bot -> Reset Token) neu erzeugen und eintragen.');
   } else if (/disallowed intents/i.test(String(err.message)) || err.code === 4014) {
-    log.error('Discord verweigert den Zugriff auf die Mitglieder. Im Developer Portal unter Bot den "Server Members Intent" einschalten.');
+    log.error('Discord verweigert den Zugriff auf Mitglieder oder Nachrichten. Im Developer Portal unter Bot den "Server Members Intent" einschalten'
+      + (config.messageContent ? ' und den "Message Content Intent" (oder BOT_MESSAGE_CONTENT aus der .env entfernen).' : '.'));
   } else {
     log.error('Anmeldung bei Discord fehlgeschlagen', err);
   }

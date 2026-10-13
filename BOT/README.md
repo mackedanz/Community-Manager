@@ -24,6 +24,9 @@ an und ändert sie nicht.
 | `/orga` | Server-Admins | Einstellungen der Orga ansehen; `name:` benennt sie um, `discord_events:` schaltet die Übernahme der Discord-Events |
 | `/betreiber` | nur `SERVER_ADMIN_DISCORD_ID` | `orgas` (alle Orgas und Sperren), `sperren`, `entsperren`, `loeschen` (mit Rückfrage) |
 | `/creator` | Server-Admins | YouTube-Creator: `hinzufuegen` (Link oder @Name, Discord-Kanal, optional Rolle zum Erwähnen und ohne Shorts), `entfernen`, `liste` |
+| `/mod` | Moderatoren und Admins | `verwarnen`, `timeout`, `timeout-aufheben`, `kick`, `bann`, `entbannen`, `warnungen`, `warnung-entfernen`, `loeschen` (siehe Abschnitt Moderation) |
+| `/mod-einstellungen` | Server-Admins | Moderatoren-Rollen und Protokoll-Kanal festlegen |
+| `/automod` | Server-Admins | automatische Moderation: Spam, Einladungslinks, Links, verbotene Wörter, Massen-Erwähnungen |
 | `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle |
 | `/ping` | alle | Verbindung zu Discord und zur Datenbank prüfen |
 | `/hilfe`, `/help` | alle | Übersicht aller Befehle, erzeugt aus der Befehlsliste; Admin-Befehle sehen nur Admins |
@@ -65,6 +68,24 @@ Ersatz für die YouTube-Benachrichtigungen von MEE6: Alle 10 Minuten liest der B
 auf Wunsch mit Erwähnung einer Rolle. Beim Hinzufügen gelten alle vorhandenen Videos als bekannt, gepostet wird erst das
 nächste. Jedes Video erscheint nur einmal, auch nach einem Neustart. Braucht Migration `021_bot_creators.sql`.
 Twitch-Livestreams sind noch nicht dabei (bräuchten einen Twitch-API-Zugang).
+
+## Moderation
+
+`/mod-einstellungen rolle-hinzufuegen` legt Moderatoren-Rollen fest, `protokoll-kanal` den Kanal für das Protokoll. Moderieren dürfen
+Server-Admins und Mitglieder dieser Rollen; Moderatoren können keine Admins, keine anderen Moderatoren und niemanden mit gleich hoher
+oder höherer Rolle moderieren. Jede Aktion wird als Fall gespeichert (Tabelle `bot_mod_cases`), der Person per Direktnachricht
+mitgeteilt und im Protokoll-Kanal gezeigt, dort auch Beitritte und Austritte. Die Rolle des Bots muss in der Rollenliste über den
+Rollen stehen, die er moderieren soll.
+
+**Automod und Nachrichten-Protokoll** brauchen den Intent "Message Content": im Developer Portal unter Bot einschalten, in der `.env`
+`BOT_MESSAGE_CONTENT=1` setzen und den Bot neu starten. Ohne diesen Schalter startet der Bot wie bisher, nur ohne diese beiden Funktionen.
+`/automod` schaltet die Regeln einzeln ein (alle sind zunächst aus). Bei einem Verstoß wird die Nachricht gelöscht, ein kurzer Hinweis
+erscheint im Kanal, der Fall wird gespeichert; ab 3 Verstößen in einer Stunde gibt es 10 Minuten Timeout. Das Nachrichten-Protokoll
+meldet gelöschte und geänderte Nachrichten, die der Bot seit seinem Start gesehen hat (je Kanal die letzten 200); gespeichert wird
+nichts in der Datenbank.
+
+Zusätzliche Rechte für die Moderation: Mitglieder kicken, Mitglieder bannen, Mitglieder moderieren, Nachrichten verwalten
+(`permissions=19009928424518`).
 
 ## Automatischer Abgleich
 
@@ -112,7 +133,7 @@ sie angemeldet sind, den Bot neu einladen (OAuth2 → URL Generator, beide Scope
 Die Rechte darin: Kanäle ansehen, Nachrichten senden, Nachrichten in Threads senden, öffentliche Threads erstellen,
 Links einbetten, Dateien anhängen, Nachrichtenverlauf lesen, Reaktionen hinzufügen, externe Emojis, @everyone und alle
 Rollen erwähnen, Rollen verwalten, Spitznamen verwalten, Events erstellen und verwalten. Bewusst nicht: Administrator,
-Kicken, Bannen, Timeout, Kanäle oder Server verwalten.
+Kanäle oder Server verwalten. Für die Moderation kommen Kicken, Bannen, Timeout und Nachrichten verwalten dazu (siehe Abschnitt Moderation).
 
 ## Einrichten auf dem Server
 
