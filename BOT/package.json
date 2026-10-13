@@ -1,0 +1,19 @@
+{
+  "name": "community-manager-bot",
+  "version": "0.1.0",
+  "description": "Discord-Bot für den Community-Manager",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.9"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "register": "node --env-file-if-exists=.env src/register.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "mysql2": "^3.24.5"
+  }
+}

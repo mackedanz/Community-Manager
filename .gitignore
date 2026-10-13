@@ -4,6 +4,7 @@
 /storage/*.log
 .env
 /node_modules/
+/BOT/node_modules/
 /.phpunit.cache/
 /public/css/
 

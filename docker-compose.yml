@@ -62,6 +62,27 @@ services:
     ports:
       - "${HANGAR_BIND:-0.0.0.0}:${HANGAR_PORT:-8181}:80"
 
+  # Discord-Bot (optional): startet nur mit COMPOSE_PROFILES=bot in der .env, siehe BOT/README.md
+  bot:
+    image: ${BOT_IMAGE:-ghcr.io/mackedanz/community-manager-bot:latest}
+    profiles: ["bot"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      # Die App spielt beim Start die Migrationen ein
+      app:
+        condition: service_started
+    environment:
+      AUTH_DISCORD_ID: ${AUTH_DISCORD_ID:?AUTH_DISCORD_ID fehlt}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DB_HOST: db
+      DB_NAME: hangar
+      DB_USER: hangar
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt}
+    mem_limit: 256m
+    pids_limit: 100
+
   db:
     image: mariadb:11.8
     restart: unless-stopped

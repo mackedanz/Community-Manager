@@ -1,4 +1,5 @@
 tools/
+BOT/
 vendor/
 node_modules/
 tests/
