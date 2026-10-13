@@ -120,6 +120,7 @@ final class Events
             'title' => $title,
             'description' => self::text($in['description'] ?? null, 3000),
             'location' => self::text($in['location'] ?? null, 100),
+            'voiceChannelId' => preg_match('/^\d{5,25}$/', (string) ($in['voiceChannelId'] ?? '')) === 1 ? (string) $in['voiceChannelId'] : null,
             'courseId' => isset($in['courseId']) && $in['courseId'] !== '' ? (string) $in['courseId'] : null,
             'departmentId' => isset($in['departmentId']) && $in['departmentId'] !== '' ? (string) $in['departmentId'] : null,
             // Ohne Abteilung gibt es keine Art; mit Abteilung gilt Training, wenn nichts Gültiges gewählt ist.
@@ -184,7 +185,7 @@ final class Events
         $wantPush = !empty($input['discord']);
         return Db::transaction(function () use ($data, $orgId, $userId, $eventId, $draft, $wantPush): array {
             $fields = [
-                'title' => $data['title'], 'description' => $data['description'], 'location' => $data['location'],
+                'title' => $data['title'], 'description' => $data['description'], 'location' => $data['location'], 'voice_channel_id' => $data['voiceChannelId'],
                 'starts_at' => Time::db($data['startsAt']), 'ends_at' => $data['endsAt'] ? Time::db($data['endsAt']) : null,
                 'course_id' => $data['courseId'], 'department_id' => $data['departmentId'], 'department_kind' => $data['departmentKind'],
             ];
@@ -194,10 +195,10 @@ final class Events
                 Db::insert('events', ['id' => $eventId, 'org_id' => $orgId, 'created_by_id' => $userId, 'status' => $draft ? 'DRAFT' : 'PLANNED'] + $fields);
             } else {
                 // Ein aus Discord übernommener Termin, dessen Eckdaten ein Planer ändert, wird vom Abgleich nicht mehr überschrieben.
-                $old = Db::one('SELECT title, description, location, starts_at, ends_at, discord_event_id, discord_push FROM events WHERE id = ?', [$eventId]);
+                $old = Db::one('SELECT title, description, location, voice_channel_id, starts_at, ends_at, discord_event_id, discord_push FROM events WHERE id = ?', [$eventId]);
                 $wasPushed = $old !== null && ($old['discord_push'] || $old['discord_event_id'] !== null);
                 if ($old !== null && $old['discord_event_id'] !== null) {
-                    foreach (['title', 'description', 'location', 'starts_at', 'ends_at'] as $k) {
+                    foreach (['title', 'description', 'location', 'voice_channel_id', 'starts_at', 'ends_at'] as $k) {
                         if ((string) $old[$k] !== (string) $fields[$k]) {
                             Db::run('UPDATE events SET discord_edited = 1 WHERE id = ?', [$eventId]);
                             break;
@@ -205,8 +206,8 @@ final class Events
                     }
                 }
                 Db::run(
-                    'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ?, course_id = ?, department_id = ?, department_kind = ? WHERE id = ?',
-                    [$fields['title'], $fields['description'], $fields['location'], $fields['starts_at'], $fields['ends_at'], $fields['course_id'], $fields['department_id'], $fields['department_kind'], $eventId],
+                    'UPDATE events SET title = ?, description = ?, location = ?, voice_channel_id = ?, starts_at = ?, ends_at = ?, course_id = ?, department_id = ?, department_kind = ? WHERE id = ?',
+                    [$fields['title'], $fields['description'], $fields['location'], $fields['voice_channel_id'], $fields['starts_at'], $fields['ends_at'], $fields['course_id'], $fields['department_id'], $fields['department_kind'], $eventId],
                 );
                 // Entwurf an/aus; ein abgesagtes Event bleibt abgesagt, außer es wird zum Entwurf gemacht.
                 Db::run("UPDATE events SET status = ? WHERE id = ? AND (status <> 'CANCELLED' OR ?)", [$draft ? 'DRAFT' : 'PLANNED', $eventId, $draft ? 1 : 0]);
@@ -472,7 +473,7 @@ final class Events
             $missing = $exempt ? [] : Training::missingPrerequisites($orgId, $viewer->id, $course['id']);
         }
         return [
-            'id' => $e['id'], 'title' => $e['title'], 'description' => $e['description'], 'location' => $e['location'],
+            'id' => $e['id'], 'title' => $e['title'], 'description' => $e['description'], 'location' => $e['location'], 'voiceChannelId' => $e['voice_channel_id'],
             'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
             'course' => $course,
             'canConfirm' => $course !== null && $exempt,

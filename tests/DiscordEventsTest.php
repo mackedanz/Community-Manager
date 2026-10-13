@@ -264,6 +264,45 @@ final class DiscordEventsTest extends DbTestCase
         $this->assertSame([], $this->calls);
     }
 
+    public function testEventWithVoiceChannelIsCreatedInThatChannelAndSwitchesBack(): void
+    {
+        $this->fakeDiscord();
+        $e = $this->save(['voiceChannelId' => '123456789012345678']);
+        $this->assertSame('123456789012345678', Db::val('SELECT voice_channel_id FROM events WHERE id = ?', [$e['id']]));
+        $this->push();
+        [, , $p] = $this->calls[0];
+        $this->assertSame(2, $p['entity_type']);
+        $this->assertSame('123456789012345678', $p['channel_id']);
+        $this->assertArrayNotHasKey('entity_metadata', $p);   // beim Anlegen ohne leere Felder
+        $this->assertStringStartsWith("Treffpunkt: Port Olisar\n", $p['description']);
+
+        // Sprachkanal entfernt: das vorhandene Event wird wieder zum externen Event
+        $this->fakeDiscord();
+        $this->save(['voiceChannelId' => ''], $e['id']);
+        $this->push();
+        [$m, , $p] = $this->calls[0];
+        $this->assertSame('PATCH', $m);
+        $this->assertSame(3, $p['entity_type']);
+        $this->assertNull($p['channel_id']);
+        $this->assertSame('Port Olisar', $p['entity_metadata']['location']);
+
+        // Ungültige Kanal-ID wird verworfen
+        $this->assertNull(Db::val('SELECT voice_channel_id FROM events WHERE id = ?', [$e['id']]));
+        $this->save(['voiceChannelId' => 'abc; DROP'], $e['id']);
+        $this->assertNull(Db::val('SELECT voice_channel_id FROM events WHERE id = ?', [$e['id']]));
+    }
+
+    public function testVoiceChannelsAreListedInDiscordOrder(): void
+    {
+        Client::fake(fn () => ['status' => 200, 'headers' => [], 'body' => json_encode([
+            ['id' => '3', 'type' => 2, 'name' => 'Hangar 2', 'position' => 2],
+            ['id' => '4', 'type' => 0, 'name' => 'text', 'position' => 0],
+            ['id' => '1', 'type' => 2, 'name' => 'Hangar 1', 'position' => 1],
+            ['id' => '5', 'type' => 13, 'name' => 'Bühne', 'position' => 3],
+        ])]);
+        $this->assertSame([['id' => '1', 'name' => 'Hangar 1'], ['id' => '3', 'name' => 'Hangar 2']], \Hangar\DiscordBot::voiceChannels('de-guild'));
+    }
+
     public function testEventWithoutTickAndDraftsAreNotSentButPublishingSendsThem(): void
     {
         $this->fakeDiscord();

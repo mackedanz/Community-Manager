@@ -141,13 +141,26 @@ final class DiscordEvents
         $start = (Time::parse($e['starts_at']) ?? Time::now())->setTimezone($utc);
         // Externe Events brauchen ein Ende; ohne Angabe nehmen wir drei Stunden.
         $end = ($e['ends_at'] !== null ? Time::parse($e['ends_at']) : null)?->setTimezone($utc) ?? $start->modify('+3 hours');
-        return [
+        $base = [
             'name' => mb_substr((string) $e['title'], 0, 100),
             'description' => $desc,
             'scheduled_start_time' => $start->format('Y-m-d\TH:i:s\Z'),
             'scheduled_end_time' => $end->format('Y-m-d\TH:i:s\Z'),
             'privacy_level' => 2,
+        ];
+        $voice = trim((string) ($e['voice_channel_id'] ?? ''));
+        if ($voice !== '') {
+            // Sprachkanal-Event: Discord zeigt den Kanal statt eines Ortes, der Treffpunkt steht dann in der Beschreibung.
+            $place = trim((string) $e['location']);
+            if ($place !== '') {
+                $base['description'] = "Treffpunkt: $place\n" . $base['description'];
+            }
+            return $base + ['entity_type' => 2, 'channel_id' => $voice, 'entity_metadata' => null];
+        }
+        // channel_id null: ein früheres Sprachkanal-Event wird beim Ändern wieder zum externen Event
+        return $base + [
             'entity_type' => 3,
+            'channel_id' => null,
             'entity_metadata' => ['location' => mb_substr(trim((string) $e['location']) !== '' ? trim((string) $e['location']) : 'Community-Hangar', 0, 100)],
         ];
     }
@@ -236,7 +249,7 @@ final class DiscordEvents
             $clean();
             return;
         }
-        $new = DiscordBot::createScheduledEvent($guild, $payload);
+        $new = DiscordBot::createScheduledEvent($guild, array_filter($payload, static fn ($v) => $v !== null));
         $clean(['discord_event_id' => $new, 'discord_origin' => 'PUSH', 'discord_status' => 1]);
     }
 

@@ -59,6 +59,17 @@ $small = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
         <input type="hidden" name="departmentId" value="">
         <input type="hidden" name="departmentKind" value="TRAINING">
       <?php endif; ?>
+      <?php if (!empty($voiceChannels)): ?>
+        <label class="block space-y-1"><span class="text-sm text-zinc-400">Discord-Sprachkanal (optional): Das Discord-Event verweist dann auf diesen Kanal</span>
+          <select name="voiceChannelId" class="<?= $input ?>">
+            <option value="">Kein Sprachkanal</option>
+            <?php foreach ($voiceChannels as $c): ?>
+              <option value="<?= e($c['id']) ?>"<?= ($initial['voiceChannelId'] ?? '') === $c['id'] ? ' selected' : '' ?>><?= e($c['name']) ?></option>
+            <?php endforeach; ?>
+          </select></label>
+      <?php else: ?>
+        <input type="hidden" name="voiceChannelId" value="<?= e($initial['voiceChannelId'] ?? '') ?>">
+      <?php endif; ?>
       <label class="block space-y-1"><span class="text-sm text-zinc-400">Treffpunkt / Ort im Spiel (optional)</span>
         <input name="location" value="<?= e($initial['location']) ?>" maxlength="100" class="<?= $input ?>"></label>
       <label class="block space-y-1"><span class="text-sm text-zinc-400">Briefing: Ziele, Ablauf, Hinweise (optional)</span>
@@ -93,7 +104,7 @@ $small = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
       <?php if (!empty($discordBot) && empty($initial['discordImported'])): ?>
         <label class="flex max-w-2xl items-start gap-2 text-sm">
           <input type="checkbox" name="discord" value="1" class="mt-1"<?= !empty($initial['discord']) ? ' checked' : '' ?>>
-          <span><span class="font-medium">Auch als Discord-Event anlegen</span><br><span class="text-zinc-400">Der Bot legt das Event innerhalb weniger Minuten auf dem Discord-Server an (als externes Event mit dem Treffpunkt als Ort) und hält es aktuell, auch bei Absage und Löschen. Entwürfe erscheinen erst nach dem Veröffentlichen.</span></span>
+          <span><span class="font-medium">Auch als Discord-Event anlegen</span><br><span class="text-zinc-400">Der Bot legt das Event innerhalb weniger Minuten auf dem Discord-Server an (als externes Event mit dem Treffpunkt als Ort, bei gewähltem Sprachkanal als Event in diesem Kanal) und hält es aktuell, auch bei Absage und Löschen. Entwürfe erscheinen erst nach dem Veröffentlichen.</span></span>
         </label>
       <?php endif; ?>
       <button class="rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500"><?= $eventId ? 'Änderungen speichern' : 'Event anlegen' ?></button>

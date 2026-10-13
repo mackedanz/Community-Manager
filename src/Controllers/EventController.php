@@ -97,9 +97,32 @@ final class EventController extends Controller
         return OrgController::orgPage($org, 'event_form', [
             'heading' => $title, 'eventId' => $eventId, 'initial' => $initial, 'config' => $config,
             'discordBot' => \Hangar\DiscordBot::configured(),
+            'voiceChannels' => self::voiceChannels($org, (string) ($initial['voiceChannelId'] ?? '')),
             'courses' => \Hangar\Training::listAll($org['id']),
             'departments' => \Hangar\Departments::options($org['id']),
         ], $title, 'events');
+    }
+
+    /**
+     * Sprachkanäle des Discord-Servers für die Auswahl. Ohne Bot, ohne Server oder bei einem Discord-Fehler bleibt die Liste leer;
+     * ein gespeicherter Kanal, den es nicht mehr gibt, bleibt als Eintrag erhalten.
+     * @param array<string,mixed> $org @return list<array{id:string,name:string}>
+     */
+    private static function voiceChannels(array $org, string $current): array
+    {
+        $guild = (string) \Hangar\Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+        if ($guild === '' || !\Hangar\DiscordBot::configured()) {
+            return [];
+        }
+        try {
+            $list = \Hangar\DiscordBot::voiceChannels($guild);
+        } catch (\Hangar\DiscordAuthError | \Hangar\DiscordUnavailableError) {
+            $list = [];
+        }
+        if ($current !== '' && !in_array($current, array_column($list, 'id'), true)) {
+            $list[] = ['id' => $current, 'name' => 'Kanal nicht mehr verfügbar'];
+        }
+        return $list;
     }
 
     public static function newForm(Request $req, array $p): Response
@@ -108,7 +131,7 @@ final class EventController extends Controller
         if (!$org['canPlan']) {
             throw HttpException::notFound();
         }
-        return self::formPage($req, $org, $viewer, 'Neues Event', ['title' => '', 'description' => '', 'location' => '', 'courseId' => '', 'departmentId' => '', 'departmentKind' => 'TRAINING', 'draft' => false, 'discord' => false, 'discordImported' => false, 'startsAt' => '', 'endsAt' => '', 'ships' => []], null);
+        return self::formPage($req, $org, $viewer, 'Neues Event', ['title' => '', 'description' => '', 'location' => '', 'voiceChannelId' => '', 'courseId' => '', 'departmentId' => '', 'departmentKind' => 'TRAINING', 'draft' => false, 'discord' => false, 'discordImported' => false, 'startsAt' => '', 'endsAt' => '', 'ships' => []], null);
     }
 
     public static function editForm(Request $req, array $p): Response
@@ -119,7 +142,7 @@ final class EventController extends Controller
         }
         $e = Events::getEvent($org['id'], $viewer, (string) $p['id']) ?? throw HttpException::notFound();
         return self::formPage($req, $org, $viewer, 'Event bearbeiten', [
-            'title' => $e['title'], 'description' => $e['description'] ?? '', 'location' => $e['location'] ?? '', 'courseId' => $e['course']['id'] ?? '', 'departmentId' => $e['department']['id'] ?? '', 'departmentKind' => $e['departmentKind'] ?? 'TRAINING', 'draft' => $e['draft'], 'discord' => $e['discordPush'], 'discordImported' => $e['discordOrigin'] === 'IMPORT',
+            'title' => $e['title'], 'description' => $e['description'] ?? '', 'location' => $e['location'] ?? '', 'voiceChannelId' => $e['voiceChannelId'] ?? '', 'courseId' => $e['course']['id'] ?? '', 'departmentId' => $e['department']['id'] ?? '', 'departmentKind' => $e['departmentKind'] ?? 'TRAINING', 'draft' => $e['draft'], 'discord' => $e['discordPush'], 'discordImported' => $e['discordOrigin'] === 'IMPORT',
             'startsAt' => EventTime::toInput($e['startsAt']), 'endsAt' => $e['endsAt'] ? EventTime::toInput($e['endsAt']) : '',
             'ships' => array_map(fn ($s) => [
                 'catalogItemId' => $s['catalogItemId'], 'customName' => $s['customName'], 'name' => $s['name'], 'task' => $s['task'] ?? '',

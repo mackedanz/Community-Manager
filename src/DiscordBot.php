@@ -115,6 +115,24 @@ final class DiscordBot
         return $out;
     }
 
+    /**
+     * Sprachkanäle des Servers in der Reihenfolge von Discord (für die Auswahl beim Termin).
+     * @return list<array{id:string,name:string}>
+     */
+    public static function voiceChannels(string $guildId): array
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/channels');
+        if ($res['status'] === 403 || $res['status'] === 401) {
+            throw new DiscordAuthError('Der Bot darf die Kanäle dieses Servers nicht lesen.');
+        }
+        if ($res['status'] < 200 || $res['status'] >= 300) {
+            throw new DiscordUnavailableError("Discord antwortet mit Status {$res['status']}.");
+        }
+        $rows = array_filter(json_decode($res['body'], true) ?: [], static fn ($c) => is_array($c) && ($c['type'] ?? null) === 2 && !empty($c['id']));
+        usort($rows, static fn ($a, $b) => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
+        return array_map(static fn ($c) => ['id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id'])], array_values($rows));
+    }
+
     /** @param array{status:int,body:string,headers:array<string,string>} $res */
     private static function checkEventWrite(array $res): void
     {
