@@ -2,8 +2,7 @@
 import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from 'discord.js';
 import { readConfig, ConfigError } from './config.js';
 import { createPool, checkDatabase } from './db.js';
-import { byName } from './commands/index.js';
-import * as panel from './commands/panel.js';
+import { byName, componentOwners } from './commands/index.js';
 import { registerMemberEvents } from './events/members.js';
 import { log } from './log.js';
 
@@ -45,8 +44,10 @@ function handlerFor(interaction) {
     if (!command) log.warn(`Unbekannter Befehl /${interaction.commandName}`);
     return command ? { name: `/${interaction.commandName}`, run: command.execute } : null;
   }
-  if ((interaction.isRoleSelectMenu() || interaction.isButton()) && panel.handles(interaction.customId)) {
-    return { name: `Panel ${interaction.customId}`, run: panel.handleComponent };
+  // Schaltflächen, Auswahlmenüs und Eingabefenster: zuständig ist das Modul, dessen handles() die custom_id erkennt
+  if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+    const owner = componentOwners.find((m) => m.handles(interaction.customId));
+    return owner ? { name: `Aktion ${interaction.customId}`, run: owner.handleComponent } : null;
   }
   return null;
 }

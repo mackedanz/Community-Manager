@@ -11,6 +11,7 @@ import { ensureOrg, setRoles, syncAllowlist } from '../src/lib/onboarding.js';
 import { connect, sync } from '../src/lib/rsi.js';
 import { current, reset, setImage, setOpacity } from '../src/lib/branding.js';
 import { newId } from '../src/lib/text.js';
+import { eventDetail, setRsvp, upcomingEvents } from '../src/lib/events.js';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
 const R_USE = '111111111111111111';
@@ -126,6 +127,56 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.deepEqual(rows.map((r) => [r.handle, r.main]), [['Eins', 1], ['Zwei', 0]]);
     const o = await one(pool, 'SELECT rsi_sid, rsi_org_name, rsi_redacted FROM organizations WHERE id = ?', [org.id]);
     assert.deepEqual({ ...o }, { rsi_sid: 'EXPG', rsi_org_name: 'Explorer', rsi_redacted: 1 });
+  });
+
+  test('Termine: Liste, Antworten und Vorstufen der Ausbildung', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Termin-Test' }, iconUrl: null });
+    const userId = newId();
+    await run(pool, 'INSERT INTO users (id, name, discord_id) VALUES (?,?,?)', [userId, 'Anna', `6${String(Date.now()).slice(-17)}`]);
+    const c1 = newId();
+    const c2 = newId();
+    await run(pool, "INSERT INTO training_courses (id, org_id, area, topic, level, title) VALUES (?,?, 'mining', 'Laser', 1, 'Grundlagen'), (?,?, 'mining', 'Laser', 2, 'Fortgeschritten')", [c1, org.id, c2, org.id]);
+    const ev = (id, title, startsAt, status = 'PLANNED', courseId = null) =>
+      run(pool, 'INSERT INTO events (id, org_id, title, starts_at, status, created_by_id, course_id) VALUES (?,?,?,?,?,?,?)', [id, org.id, title, startsAt, status, userId, courseId]);
+    const kurs = newId();
+    const entwurf = newId();
+    const alt = newId();
+    await ev(kurs, 'Laser Stufe 2', '2099-01-02 18:00:00', 'PLANNED', c2);
+    await ev(entwurf, 'Entwurf', '2099-01-01 18:00:00', 'DRAFT');
+    await ev(alt, 'Vorbei', '2000-01-01 18:00:00');
+
+    const list = await upcomingEvents(pool, org.id);
+    assert.deepEqual(list.map((e) => [e.title, e.training]), [['Laser Stufe 2', 'Laser · Stufe 2']]);
+    assert.equal(await eventDetail(pool, org.id, entwurf), null);
+    assert.notEqual(await eventDetail(pool, org.id, entwurf, { canPlan: true }), null);
+
+    const member = { admin: false, canPlan: false, canInstruct: false };
+    await assert.rejects(setRsvp(pool, org.id, userId, kurs, 'YES', member), /Stufe 1 \(„Grundlagen“\)/);
+    await setRsvp(pool, org.id, userId, kurs, 'NO', member); // Absagen geht immer
+    await setRsvp(pool, org.id, userId, kurs, 'YES', { ...member, canInstruct: true }); // Ausbilder sind ausgenommen
+    await run(pool, "INSERT INTO training_completions (user_id, course_id, org_id, area, topic, level, title) VALUES (?,?,?, 'mining', 'Laser', 1, 'Grundlagen')", [userId, c1, org.id]);
+    await setRsvp(pool, org.id, userId, kurs, 'YES', member);
+
+    // Wer nicht mehr "Dabei" ist, gibt seinen Platz frei
+    const shipId = newId();
+    const slotId = newId();
+    await run(pool, 'INSERT INTO event_ships (id, event_id, custom_name) VALUES (?,?,?)', [shipId, kurs, 'Prospector']);
+    await run(pool, 'INSERT INTO event_slots (id, event_ship_id, label, user_id) VALUES (?,?,?,?)', [slotId, shipId, 'Pilot', userId]);
+    await setRsvp(pool, org.id, userId, kurs, 'MAYBE', member);
+    assert.equal(await val(pool, 'SELECT user_id FROM event_slots WHERE id = ?', [slotId]), null);
+
+    const detail = await eventDetail(pool, org.id, kurs);
+    assert.deepEqual(detail.rsvps, [{ userId, status: 'MAYBE', name: 'Anna' }]);
+    assert.equal(detail.course.areaName, 'Mining und Salvage');
+    assert.equal(detail.course.level, 2);
+
+    await setRsvp(pool, org.id, userId, kurs, 'NONE', member);
+    assert.deepEqual((await eventDetail(pool, org.id, kurs)).rsvps, []);
+    await run(pool, "UPDATE events SET status = 'CANCELLED' WHERE id = ?", [kurs]);
+    await assert.rejects(setRsvp(pool, org.id, userId, kurs, 'YES', member), /abgesagt/);
+    await assert.rejects(setRsvp(pool, org.id, userId, entwurf, 'YES', member), /nicht gefunden/);
+    await run(pool, 'DELETE FROM users WHERE id = ?', [userId]);
   });
 
   test('/design: Bilder ablegen, alte Dateien entfernen, zurücksetzen', async () => {

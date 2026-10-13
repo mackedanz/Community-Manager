@@ -13,7 +13,15 @@ an und ändert sie nicht.
 | `/einrichten` | Server-Admins | Orga anlegen, RSI-Orga verbinden, Rollen wählen; jede Rollenänderung gleicht die Zugangsliste ab |
 | `/design` | Server-Admins | Logo, Hintergrundbild und Deckkraft der Web-App setzen oder zurücksetzen |
 | `/abgleichen` | Server-Admins und Mitglieder mit Nutzungs-Rolle | Zugangsliste mit den Discord-Rollen abgleichen |
+| `/termine` | Mitglieder der Orga | kommende Termine ansehen und mit „Dabei“, „Vielleicht“, „Kann nicht“ antworten (nur für einen selbst sichtbar) |
+| `/serverregeln` | Server-Admins | Text nach Wahl mit „Bestätigen“-Schaltfläche in einem Kanal veröffentlichen; „Bestätigen“ vergibt die gewählte Rolle |
 | `/ping` | alle | Verbindung zu Discord und zur Datenbank prüfen |
+
+Antworten über `/termine` brauchen ein Konto in der Web-App (einmal dort mit Discord anmelden). Für
+Ausbildungstermine gilt wie auf der Webseite: erst nach bestandener Vorstufe (Admins und Ausbilder ausgenommen).
+
+Für `/serverregeln` braucht der Bot das Recht „Rollen verwalten“, und seine Rolle muss in den Servereinstellungen
+über der Rolle stehen, die er vergeben soll. Der Befehl prüft das vorher und sagt, was fehlt.
 
 Die Befehle verhalten sich wie die gleichnamigen Befehle der PHP-App (`src/Controllers/DiscordController.php`).
 
@@ -56,8 +64,9 @@ Im Developer Portal muss unter "Bot" der Intent **Server Members** eingeschaltet
 sonst startet der Bot nicht.
 
 Der Bot muss mit den Scopes `bot` und `applications.commands` eingeladen sein. Fehlen die Befehle in Discord, obwohl
-sie angemeldet sind, den Bot neu einladen (OAuth2 → URL Generator, beide Scopes, Rechte "Kanäle ansehen" und
-"Events verwalten").
+sie angemeldet sind, den Bot neu einladen (OAuth2 → URL Generator, beide Scopes, Rechte "Kanäle ansehen",
+"Nachrichten senden", "Links einbetten", "Rollen verwalten" und "Events verwalten"):
+`https://discord.com/oauth2/authorize?client_id=<AUTH_DISCORD_ID>&scope=bot+applications.commands&permissions=8858389504`
 
 ## Umstieg von der PHP-App auf den Bot
 

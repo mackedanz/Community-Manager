@@ -42,7 +42,7 @@ test('/abgleichen: Gründe für eine Ablehnung', () => {
 
 test('Befehle: eindeutige Namen und gültige Beschreibungen', () => {
   const names = commands.map((c) => c.data.name);
-  assert.deepEqual(names.sort(), ['abgleichen', 'design', 'einrichten', 'ping']);
+  assert.deepEqual(names.sort(), ['abgleichen', 'design', 'einrichten', 'ping', 'serverregeln', 'termine']);
   for (const c of commands) {
     assert.ok(c.data.description.length <= 100, c.data.name);
     for (const o of c.data.options ?? []) assert.ok(o.description.length <= 100, `${c.data.name}.${o.name}`);
