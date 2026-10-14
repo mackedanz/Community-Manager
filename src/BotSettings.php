@@ -47,6 +47,7 @@ final class BotSettings
     public const SUBSECTIONS = [
         'vorlagen' => 'setup',
         'zuordnung' => 'setup',
+        'faelle' => 'moderation',
     ];
 
     /** Alle Einstellungen der Orga. @return array<string,string> */

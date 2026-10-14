@@ -15,6 +15,10 @@
 /** @var ?array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure */
 /** @var list<array<string,mixed>> $cases */
 /** @var list<array<string,mixed>> $creators */
+/** @var array{rows:list<array<string,mixed>>,total:int} $modCases */
+/** @var string $modQuery */
+/** @var string $modAction */
+/** @var int $modPage */
 /** @var string $csrf */
 use Hangar\BotSettings;
 
@@ -86,19 +90,22 @@ $descriptions = [
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
     'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen, vorhandene ändern, verschieben oder löschen.',
     'creator' => 'YouTube-Kanäle, deren neue Videos der Bot automatisch in einen Discord-Kanal postet. Der Bot schaut alle 10 Minuten nach; schon vorhandene Videos werden nicht nachträglich gepostet.',
+    'faelle' => 'Verwarnen, Timeout, Kick und Bann direkt im Manager und die Liste aller Fälle.',
     'zuordnung' => 'Legt fest, welchen Kanal und welche Rolle der Bot wofür nutzt. Nach dem Aufbau des Servers kannst du hier alles auf einmal eintragen; die Vorschläge kommen aus den Namen.',
     'vorlagen' => 'Den Aufbau des Servers (Rollen, Kategorien, Kanäle mit Rechten) als Vorlage festhalten und eine Vorlage auf den Server anwenden. Vor dem Anwenden siehst du, was sich ändert; gelöscht wird nur, was du ausdrücklich ankreuzt.',
     'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen lassen sich ändern und löschen.',
 ];
-// Reiter innerhalb von „Discord-Setup“: Aufbauen oder mit Vorlagen arbeiten.
-$setupTabs = static function (string $active) use ($base): string {
+// Reiter innerhalb eines Bereichs (Discord-Setup, Moderation).
+$tabsOf = static function (array $items, string $active) use ($base): string {
     $html = '<div class="flex gap-2 border-b border-cyan-900/50 text-sm" role="tablist">';
-    foreach (['setup' => 'Server aufbauen', 'vorlagen' => 'Vorlagen', 'zuordnung' => 'Zuordnung'] as $k => $label) {
+    foreach ($items as $k => $label) {
         $html .= '<a href="' . e($base . '?m=' . $k) . '" role="tab"' . ($k === $active ? ' aria-selected="true"' : '')
             . ' class="-mb-px border-b-2 px-4 py-2 transition ' . ($k === $active ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-zinc-400 hover:text-zinc-200') . '">' . e($label) . '</a>';
     }
     return $html . '</div>';
 };
+$setupTabs = static fn (string $active): string => $tabsOf(['setup' => 'Server aufbauen', 'vorlagen' => 'Vorlagen', 'zuordnung' => 'Zuordnung'], $active);
+$modTabs = static fn (string $active): string => $tabsOf(['moderation' => 'Einstellungen', 'faelle' => 'Fälle und Maßnahmen'], $active);
 $typeIcon = [0 => '#', 2 => '🔊', 5 => '📢', 13 => '🎙', 15 => '💬'];
 // Rollen als anklickbare Chips für das Setup; der Name enthält Platzhalter, die das JavaScript beim Kopieren der Vorlage ersetzt.
 $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . $hint . '">Keine Rollen geladen.</p>' : $chips($name, $roles, [], '@');
@@ -578,6 +585,96 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
       </template>
       <?php endif; ?>
     </div>
+    <?php elseif ($section === 'faelle'): ?>
+    <div class="space-y-4">
+      <?= $modTabs('faelle') ?>
+      <section class="<?= $card ?>">
+        <header class="border-b border-cyan-900/50 px-5 py-4">
+          <h2 class="text-lg font-semibold">Maßnahme</h2>
+          <p class="text-sm text-zinc-400">Wirkt sofort auf dem Discord-Server, wird als Fall gespeichert und, wenn ein Protokollkanal eingestellt ist, dorthin geschrieben. Die Person bekommt bei Verwarnung, Timeout, Kick und Bann eine Direktnachricht, wenn sie das zulässt.</p>
+        </header>
+        <form method="post" action="<?= e($base . '/mod/action') ?>" class="space-y-4 p-5" data-mod-form>
+          <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Person</span>
+              <input type="text" name="person" required maxlength="100" class="<?= $field ?>" placeholder="Name oder Discord-ID">
+              <span class="block <?= $hint ?>">Der Name muss genau eine Person treffen, sonst nimm die Discord-ID. Zum Aufheben eines Banns ist die ID nötig.</span></label>
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Maßnahme</span>
+              <select name="do" class="<?= $field ?>" data-mod-do>
+                <?php foreach (\Hangar\Moderation::DO as $k => $label): ?><option value="<?= e($k) ?>"><?= e($label) ?></option><?php endforeach; ?>
+              </select></label>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-3">
+            <label class="block space-y-1.5 sm:col-span-3"><span class="text-sm text-zinc-300">Grund <span class="text-zinc-500">(bei Verwarnung nötig; die Person sieht ihn)</span></span>
+              <input type="text" name="reason" maxlength="500" class="<?= $field ?>"></label>
+            <label class="block space-y-1.5" data-for="timeout"><span class="text-sm text-zinc-300">Dauer (Timeout)</span>
+              <input type="text" name="duration" maxlength="10" class="<?= $field ?>" placeholder="z. B. 30m, 2h, 1d, 1w">
+              <span class="block <?= $hint ?>">Höchstens 28 Tage.</span></label>
+            <label class="block space-y-1.5" data-for="ban"><span class="text-sm text-zinc-300">Nachrichten löschen (Bann)</span>
+              <select name="days" class="<?= $field ?>">
+                <?php foreach ([0 => 'keine', 1 => 'letzter Tag', 2 => 'letzte 2 Tage', 3 => 'letzte 3 Tage', 7 => 'letzte 7 Tage'] as $d => $label): ?><option value="<?= $d ?>"><?= e($label) ?></option><?php endforeach; ?>
+              </select></label>
+          </div>
+          <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Ausführen</button>
+        </form>
+      </section>
+
+      <section class="<?= $card ?>">
+        <header class="flex flex-wrap items-end justify-between gap-3 border-b border-cyan-900/50 px-5 py-4">
+          <div>
+            <h2 class="text-lg font-semibold">Fälle <span class="text-sm font-normal text-zinc-500">(<?= (int) $modCases['total'] ?>)</span></h2>
+            <p class="text-sm text-zinc-400">Alle Maßnahmen, auch die aus Discord (/mod) und von der Automod.</p>
+          </div>
+          <form method="get" action="<?= e($base) ?>" class="flex flex-wrap items-center gap-2 text-sm">
+            <input type="hidden" name="m" value="faelle">
+            <input type="text" name="q" value="<?= e($modQuery) ?>" maxlength="100" placeholder="Name oder ID" class="<?= $field ?> w-44" aria-label="Person suchen">
+            <select name="a" class="<?= $field ?> w-auto" aria-label="Art">
+              <option value="">alle Arten</option>
+              <?php foreach (\Hangar\Moderation::ACTIONS as $k => $label): ?><option value="<?= e($k) ?>"<?= $k === $modAction ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?>
+            </select>
+            <button class="rounded-md border border-zinc-600 px-3 py-2 hover:border-cyan-500">Filtern</button>
+          </form>
+        </header>
+        <?php if ($modCases['rows'] === []): ?>
+          <p class="px-5 py-4 text-sm text-zinc-400">Keine Fälle gefunden.</p>
+        <?php else: ?>
+        <ul class="divide-y divide-cyan-900/40 text-sm">
+          <?php foreach ($modCases['rows'] as $c): ?>
+            <li class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 py-3">
+              <div class="min-w-0 max-w-2xl space-y-0.5">
+                <div><span class="font-mono text-zinc-500">#<?= (int) $c['id'] ?></span>
+                  <span class="<?= $c['removed_at'] !== null ? 'text-zinc-500 line-through' : 'text-amber-400' ?>"><?= e(\Hangar\Moderation::ACTIONS[$c['action']] ?? $c['action']) ?></span>
+                  · <?= e($c['target_name']) ?> <span class="font-mono text-xs text-zinc-500"><?= e($c['target_id']) ?></span></div>
+                <?php if (!empty($c['detail'])): ?><div class="text-zinc-400"><?= e($c['detail']) ?></div><?php endif; ?>
+                <?php if (!empty($c['reason'])): ?><div class="text-zinc-300">Grund: <?= e($c['reason']) ?></div><?php endif; ?>
+                <div class="<?= $hint ?>"><?= e(dt(\Hangar\Time::parse((string) $c['created_at']))) ?>
+                  <?php if (!empty($c['moderator_id'])): ?> · von <?= e($c['moderator_name'] ?: $c['moderator_id']) ?><?php endif; ?>
+                  <?= $c['removed_at'] !== null ? ' · zurückgenommen' : '' ?></div>
+              </div>
+              <?php if ($c['action'] === 'WARN' && $c['removed_at'] === null): ?>
+                <form method="post" action="<?= e($base . '/mod/unwarn') ?>" onsubmit="return confirm('Verwarnung #<?= (int) $c['id'] ?> zurücknehmen?')">
+                  <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                  <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
+                  <button class="text-zinc-400 hover:text-red-300">Zurücknehmen</button>
+                </form>
+              <?php endif; ?>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+        <?php
+          $pages = max(1, (int) ceil($modCases['total'] / \Hangar\Moderation::PER_PAGE));
+          $link = static fn (int $p) => e($base . '?' . http_build_query(['m' => 'faelle', 'q' => $modQuery, 'a' => $modAction, 'p' => $p]));
+        ?>
+        <?php if ($pages > 1): ?>
+          <nav class="flex items-center justify-between border-t border-cyan-900/50 px-5 py-3 text-sm text-zinc-400" aria-label="Seiten">
+            <span><?= $modPage > 1 ? '<a class="hover:text-cyan-300" href="' . $link($modPage - 1) . '">← Neuere</a>' : '' ?></span>
+            <span>Seite <?= $modPage ?> von <?= $pages ?></span>
+            <span><?= $modPage < $pages ? '<a class="hover:text-cyan-300" href="' . $link($modPage + 1) . '">Ältere →</a>' : '' ?></span>
+          </nav>
+        <?php endif; ?>
+        <?php endif; ?>
+      </section>
+    </div>
     <?php elseif ($section === 'creator'): ?>
     <div class="space-y-4">
       <section class="<?= $card ?>">
@@ -659,7 +756,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     <form method="post" action="<?= e($base . '/save') ?>" class="space-y-4">
       <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="section" value="<?= e($section) ?>">
-      <?= $section === 'zuordnung' ? $setupTabs('zuordnung') : '' ?>
+      <?= $section === 'zuordnung' ? $setupTabs('zuordnung') : ($section === 'moderation' ? $modTabs('moderation') : '') ?>
       <section class="<?= $card ?>">
         <header class="flex items-start justify-between gap-4 border-b border-cyan-900/50 px-5 py-4">
           <div>
@@ -839,6 +936,18 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     };
     text.addEventListener("input", render);
     render();
+  }
+  // Maßnahme: nur die passenden Felder zeigen, vor dem Ausführen nachfragen.
+  var mod = document.querySelector("[data-mod-form]");
+  if (mod) {
+    var doSel = mod.querySelector("[data-mod-do]");
+    var sync = function () { mod.querySelectorAll("[data-for]").forEach(function (el) { el.hidden = el.dataset.for !== doSel.value; }); };
+    doSel.addEventListener("change", sync);
+    sync();
+    mod.addEventListener("submit", function (ev) {
+      var who = mod.querySelector("[name=person]").value.trim();
+      if (!confirm(doSel.options[doSel.selectedIndex].text + ": " + who + "? Das wirkt sofort auf dem Discord-Server.")) ev.preventDefault();
+    });
   }
   var range = document.querySelector("[data-range]"), out = document.querySelector("[data-range-out]");
   if (range && out) {

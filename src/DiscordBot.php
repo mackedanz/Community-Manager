@@ -19,9 +19,12 @@ final class DiscordBot
     }
 
     /** @return array{status:int,body:string,headers:array<string,string>} */
-    private static function call(string $method, string $path, ?array $json = null): array
+    private static function call(string $method, string $path, ?array $json = null, ?string $reason = null): array
     {
         $headers = ['Authorization' => 'Bot ' . Env::get('DISCORD_BOT_TOKEN', '')];
+        if ($reason !== null && $reason !== '') {
+            $headers['X-Audit-Log-Reason'] = rawurlencode(mb_substr($reason, 0, 480));
+        }
         $body = null;
         if ($json !== null) {
             $headers['Content-Type'] = 'application/json';
@@ -278,14 +281,14 @@ final class DiscordBot
      * @return array<string,mixed>
      * @throws DiscordAuthError|DiscordUnavailableError
      */
-    private static function mutate(string $method, string $path, ?array $payload, string $needed): array
+    private static function mutate(string $method, string $path, ?array $payload, string $needed, ?string $reason = null): array
     {
-        $res = self::call($method, $path, $payload);
+        $res = self::call($method, $path, $payload, $reason);
         if ($res['status'] === 429) {
             $wait = (float) ((json_decode($res['body'], true)['retry_after'] ?? 2));
             if ($wait <= 10) {
                 usleep((int) ($wait * 1_000_000) + 200_000);
-                $res = self::call($method, $path, $payload);
+                $res = self::call($method, $path, $payload, $reason);
             }
         }
         if ($res['status'] === 401 || $res['status'] === 403) {
@@ -358,6 +361,114 @@ final class DiscordBot
             }
         }
         return ['permissions' => ($bits & (1 << 3)) !== 0 ? -1 : $bits, 'top' => $top];
+    }
+
+    /**
+     * Mitglied mit Rollen und Timeout; null, wenn die Person nicht auf dem Server ist.
+     * @return ?array{id:string,name:string,roles:list<string>,until:?string,bot:bool}
+     * @throws DiscordAuthError|DiscordUnavailableError
+     */
+    public static function member(string $guildId, string $userId): ?array
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/members/' . rawurlencode($userId));
+        if ($res['status'] === 404) {
+            return null;
+        }
+        self::checkRead($res, 'Mitglieder');
+        $m = json_decode($res['body'], true);
+        return is_array($m) ? self::memberRow($m) : null;
+    }
+
+    /**
+     * Mitglieder, deren Name mit dem Suchtext beginnt (höchstens 10). Braucht den Intent "Server Members".
+     * @return list<array{id:string,name:string,roles:list<string>,until:?string,bot:bool}>
+     */
+    public static function searchMembers(string $guildId, string $query): array
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/members/search?limit=10&query=' . rawurlencode($query));
+        self::checkRead($res, 'Mitglieder');
+        $rows = json_decode($res['body'], true);
+        return is_array($rows) ? array_values(array_map(self::memberRow(...), array_filter($rows, 'is_array'))) : [];
+    }
+
+    /** @param array<string,mixed> $m @return array{id:string,name:string,roles:list<string>,until:?string,bot:bool} */
+    private static function memberRow(array $m): array
+    {
+        $u = is_array($m['user'] ?? null) ? $m['user'] : [];
+        $name = (string) ($u['global_name'] ?? '') !== '' ? (string) $u['global_name'] : (string) ($u['username'] ?? ($u['id'] ?? ''));
+        return [
+            'id' => (string) ($u['id'] ?? ''), 'name' => $name, 'roles' => array_map('strval', is_array($m['roles'] ?? null) ? $m['roles'] : []),
+            'until' => isset($m['communication_disabled_until']) ? (string) $m['communication_disabled_until'] : null, 'bot' => !empty($u['bot']),
+        ];
+    }
+
+    /** ID des Server-Eigentümers (null, wenn nicht zu ermitteln). */
+    public static function ownerId(string $guildId): ?string
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId));
+        $g = json_decode($res['body'], true);
+        return $res['status'] === 200 && is_array($g) && !empty($g['owner_id']) ? (string) $g['owner_id'] : null;
+    }
+
+    /** Timeout setzen (ISO-Zeit) oder beenden (null). @throws DiscordAuthError|DiscordUnavailableError */
+    public static function timeoutMember(string $guildId, string $userId, ?string $until, string $reason): void
+    {
+        self::mutate('PATCH', '/guilds/' . rawurlencode($guildId) . '/members/' . rawurlencode($userId), ['communication_disabled_until' => $until], 'Mitglieder moderieren', $reason);
+    }
+
+    public static function kickMember(string $guildId, string $userId, string $reason): void
+    {
+        self::mutate('DELETE', '/guilds/' . rawurlencode($guildId) . '/members/' . rawurlencode($userId), null, 'Mitglieder kicken', $reason);
+    }
+
+    public static function banMember(string $guildId, string $userId, int $deleteDays, string $reason): void
+    {
+        self::mutate('PUT', '/guilds/' . rawurlencode($guildId) . '/bans/' . rawurlencode($userId), ['delete_message_seconds' => $deleteDays * 86400], 'Mitglieder bannen', $reason);
+    }
+
+    public static function unbanMember(string $guildId, string $userId, string $reason): void
+    {
+        self::mutate('DELETE', '/guilds/' . rawurlencode($guildId) . '/bans/' . rawurlencode($userId), null, 'Mitglieder bannen', $reason);
+    }
+
+    /** Name der gebannten Person, null wenn sie nicht gebannt ist. */
+    public static function banned(string $guildId, string $userId): ?string
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/bans/' . rawurlencode($userId));
+        if ($res['status'] === 404) {
+            return null;
+        }
+        self::checkRead($res, 'Banliste');
+        $b = json_decode($res['body'], true);
+        $u = is_array($b['user'] ?? null) ? $b['user'] : [];
+        return (string) ($u['global_name'] ?? '') !== '' ? (string) $u['global_name'] : (string) ($u['username'] ?? $userId);
+    }
+
+    /** Direktnachricht an eine Person; false, wenn sie nicht ankam (DMs aus). Nie ein Fehler. */
+    public static function dm(string $userId, string $text): bool
+    {
+        try {
+            $ch = self::call('POST', '/users/@me/channels', ['recipient_id' => $userId]);
+            $c = json_decode($ch['body'], true);
+            if ($ch['status'] !== 200 || !is_array($c) || empty($c['id'])) {
+                return false;
+            }
+            $res = self::call('POST', '/channels/' . rawurlencode((string) $c['id']) . '/messages', ['content' => $text, 'allowed_mentions' => ['parse' => []]]);
+            return $res['status'] >= 200 && $res['status'] < 300;
+        } catch (DiscordUnavailableError) {
+            return false;
+        }
+    }
+
+    /** Nachricht in einen Kanal schreiben (z. B. Protokoll); Fehler werden verschluckt. @param array<string,mixed> $payload */
+    public static function post(string $channelId, array $payload): bool
+    {
+        try {
+            $res = self::call('POST', '/channels/' . rawurlencode($channelId) . '/messages', $payload + ['allowed_mentions' => ['parse' => []]]);
+            return $res['status'] >= 200 && $res['status'] < 300;
+        } catch (DiscordUnavailableError) {
+            return false;
+        }
     }
 
     /** Alle Kanäle des Servers (roh). @return list<array<string,mixed>> */

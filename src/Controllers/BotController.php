@@ -18,6 +18,7 @@ use Hangar\Http\Flash;
 use Hangar\Http\HttpException;
 use Hangar\Http\Request;
 use Hangar\Http\Response;
+use Hangar\Moderation;
 use Hangar\OrgError;
 
 /** Einstellungen des Discord-Bots im Web (nur Orga-Admins), als Alternative zu den Slash-Befehlen. */
@@ -95,6 +96,10 @@ final class BotController extends Controller
                 }
             }
         }
+        $modQuery = (string) $req->query('q', '');
+        $modAction = (string) $req->query('a', '');
+        $modPage = max(1, (int) $req->query('p', '1'));
+        $modCases = $section === 'faelle' ? Moderation::cases($org['id'], $modQuery, $modAction, $modPage) : ['rows' => [], 'total' => 0];
         $creators = $section === 'creator' ? Creators::list($org['id']) : [];
         $suggest = $section === 'zuordnung' ? BotSettings::suggest($all, $lists['channels'] ?? [], $lists['roles'] ?? []) : [];
         $cases = [];
@@ -118,6 +123,10 @@ final class BotController extends Controller
             'cases' => $cases,
             'suggest' => $suggest,
             'creators' => $creators,
+            'modCases' => $modCases,
+            'modQuery' => $modQuery,
+            'modAction' => $modAction,
+            'modPage' => $modPage,
         ], 'Discord-Bot', 'bot');
     }
 
@@ -159,6 +168,40 @@ final class BotController extends Controller
         } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
             return Flash::error($to, $e->getMessage());
         }
+    }
+
+    /** Maßnahme gegen eine Person (verwarnen, Timeout, Kick, Bann, aufheben). */
+    public static function modAction(Request $req, array $p): Response
+    {
+        [$viewer, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=faelle';
+        $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+        if ($guild === '' || !DiscordBot::configured()) {
+            return Flash::error($to, 'Kein Bot-Token eingerichtet (DISCORD_BOT_TOKEN).');
+        }
+        try {
+            $msg = Moderation::perform($org['id'], $guild, ['id' => $viewer->id, 'name' => $viewer->name, 'discord_id' => $viewer->discordId], [
+                'do' => (string) $req->input('do', ''), 'person' => (string) $req->input('person', ''), 'reason' => (string) $req->input('reason', ''),
+                'duration' => (string) $req->input('duration', ''), 'days' => (int) $req->input('days', '0'),
+            ]);
+        } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Flash::ok($to, $msg);
+    }
+
+    /** Nimmt eine Verwarnung zurück. */
+    public static function modUnwarn(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=faelle';
+        $id = (int) $req->input('id', '0');
+        try {
+            Moderation::removeWarning($org['id'], $id);
+        } catch (OrgError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Flash::ok($to, "Verwarnung #$id ist zurückgenommen.");
     }
 
     /** Gemeinsame Prüfung der Creator-Formulare: Discord-Kanal (und Rolle) müssen auf dem Server existieren. @return array{0:string,1:?string} */
