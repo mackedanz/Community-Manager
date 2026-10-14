@@ -14,6 +14,7 @@
 /** @var array<string,string> $usedChannels Kanal-ID => wofür der Bot ihn nutzt */
 /** @var ?array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure */
 /** @var list<array<string,mixed>> $cases */
+/** @var list<array<string,mixed>> $creators */
 /** @var string $csrf */
 use Hangar\BotSettings;
 
@@ -84,6 +85,7 @@ $descriptions = [
     'moderation' => 'Wer mit /mod verwarnen, stummschalten, kicken und bannen darf und wohin der Bot das protokolliert.',
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
     'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen, vorhandene ändern, verschieben oder löschen.',
+    'creator' => 'YouTube-Kanäle, deren neue Videos der Bot automatisch in einen Discord-Kanal postet. Der Bot schaut alle 10 Minuten nach; schon vorhandene Videos werden nicht nachträglich gepostet.',
     'zuordnung' => 'Legt fest, welchen Kanal und welche Rolle der Bot wofür nutzt. Nach dem Aufbau des Servers kannst du hier alles auf einmal eintragen; die Vorschläge kommen aus den Namen.',
     'vorlagen' => 'Den Aufbau des Servers (Rollen, Kategorien, Kanäle mit Rechten) als Vorlage festhalten und eine Vorlage auf den Server anwenden. Vor dem Anwenden siehst du, was sich ändert; gelöscht wird nur, was du ausdrücklich ankreuzt.',
     'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen lassen sich ändern und löschen.',
@@ -575,6 +577,83 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
         </div>
       </template>
       <?php endif; ?>
+    </div>
+    <?php elseif ($section === 'creator'): ?>
+    <div class="space-y-4">
+      <section class="<?= $card ?>">
+        <header class="border-b border-cyan-900/50 px-5 py-4">
+          <h2 class="text-lg font-semibold"><?= e(BotSettings::SECTIONS['creator']) ?> <span class="text-sm font-normal text-zinc-500">(<?= count($creators) ?>/<?= \Hangar\Creators::MAX ?>)</span></h2>
+          <p class="text-sm text-zinc-400"><?= e($descriptions['creator']) ?></p>
+        </header>
+        <?php if ($creators === []): ?>
+          <p class="px-5 py-4 text-sm text-zinc-400">Noch keine Creator. Unten einen YouTube-Kanal hinzufügen.</p>
+        <?php else: ?>
+        <ul class="divide-y divide-cyan-900/40">
+          <?php foreach ($creators as $c): ?>
+            <?php
+              $chName = current(array_column(array_filter($channels, static fn ($ch) => $ch['id'] === $c['discord_channel_id']), 'name'));
+              $roleName = $c['mention_role_id'] ? current(array_column(array_filter($roles, static fn ($r) => $r['id'] === $c['mention_role_id']), 'name')) : null;
+            ?>
+            <li class="px-5 py-4">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <a href="https://www.youtube.com/channel/<?= e($c['channel_id']) ?>" target="_blank" rel="noopener" class="font-medium text-cyan-300 hover:underline"><?= e($c['name']) ?></a>
+                <span class="text-xs <?= !empty($c['last_error']) ? 'text-amber-300' : 'text-zinc-500' ?>"><?php
+                  if (!empty($c['last_error'])) { echo '⚠ ' . e($c['last_error']); }
+                  elseif (!empty($c['checked_at'])) { echo 'zuletzt geprüft ' . e(dt(\Hangar\Time::parse((string) $c['checked_at']))); }
+                  else { echo 'noch nicht geprüft'; }
+                ?></span>
+              </div>
+              <p class="mt-1 text-sm text-zinc-400">→ <?= $chName ? '#' . e($chName) : 'Kanal nicht mehr verfügbar' ?><?= $c['mention_role_id'] ? ', erwähnt @' . e($roleName ?: 'Rolle nicht mehr verfügbar') : '' ?><?= (int) $c['skip_shorts'] === 1 ? ', ohne Shorts' : '' ?></p>
+              <details class="mt-2 rounded-md border border-cyan-900/50">
+                <summary class="cursor-pointer px-3 py-1.5 text-sm text-cyan-300">Bearbeiten</summary>
+                <form method="post" action="<?= e($base . '/creator/update') ?>" class="space-y-3 border-t border-cyan-900/50 p-3">
+                  <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                  <input type="hidden" name="id" value="<?= e($c['id']) ?>">
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Discord-Kanal</span><?= $channelSelect('channel', (string) $c['discord_channel_id']) ?></label>
+                    <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Rolle erwähnen (freiwillig)</span><?= $roleSelect('role', (string) ($c['mention_role_id'] ?? '')) ?></label>
+                  </div>
+                  <label class="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" name="skipShorts" value="1" class="accent-cyan-400"<?= (int) $c['skip_shorts'] === 1 ? ' checked' : '' ?>> Shorts nicht posten</label>
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-4 py-1.5 text-sm hover:bg-cyan-500/30">Speichern</button>
+                    <button type="submit" form="del-creator-<?= e($c['id']) ?>" class="text-sm text-red-400 hover:text-red-300">Creator entfernen</button>
+                  </div>
+                </form>
+                <form id="del-creator-<?= e($c['id']) ?>" method="post" action="<?= e($base . '/creator/delete') ?>"
+                      onsubmit="return confirm('Den Creator &quot;<?= e(addslashes($c['name'])) ?>&quot; entfernen? Neue Videos werden dann nicht mehr gepostet.')">
+                  <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                  <input type="hidden" name="id" value="<?= e($c['id']) ?>">
+                </form>
+              </details>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+      </section>
+
+      <section class="<?= $card ?>">
+        <header class="border-b border-cyan-900/50 px-5 py-4">
+          <h2 class="text-lg font-semibold">Creator hinzufügen</h2>
+          <p class="text-sm text-zinc-400">Gibt es den YouTube-Kanal schon in der Liste, werden Kanal, Rolle und Shorts geändert.</p>
+        </header>
+        <?php if ($channels === []): ?>
+          <p class="p-5 text-sm text-zinc-400">Die Discord-Kanäle konnten nicht geladen werden, deshalb ist das Hinzufügen gesperrt.</p>
+        <?php else: ?>
+        <form method="post" action="<?= e($base . '/creator/add') ?>" class="space-y-4 p-5">
+          <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">YouTube-Kanal</span>
+            <input type="text" name="youtube" required maxlength="200" class="<?= $field ?>" placeholder="youtube.com/@Name, @Name oder Kanal-ID (UC…)">
+            <span class="block <?= $hint ?>">Link zum Kanal oder @Name. Der Kanal wird bei YouTube geprüft, das dauert einen Moment.</span></label>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Discord-Kanal für neue Videos</span><?= $channelSelect('channel', '', '– Kanal wählen –') ?>
+              <span class="block <?= $hint ?>">Der Bot braucht dort „Kanal ansehen“, „Nachrichten senden“ und „Links einbetten“.</span></label>
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Rolle erwähnen (freiwillig)</span><?= $roleSelect('role', '') ?></label>
+          </div>
+          <label class="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" name="skipShorts" value="1" class="accent-cyan-400"> Shorts nicht posten</label>
+          <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Hinzufügen</button>
+        </form>
+        <?php endif; ?>
+      </section>
     </div>
     <?php else: ?>
     <form method="post" action="<?= e($base . '/save') ?>" class="space-y-4">

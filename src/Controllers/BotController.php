@@ -6,6 +6,7 @@ namespace Hangar\Controllers;
 
 use Hangar\Auth;
 use Hangar\BotSettings;
+use Hangar\Creators;
 use Hangar\Db;
 use Hangar\DiscordAuthError;
 use Hangar\DiscordBot;
@@ -94,6 +95,7 @@ final class BotController extends Controller
                 }
             }
         }
+        $creators = $section === 'creator' ? Creators::list($org['id']) : [];
         $suggest = $section === 'zuordnung' ? BotSettings::suggest($all, $lists['channels'] ?? [], $lists['roles'] ?? []) : [];
         $cases = [];
         if ($section === 'moderation') {
@@ -115,6 +117,7 @@ final class BotController extends Controller
             'preview' => $preview,
             'cases' => $cases,
             'suggest' => $suggest,
+            'creators' => $creators,
         ], 'Discord-Bot', 'bot');
     }
 
@@ -156,6 +159,61 @@ final class BotController extends Controller
         } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
             return Flash::error($to, $e->getMessage());
         }
+    }
+
+    /** Gemeinsame Prüfung der Creator-Formulare: Discord-Kanal (und Rolle) müssen auf dem Server existieren. @return array{0:string,1:?string} */
+    private static function creatorTarget(Request $req, string $orgId): array
+    {
+        $channel = trim((string) $req->input('channel', ''));
+        $role = trim((string) $req->input('role', ''));
+        $lists = self::discordLists($orgId);
+        if ($lists['channels'] === null) {
+            throw new OrgError((string) $lists['problem']);
+        }
+        if (!in_array($channel, array_column($lists['channels'], 'id'), true)) {
+            throw new OrgError('Bitte einen Discord-Kanal auswählen.');
+        }
+        if ($role !== '' && !in_array($role, array_column($lists['roles'] ?? [], 'id'), true)) {
+            throw new OrgError('Diese Rolle gibt es auf dem Server nicht (mehr). Bitte die Seite neu laden.');
+        }
+        return [$channel, $role === '' ? null : $role];
+    }
+
+    /** Fügt einen YouTube-Kanal hinzu oder ändert ihn, wenn es ihn schon gibt. */
+    public static function creatorAdd(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=creator';
+        try {
+            [$channel, $role] = self::creatorTarget($req, $org['id']);
+            $r = Creators::add($org['id'], (string) $req->input('youtube', ''), $channel, $role, $req->input('skipShorts', '') === '1');
+        } catch (OrgError $e) {
+            return Flash::error($to, 'Nicht hinzugefügt: ' . $e->getMessage());
+        }
+        return Flash::ok($to, ($r['updated'] ? 'Geändert: ' : 'Hinzugefügt: ') . $r['name'] . '. Ab jetzt postet der Bot jedes neue Video (geprüft wird alle 10 Minuten). Bisherige Videos werden nicht nachträglich gepostet.');
+    }
+
+    /** Ändert Discord-Kanal, Rolle und Shorts eines Creators. */
+    public static function creatorUpdate(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=creator';
+        try {
+            [$channel, $role] = self::creatorTarget($req, $org['id']);
+            Creators::update($org['id'], (string) $req->input('id', ''), $channel, $role, $req->input('skipShorts', '') === '1');
+        } catch (OrgError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Flash::ok($to, 'Creator geändert.');
+    }
+
+    public static function creatorDelete(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=creator';
+        return Creators::remove($org['id'], (string) $req->input('id', ''))
+            ? Flash::ok($to, 'Creator entfernt. Neue Videos werden nicht mehr gepostet.')
+            : Flash::error($to, 'Diesen Creator gibt es nicht (mehr).');
     }
 
     /** Ändert eine vorhandene Rolle. */

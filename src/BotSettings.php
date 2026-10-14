@@ -38,6 +38,7 @@ final class BotSettings
         'willkommen' => 'Willkommen und Regeln',
         'moderation' => 'Moderation',
         'automod' => 'Automod',
+        'creator' => 'Creator',
         'setup' => 'Discord-Setup',
         'rollen' => 'Rollen und Rechte',
     ];

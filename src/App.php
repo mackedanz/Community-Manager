@@ -95,6 +95,9 @@ final class App
         $r->post('/o/{slug}/bot/roles', [BotController::class, 'roles']);
         $r->post('/o/{slug}/bot/role/update', [BotController::class, 'roleUpdate']);
         $r->post('/o/{slug}/bot/role/delete', [BotController::class, 'roleDelete']);
+        $r->post('/o/{slug}/bot/creator/add', [BotController::class, 'creatorAdd']);
+        $r->post('/o/{slug}/bot/creator/update', [BotController::class, 'creatorUpdate']);
+        $r->post('/o/{slug}/bot/creator/delete', [BotController::class, 'creatorDelete']);
         $r->post('/o/{slug}/bot/channel/update', [BotController::class, 'channelUpdate']);
         $r->post('/o/{slug}/bot/channel/delete', [BotController::class, 'channelDelete']);
         $r->post('/o/{slug}/bot/template/save', [BotController::class, 'templateSave']);
