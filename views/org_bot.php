@@ -8,6 +8,7 @@
 /** @var list<array{id:string,name:string,color:int}> $roles */
 /** @var ?string $problem */
 /** @var bool $messageContent */
+/** @var array<string,string> $usedChannels Kanal-ID => wofür der Bot ihn nutzt */
 /** @var ?array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure */
 /** @var list<array<string,mixed>> $cases */
 /** @var string $csrf */
@@ -78,8 +79,8 @@ $descriptions = [
     'willkommen' => 'Begrüßt neue Mitglieder. „Bestätigen“ unter den Regeln vergibt die Besucher-Rolle.',
     'moderation' => 'Wer mit /mod verwarnen, stummschalten, kicken und bannen darf und wohin der Bot das protokolliert.',
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
-    'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen. Bestehendes bleibt unverändert.',
-    'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen bleiben unverändert.',
+    'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen, vorhandene ändern, verschieben oder löschen.',
+    'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen lassen sich ändern und löschen.',
 ];
 $typeIcon = [0 => '#', 2 => '🔊', 5 => '📢', 13 => '🎙', 15 => '💬'];
 // Rollen als anklickbare Chips für das Setup; der Name enthält Platzhalter, die das JavaScript beim Kopieren der Vorlage ersetzt.
@@ -126,15 +127,17 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
       foreach (\Hangar\DiscordRoles::PERMISSIONS as $bit => [$title, $group]) {
           $groups[$group][$bit] = $title;
       }
-      $permBoxes = static function () use ($groups, $mayGrant): string {
+      // Rechte als Kästchen; $have = bereits gesetzte Rechte (Bitmaske). Was der Bot nicht vergeben darf, ist gesperrt und wird nicht gesendet.
+      $permBoxes = static function (string $name, int $have = 0) use ($groups, $mayGrant): string {
           $html = '';
           foreach ($groups as $group => $items) {
               $html .= '<fieldset class="space-y-1"><legend class="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">' . e($group) . '</legend>';
               foreach ($items as $bit => $title) {
                   $ok = $mayGrant($bit);
                   $html .= '<label class="flex items-center gap-2 text-sm ' . ($ok ? 'text-zinc-300' : 'cursor-not-allowed text-zinc-600') . '"'
-                      . ($ok ? '' : ' title="Der Bot hat dieses Recht selbst nicht und kann es nicht vergeben"') . '>'
-                      . '<input type="checkbox" name="roles[__R__][perms][]" value="' . (int) $bit . '" class="accent-cyan-400"' . ($ok ? '' : ' disabled') . '> ' . e($title) . '</label>';
+                      . ($ok ? '' : ' title="Der Bot hat dieses Recht selbst nicht und kann es nicht ändern"') . '>'
+                      . '<input type="checkbox" name="' . e($name) . '" value="' . (int) $bit . '" class="accent-cyan-400"'
+                      . (($have & (1 << $bit)) !== 0 ? ' checked' : '') . ($ok ? '' : ' disabled') . '> ' . e($title) . '</label>';
               }
               $html .= '</fieldset>';
           }
@@ -164,11 +167,50 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
               <summary class="cursor-pointer px-4 py-2 text-sm text-zinc-300">Vorhandene Rollen (<?= count(array_filter($roleInfo['roles'], static fn ($r) => $r['name'] !== '@everyone')) ?>)</summary>
               <ul class="divide-y divide-cyan-900/40 border-t border-cyan-900/50 text-sm">
                 <?php foreach ($roleInfo['roles'] as $r): ?>
-                  <?php $labels = \Hangar\DiscordRoles::labels($r['permissions']); ?>
-                  <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2">
-                    <span class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded-full border border-zinc-600" style="background: <?= $r['color'] > 0 ? e(sprintf('#%06x', $r['color'])) : 'transparent' ?>"></span>
-                      <?= e($r['name']) ?><?= $r['managed'] ? ' <span class="text-xs text-zinc-500">(Bot oder Integration)</span>' : '' ?></span>
-                    <span class="text-xs text-zinc-500"><?= e($labels === [] ? 'keine besonderen Rechte' : implode(', ', array_slice($labels, 0, 5)) . (count($labels) > 5 ? ' … +' . (count($labels) - 5) : '')) ?></span>
+                  <?php
+                    $labels = \Hangar\DiscordRoles::labels($r['permissions']);
+                    $editable = \Hangar\DiscordRoles::editable($r, $roleInfo['top'] ?? null);
+                    $hex = $r['color'] > 0 ? sprintf('#%06x', $r['color']) : '';
+                  ?>
+                  <li class="px-4 py-2">
+                    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <span class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded-full border border-zinc-600" style="background: <?= $hex !== '' ? e($hex) : 'transparent' ?>"></span>
+                        <?= e($r['name']) ?><?= $r['managed'] ? ' <span class="text-xs text-zinc-500">(Bot oder Integration)</span>' : '' ?></span>
+                      <span class="text-xs text-zinc-500"><?= e($labels === [] ? 'keine besonderen Rechte' : implode(', ', array_slice($labels, 0, 5)) . (count($labels) > 5 ? ' … +' . (count($labels) - 5) : '')) ?></span>
+                    </div>
+                    <?php if ($editable): ?>
+                      <details class="mt-2 rounded-md border border-cyan-900/50">
+                        <summary class="cursor-pointer px-3 py-1.5 text-sm text-cyan-300">Bearbeiten</summary>
+                        <form method="post" action="<?= e($base . '/role/update') ?>" class="space-y-3 border-t border-cyan-900/50 p-3">
+                          <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                          <input type="hidden" name="id" value="<?= e($r['id']) ?>">
+                          <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+                            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Name</span>
+                              <input type="text" name="name" value="<?= e($r['name']) ?>" maxlength="<?= \Hangar\DiscordRoles::MAX_NAME ?>" class="<?= $field ?>"></label>
+                            <div class="space-y-1.5"><span class="block text-sm text-zinc-300">Farbe</span>
+                              <span class="flex items-center gap-2"><input type="checkbox" name="usecolor" value="1" class="accent-cyan-400" aria-label="Farbe setzen" data-usecolor<?= $hex !== '' ? ' checked' : '' ?>>
+                                <input type="color" name="color" value="<?= e($hex !== '' ? $hex : '#3b82f6') ?>"<?= $hex === '' ? ' disabled' : '' ?> class="h-9 w-14 cursor-pointer rounded border border-cyan-800/60 bg-zinc-950/60" data-color></span></div>
+                            <div class="flex flex-wrap gap-x-4 gap-y-1 pb-2 text-sm text-zinc-300">
+                              <label class="flex items-center gap-2"><input type="checkbox" name="hoist" value="1" class="accent-cyan-400"<?= $r['hoist'] ? ' checked' : '' ?>> getrennt zeigen</label>
+                              <label class="flex items-center gap-2"><input type="checkbox" name="mentionable" value="1" class="accent-cyan-400"<?= $r['mentionable'] ? ' checked' : '' ?>> erwähnbar</label>
+                            </div>
+                          </div>
+                          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><?= $permBoxes('perms[]', $r['permissions']) ?></div>
+                          <?php if (($r['permissions'] & (1 << 3)) !== 0): ?><p class="text-xs text-amber-300">Diese Rolle hat Administrator-Rechte. Die bleiben unverändert, auch wenn du hier speicherst.</p><?php endif; ?>
+                          <div class="flex flex-wrap items-center justify-between gap-3">
+                            <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-4 py-1.5 text-sm hover:bg-cyan-500/30">Speichern</button>
+                            <button type="submit" form="del-role-<?= e($r['id']) ?>" class="text-sm text-red-400 hover:text-red-300">Rolle löschen</button>
+                          </div>
+                        </form>
+                        <form id="del-role-<?= e($r['id']) ?>" method="post" action="<?= e($base . '/role/delete') ?>"
+                              onsubmit="return confirm('Die Rolle &quot;<?= e(addslashes($r['name'])) ?>&quot; endgültig löschen? Alle, die sie haben, verlieren sie. Das lässt sich nicht rückgängig machen.')">
+                          <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                          <input type="hidden" name="id" value="<?= e($r['id']) ?>">
+                        </form>
+                      </details>
+                    <?php elseif ($r['position'] > 0): ?>
+                      <p class="mt-1 text-xs text-zinc-600"><?= $r['managed'] ? 'Gehört einem Bot oder einer Integration und lässt sich hier nicht ändern.' : 'Steht über der Rolle des Bots, deshalb kann er sie nicht ändern. Die Bot-Rolle in Discord nach oben ziehen.' ?></p>
+                    <?php endif; ?>
                   </li>
                 <?php endforeach; ?>
               </ul>
@@ -183,7 +225,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
         <section class="<?= $card ?>">
           <header class="border-b border-cyan-900/50 px-5 py-4">
             <h2 class="text-lg font-semibold">Neue Rollen</h2>
-            <p class="text-sm text-zinc-400">Die Rollen entstehen unten in der Rollenliste, vorhandene werden nicht verändert. Die Mitglieder weist du in Discord zu; in „Discord-Setup“ stehen die neuen Rollen für Sichtbarkeit zur Auswahl.</p>
+            <p class="text-sm text-zinc-400">Die Rollen entstehen unten in der Rollenliste. Die Mitglieder weist du in Discord zu; in „Discord-Setup“ stehen die neuen Rollen für Sichtbarkeit zur Auswahl.</p>
           </header>
           <div class="space-y-4 p-5">
             <noscript><p class="text-sm text-amber-300">Zum Zusammenstellen der Rollen braucht diese Seite JavaScript.</p></noscript>
@@ -221,7 +263,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
             </select></label>
           <details class="rounded-md border border-cyan-900/50">
             <summary class="cursor-pointer px-3 py-2 text-sm text-zinc-300">Rechte einzeln wählen (<span data-permcount>0</span> gewählt)</summary>
-            <div class="grid gap-4 border-t border-cyan-900/50 p-3 sm:grid-cols-2 lg:grid-cols-3"><?= $permBoxes() ?></div>
+            <div class="grid gap-4 border-t border-cyan-900/50 p-3 sm:grid-cols-2 lg:grid-cols-3"><?= $permBoxes('roles[__R__][perms][]') ?></div>
           </details>
         </div>
       </template>
@@ -238,20 +280,90 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
           <?php if ($structure === null): ?>
             <p class="<?= $hint ?>">Der Aufbau des Servers konnte nicht geladen werden, deshalb ist das Anlegen gesperrt.</p>
           <?php else: ?>
-            <details class="rounded-md border border-cyan-900/50">
-              <summary class="cursor-pointer px-4 py-2 text-sm text-zinc-300">Aufbau des Servers jetzt (<?= count($structure['categories']) ?> Kategorien)</summary>
-              <div class="grid gap-x-6 gap-y-3 border-t border-cyan-900/50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                <?php foreach ($structure['loose'] !== [] ? array_merge([['name' => 'Ohne Kategorie', 'channels' => $structure['loose']]], $structure['categories']) : $structure['categories'] as $cat): ?>
-                  <div>
-                    <div class="font-medium text-cyan-300"><?= e($cat['name']) ?></div>
-                    <ul class="text-zinc-400">
-                      <?php foreach ($cat['channels'] as $c): ?><li><?= e($typeIcon[$c['type']] ?? '#') ?> <?= e($c['name']) ?></li><?php endforeach; ?>
-                      <?php if ($cat['channels'] === []): ?><li class="text-zinc-600">leer</li><?php endif; ?>
-                    </ul>
+            <?php
+              // Ein Eintrag des Servers (Kategorie oder Kanal) zum Aufklappen: Name, Thema, Kategorie, Rechte ändern oder löschen.
+              $editor = static function (array $item, bool $isCategory) use ($csrf, $base, $field, $hint, $typeIcon, $structure, $usedChannels, $roleBoxes): string {
+                  $id = (string) $item['id'];
+                  $type = $isCategory ? 4 : (int) $item['type'];
+                  $used = $usedChannels[$id] ?? null;
+                  $confirm = $isCategory
+                      ? 'Kategorie „' . $item['name'] . '“ löschen? Die ' . count($item['channels']) . ' Kanäle darin bleiben bestehen und liegen danach ohne Kategorie ganz oben.'
+                      : 'Kanal „' . $item['name'] . '“ löschen? Alle Nachrichten darin gehen verloren.' . ($used !== null ? ' Der Bot nutzt ihn für: ' . $used . '.' : '');
+                  ob_start(); ?>
+                  <details class="rounded-md border border-transparent open:border-cyan-900/50">
+                    <summary class="flex cursor-pointer flex-wrap items-center gap-2 rounded px-2 py-1 text-sm hover:bg-teal-900/30">
+                      <span class="w-5 text-center text-zinc-500"><?= $isCategory ? '▾' : e($typeIcon[$type] ?? '#') ?></span>
+                      <span class="<?= $isCategory ? 'font-medium text-cyan-300' : 'text-zinc-300' ?>"><?= e($item['name']) ?></span>
+                      <?php if ($used !== null): ?><span class="rounded-full border border-cyan-700/50 px-2 text-xs text-cyan-300" title="Der Bot nutzt diesen Kanal">Bot: <?= e($used) ?></span><?php endif; ?>
+                    </summary>
+                    <form method="post" action="<?= e($base . '/channel/update') ?>" class="space-y-3 border-t border-cyan-900/50 p-3">
+                      <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                      <input type="hidden" name="id" value="<?= e($id) ?>">
+                      <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Name</span>
+                          <input type="text" name="name" value="<?= e($item['name']) ?>" maxlength="<?= \Hangar\DiscordSetup::MAX_NAME ?>" class="<?= $field ?>"></label>
+                        <?php if (!$isCategory && in_array($type, [0, 5, 15], true)): ?>
+                          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Thema</span>
+                            <input type="text" name="topic" value="<?= e($item['topic'] ?? '') ?>" maxlength="<?= \Hangar\DiscordSetup::MAX_TOPIC ?>" class="<?= $field ?>"></label>
+                        <?php endif; ?>
+                        <?php if (!$isCategory): ?>
+                          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Kategorie</span>
+                            <select name="parent" class="<?= $field ?>">
+                              <option value="">unverändert</option>
+                              <option value="-">Ohne Kategorie</option>
+                              <?php foreach ($structure['categories'] as $cat): ?><option value="<?= e($cat['id']) ?>"><?= e($cat['name']) ?></option><?php endforeach; ?>
+                            </select></label>
+                        <?php endif; ?>
+                        <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Sichtbar für</span>
+                          <select name="access" class="<?= $field ?>" data-edit-access>
+                            <option value="keep">unverändert</option>
+                            <?php if (!$isCategory): ?><option value="inherit">wie die Kategorie</option><?php endif; ?>
+                            <option value="all">alle</option>
+                            <option value="roles">nur bestimmte Rollen</option>
+                          </select></label>
+                        <?php if (!$isCategory && $type !== 2): ?>
+                          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Nur lesen</span>
+                            <select name="readonly" class="<?= $field ?>">
+                              <option value="">unverändert</option>
+                              <option value="1">ja (nur Bot und Admins schreiben)</option>
+                              <option value="0">nein</option>
+                            </select></label>
+                        <?php endif; ?>
+                      </div>
+                      <div hidden data-edit-roles><?= $roleBoxes('roles') ?></div>
+                      <p class="<?= $hint ?>">Wer „Sichtbar für“ oder „Nur lesen“ ändert, ersetzt die bisherigen Rechte <?= $isCategory ? 'dieser Kategorie' : 'dieses Kanals' ?>. „Unverändert“ lässt sie, wie sie sind.</p>
+                      <div class="flex flex-wrap items-center justify-between gap-3">
+                        <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-4 py-1.5 text-sm hover:bg-cyan-500/30">Speichern</button>
+                        <button type="submit" form="del-<?= e($id) ?>" class="text-sm text-red-400 hover:text-red-300"><?= $isCategory ? 'Kategorie' : 'Kanal' ?> löschen</button>
+                      </div>
+                    </form>
+                    <form id="del-<?= e($id) ?>" method="post" action="<?= e($base . '/channel/delete') ?>"
+                          onsubmit="return confirm('<?= e(addslashes($confirm . ' Das lässt sich nicht rückgängig machen.')) ?>')">
+                      <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                      <input type="hidden" name="id" value="<?= e($id) ?>">
+                    </form>
+                  </details>
+                  <?php return (string) ob_get_clean();
+              };
+            ?>
+            <p class="<?= $hint ?>">Auf einen Eintrag klicken, um ihn zu ändern oder zu löschen. Vorhandenes wird nur geändert, wenn du es hier ausdrücklich speicherst.</p>
+            <div class="space-y-3">
+              <?php if ($structure['loose'] !== []): ?>
+                <section class="rounded-md border border-cyan-900/50 p-2">
+                  <div class="px-2 py-1 text-sm font-medium text-zinc-400">Ohne Kategorie</div>
+                  <div class="space-y-0.5 pl-3"><?php foreach ($structure['loose'] as $c): ?><?= $editor($c, false) ?><?php endforeach; ?></div>
+                </section>
+              <?php endif; ?>
+              <?php foreach ($structure['categories'] as $cat): ?>
+                <section class="rounded-md border border-cyan-900/50 p-2">
+                  <?= $editor($cat, true) ?>
+                  <div class="space-y-0.5 pl-6">
+                    <?php foreach ($cat['channels'] as $c): ?><?= $editor($c, false) ?><?php endforeach; ?>
+                    <?php if ($cat['channels'] === []): ?><div class="px-2 py-1 text-sm text-zinc-600">leer</div><?php endif; ?>
                   </div>
-                <?php endforeach; ?>
-              </div>
-            </details>
+                </section>
+              <?php endforeach; ?>
+            </div>
           <?php endif; ?>
         </div>
       </section>
@@ -262,7 +374,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
         <section class="<?= $card ?>">
           <header class="border-b border-cyan-900/50 px-5 py-4">
             <h2 class="text-lg font-semibold">Neu anlegen</h2>
-            <p class="text-sm text-zinc-400">Jeder Block ist eine Kategorie mit ihren Kanälen. Es wird erst alles geprüft und dann angelegt. Vorhandenes wird nie geändert oder gelöscht.</p>
+            <p class="text-sm text-zinc-400">Jeder Block ist eine Kategorie mit ihren Kanälen. Es wird erst alles geprüft und dann angelegt. Vorhandenes bleibt dabei unverändert.</p>
           </header>
           <div class="space-y-4 p-5">
             <label class="block max-w-xs space-y-1.5"><span class="text-sm text-zinc-300">Zeichen vor jedem Kanalnamen</span>
@@ -519,6 +631,17 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
       add.value = ""; draw();
     });
     draw();
+  });
+
+  // Vorhandenes bearbeiten: Rollen-Auswahl nur bei „nur bestimmte Rollen“, Farbfeld nur mit gesetztem Haken
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.matches("[data-edit-access]")) {
+      t.closest("form").querySelector("[data-edit-roles]").hidden = t.value !== "roles";
+    } else if (t.matches("[data-usecolor]")) {
+      var color = t.closest("span").querySelector("[data-color]");
+      if (color) { color.disabled = !t.checked; }
+    }
   });
 
   // Discord-Setup: Blöcke (Kategorie mit Kanälen) aus Vorlagen zusammenstellen; __B__ und __C__ sind die laufenden Nummern für die Feldnamen.

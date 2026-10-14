@@ -305,6 +305,193 @@ final class DiscordSetup
     }
 
     /**
+     * Kanal oder Kategorie mit dieser ID aus dem Aufbau des Servers.
+     * @param array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure
+     * @return ?array{category:bool,row:array<string,mixed>}
+     */
+    private static function locate(string $id, array $structure): ?array
+    {
+        foreach ($structure['categories'] as $cat) {
+            if ((string) $cat['id'] === $id) {
+                return ['category' => true, 'row' => $cat];
+            }
+            foreach ($cat['channels'] as $c) {
+                if ((string) $c['id'] === $id) {
+                    return ['category' => false, 'row' => $c];
+                }
+            }
+        }
+        foreach ($structure['loose'] as $c) {
+            if ((string) $c['id'] === $id) {
+                return ['category' => false, 'row' => $c];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * „Nur lesen“ an einem vorhandenen Kanal ein- oder ausschalten, ohne die übrigen Rechte anzufassen.
+     * @param list<array{id:string,type:int,allow:string,deny:string}> $current
+     * @return list<array{id:string,type:int,allow:string,deny:string}>
+     */
+    public static function readonlyOverwrites(array $current, bool $on, string $guildId, ?string $botId): array
+    {
+        $map = [];
+        foreach ($current as $o) {
+            $map[$o['id']] = ['id' => $o['id'], 'type' => $o['type'], 'allow' => (int) $o['allow'], 'deny' => (int) $o['deny']];
+        }
+        if ($on) {
+            if (!isset($map[$guildId])) {
+                self::bits($map, $guildId, 0, 0, 0);
+            }
+            foreach (array_keys($map) as $key) {
+                $id = (string) $key; // ganzzahlige Schlüssel wie "20" macht PHP zu int
+                if ($id !== $botId) {
+                    self::bits($map, $id, $map[$key]['type'], 0, self::WRITE);
+                }
+            }
+            if ($botId !== null) {
+                self::bits($map, $botId, 1, self::VIEW | self::SEND | self::EMBED | self::HISTORY, 0);
+            }
+        } else {
+            foreach (array_keys($map) as $key) {
+                $map[$key]['deny'] &= ~self::WRITE;
+            }
+        }
+        return self::export($map);
+    }
+
+    /**
+     * Prüft die Änderung eines vorhandenen Kanals oder einer Kategorie und liefert nur die geänderten Felder für Discord.
+     * Felder: name, topic, parent ('' = unverändert, '-' = ohne Kategorie, sonst Kategorie-ID), access (keep|inherit|all|roles) mit roles,
+     * readonly ('' = unverändert, '1', '0'). Änderungen an den Rechten ersetzen die bisherigen Rechte des Kanals.
+     * @param array<string,mixed> $post
+     * @param array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure
+     * @param list<string> $roleIds
+     * @return array{id:string,name:string,payload:array<string,mixed>}
+     * @throws OrgError
+     */
+    public static function planUpdate(array $post, array $structure, array $roleIds, string $guildId, ?string $botId): array
+    {
+        $found = self::locate(is_string($post['id'] ?? null) ? trim($post['id']) : '', $structure);
+        if ($found === null) {
+            throw new OrgError('Das gibt es auf dem Server nicht mehr. Bitte die Seite neu laden.');
+        }
+        $isCategory = $found['category'];
+        $row = $found['row'];
+        $type = $isCategory ? 4 : (int) $row['type'];
+        $name = is_string($post['name'] ?? null) ? trim($post['name']) : '';
+        if (self::baseName($name) === '' || mb_strlen($name) > self::MAX_NAME) {
+            throw new OrgError('Der Name braucht 1 bis ' . self::MAX_NAME . ' Zeichen mit mindestens einem Buchstaben oder einer Ziffer.');
+        }
+        $payload = [];
+        if ($name !== $row['name']) {
+            $payload['name'] = $name;
+        }
+
+        // Kategorie des Kanals
+        $parent = $isCategory ? null : $row['parent'];
+        $target = is_string($post['parent'] ?? null) ? trim($post['parent']) : '';
+        if (!$isCategory && $target !== '') {
+            $ids = array_map(static fn ($c) => (string) $c['id'], $structure['categories']);
+            if ($target !== '-' && !in_array($target, $ids, true)) {
+                throw new OrgError('Diese Kategorie gibt es auf dem Server nicht mehr. Bitte die Seite neu laden.');
+            }
+            $parent = $target === '-' ? null : $target;
+            if ($parent !== $row['parent']) {
+                $payload['parent_id'] = $parent;
+            }
+        }
+
+        // Name darf unter Geschwistern nicht doppelt vorkommen (Sprache und Text getrennt)
+        if ($isCategory) {
+            foreach ($structure['categories'] as $c) {
+                if ((string) $c['id'] !== (string) $row['id'] && self::baseName((string) $c['name']) === self::baseName($name)) {
+                    throw new OrgError("Eine Kategorie „{$name}“ gibt es schon.");
+                }
+            }
+        } else {
+            $siblings = $parent === null ? $structure['loose'] : array_values(array_filter($structure['categories'], static fn ($c) => (string) $c['id'] === $parent))[0]['channels'];
+            $count = 0;
+            foreach ($siblings as $c) {
+                if ((string) $c['id'] === (string) $row['id']) {
+                    continue;
+                }
+                $count++;
+                if (self::channelKey((int) $c['type'], (string) $c['name']) === self::channelKey($type, $name)) {
+                    throw new OrgError("Einen Kanal „{$name}“ gibt es in dieser Kategorie schon.");
+                }
+            }
+            if ($parent !== null && $count + 1 > self::MAX_IN_CATEGORY) {
+                throw new OrgError('Eine Kategorie fasst höchstens ' . self::MAX_IN_CATEGORY . ' Kanäle.');
+            }
+        }
+
+        // Thema (nicht bei Sprachkanälen und Kategorien)
+        if (!$isCategory && $type !== 2 && is_string($post['topic'] ?? null)) {
+            $topic = trim($post['topic']);
+            if (mb_strlen($topic) > self::MAX_TOPIC) {
+                throw new OrgError('Das Thema ist zu lang (höchstens ' . self::MAX_TOPIC . ' Zeichen).');
+            }
+            if ($topic !== (string) ($row['topic'] ?? '')) {
+                $payload['topic'] = $topic;
+            }
+        }
+
+        // Rechte
+        $access = is_string($post['access'] ?? null) ? $post['access'] : 'keep';
+        $access = in_array($access, ['keep', ...self::ACCESS], true) ? $access : 'keep';
+        if ($isCategory && $access === 'inherit') {
+            $access = 'keep';
+        }
+        $roles = self::roles($post['roles'] ?? null, $roleIds);
+        if ($access === 'roles' && $roles === []) {
+            throw new OrgError('„Nur bestimmte Rollen“ ist gewählt, aber keine Rolle angekreuzt.');
+        }
+        $readonly = $isCategory || $type === 2 ? '' : (is_string($post['readonly'] ?? null) ? $post['readonly'] : '');
+        if ($isCategory && $access !== 'keep') {
+            $payload['permission_overwrites'] = self::categoryOverwrites(['mode' => $access, 'roles' => $access === 'roles' ? $roles : []], $guildId, $botId);
+        } elseif (!$isCategory && $access !== 'keep') {
+            $base = [];
+            foreach ($structure['categories'] as $c) {
+                if ((string) $c['id'] === $parent) {
+                    $base = $c['overwrites'];
+                }
+            }
+            $payload['permission_overwrites'] = self::channelOverwrites(
+                ['type' => $type, 'access' => $access, 'roles' => $access === 'roles' ? $roles : [], 'readonly' => $readonly === '1'],
+                $base,
+                $guildId,
+                $botId,
+            );
+        } elseif (!$isCategory && ($readonly === '1' || $readonly === '0')) {
+            $payload['permission_overwrites'] = self::readonlyOverwrites($row['overwrites'] ?? [], $readonly === '1', $guildId, $botId);
+        }
+        if ($payload === []) {
+            throw new OrgError('Nichts geändert.');
+        }
+        return ['id' => (string) $row['id'], 'name' => (string) $row['name'], 'payload' => $payload];
+    }
+
+    /**
+     * Prüft das Löschen eines Kanals oder einer Kategorie.
+     * @param array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure
+     * @return array{id:string,name:string,category:bool,channels:int}
+     * @throws OrgError
+     */
+    public static function planDelete(string $id, array $structure): array
+    {
+        $found = self::locate(trim($id), $structure);
+        if ($found === null) {
+            throw new OrgError('Das gibt es auf dem Server nicht mehr. Bitte die Seite neu laden.');
+        }
+        return [
+            'id' => (string) $found['row']['id'], 'name' => (string) $found['row']['name'], 'category' => $found['category'],
+            'channels' => $found['category'] ? count($found['row']['channels']) : 0,
+        ];
+    }
+
+    /**
      * Legt den Plan auf dem Server an. Bei einem Fehler bleibt das bis dahin Angelegte bestehen; die Meldung nennt es.
      * @param array{blocks:list<array<string,mixed>>} $plan
      * @return array{categories:int,channels:int}

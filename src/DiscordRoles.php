@@ -145,6 +145,105 @@ final class DiscordRoles
         return $out;
     }
 
+    /** Alle Rechte des Katalogs als Bitmaske. */
+    public static function catalogMask(): int
+    {
+        return array_reduce(array_keys(self::PERMISSIONS), static fn (int $m, int $bit) => $m | (1 << $bit), 0);
+    }
+
+    /**
+     * Darf diese Seite die Rolle ändern oder löschen? Nicht @everyone (Position 0), nicht Rollen von Bots und Integrationen und
+     * nur Rollen unter der höchsten Rolle des Bots (null = unbekannt, dann entscheidet Discord).
+     * @param array{managed:bool,position:int} $role
+     */
+    public static function editable(array $role, ?int $botTop): bool
+    {
+        return $role['position'] > 0 && !$role['managed'] && ($botTop === null || $role['position'] < $botTop);
+    }
+
+    /**
+     * @param list<array{id:string,name:string,color:int,hoist:bool,mentionable:bool,managed:bool,position:int,permissions:int}> $roles
+     * @return array{id:string,name:string,color:int,hoist:bool,mentionable:bool,managed:bool,position:int,permissions:int}
+     * @throws OrgError
+     */
+    private static function find(string $id, array $roles, ?int $botTop): array
+    {
+        foreach ($roles as $r) {
+            if ($r['id'] === $id) {
+                if (!self::editable($r, $botTop)) {
+                    throw new OrgError('Diese Rolle kann der Bot nicht ändern: sie ist @everyone, gehört einem Bot oder einer Integration oder steht über der Rolle des Bots.');
+                }
+                return $r;
+            }
+        }
+        throw new OrgError('Diese Rolle gibt es auf dem Server nicht mehr. Bitte die Seite neu laden.');
+    }
+
+    /**
+     * Prüft die Änderung einer vorhandenen Rolle und liefert nur die geänderten Felder für Discord. Rechte außerhalb des Katalogs
+     * und Rechte, die der Bot selbst nicht hat, bleiben unverändert (Discord ließe ihn sie ohnehin nicht ändern).
+     * @param array<string,mixed> $post
+     * @param list<array{id:string,name:string,color:int,hoist:bool,mentionable:bool,managed:bool,position:int,permissions:int}> $roles
+     * @param ?array{permissions:int,top:int} $bot
+     * @return array{id:string,name:string,payload:array<string,mixed>}
+     * @throws OrgError
+     */
+    public static function planUpdate(array $post, array $roles, ?array $bot): array
+    {
+        $role = self::find(is_string($post['id'] ?? null) ? trim($post['id']) : '', $roles, $bot['top'] ?? null);
+        $name = is_string($post['name'] ?? null) ? trim($post['name']) : '';
+        if ($name === '' || mb_strlen($name) > self::MAX_NAME) {
+            throw new OrgError('Der Rollenname muss 1 bis ' . self::MAX_NAME . ' Zeichen haben.');
+        }
+        $key = DiscordSetup::baseName($name);
+        $clash = $key === '' || $key === 'everyone';
+        foreach ($roles as $o) {
+            $clash = $clash || ($o['id'] !== $role['id'] && DiscordSetup::baseName($o['name']) === $key);
+        }
+        if ($clash) {
+            throw new OrgError("Die Rolle „{$name}“ gibt es schon oder der Name ist ungültig.");
+        }
+        $selected = 0;
+        foreach (is_array($post['perms'] ?? null) ? $post['perms'] : [] as $p) {
+            $bit = filter_var($p, FILTER_VALIDATE_INT);
+            if ($bit === false || !isset(self::PERMISSIONS[$bit])) {
+                throw new OrgError('Unbekanntes Recht.');
+            }
+            $selected |= 1 << $bit;
+        }
+        $perms = ($role['permissions'] & ~self::catalogMask()) | $selected;
+        $botPerms = $bot['permissions'] ?? null;
+        if ($botPerms !== null && $botPerms !== -1) {
+            $perms = ($perms & $botPerms) | ($role['permissions'] & ~$botPerms);
+        }
+        $new = [
+            'name' => $name, 'color' => ($post['usecolor'] ?? '') === '1' ? self::color($post['color'] ?? '') : 0,
+            'hoist' => ($post['hoist'] ?? '') === '1', 'mentionable' => ($post['mentionable'] ?? '') === '1', 'permissions' => $perms,
+        ];
+        $payload = [];
+        foreach ($new as $field => $value) {
+            if ($value !== $role[$field]) {
+                $payload[$field] = $field === 'permissions' ? (string) $value : $value;
+            }
+        }
+        if ($payload === []) {
+            throw new OrgError('Nichts geändert.');
+        }
+        return ['id' => $role['id'], 'name' => $role['name'], 'payload' => $payload];
+    }
+
+    /**
+     * Prüft das Löschen einer Rolle und liefert ihre ID und ihren Namen.
+     * @param list<array{id:string,name:string,color:int,hoist:bool,mentionable:bool,managed:bool,position:int,permissions:int}> $roles
+     * @return array{id:string,name:string}
+     * @throws OrgError
+     */
+    public static function planDelete(string $id, array $roles, ?array $bot): array
+    {
+        $role = self::find(trim($id), $roles, $bot['top'] ?? null);
+        return ['id' => $role['id'], 'name' => $role['name']];
+    }
+
     /**
      * Legt die Rollen an. Bei einem Fehler bleibt das bis dahin Angelegte bestehen; die Meldung nennt die Zahl.
      * @param list<array{name:string,color:int,hoist:bool,mentionable:bool,permissions:int}> $plan

@@ -169,22 +169,26 @@ final class DiscordBot
     /**
      * Aufbau des Servers: Kategorien (mit ihren Rechten und Kanälen) und Kanäle ohne Kategorie, jeweils in der Reihenfolge von Discord.
      * type: 0 Text, 2 Sprache, 5 Ankündigung, 13 Bühne, 15 Forum (andere Typen fehlen).
-     * @return array{categories:list<array{id:string,name:string,overwrites:list<array{id:string,type:int,allow:string,deny:string}>,channels:list<array{id:string,name:string,type:int}>}>,loose:list<array{id:string,name:string,type:int}>}
+     * Jeder Kanal trägt sein Thema, seine Kategorie (parent) und seine Rechte (overwrites).
+     * @return array{categories:list<array{id:string,name:string,overwrites:list<array{id:string,type:int,allow:string,deny:string}>,channels:list<array{id:string,name:string,type:int,topic:string,parent:?string,overwrites:list<array{id:string,type:int,allow:string,deny:string}>}>}>,loose:list<array{id:string,name:string,type:int,topic:string,parent:?string,overwrites:list<array{id:string,type:int,allow:string,deny:string}>}>}
      */
     public static function structure(string $guildId): array
     {
         $all = self::channels($guildId);
         usort($all, static fn ($a, $b) => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
+        $overwritesOf = static function (array $c): array {
+            $out = [];
+            foreach (is_array($c['permission_overwrites'] ?? null) ? $c['permission_overwrites'] : [] as $o) {
+                if (is_array($o) && isset($o['id'])) {
+                    $out[] = ['id' => (string) $o['id'], 'type' => (int) ($o['type'] ?? 0), 'allow' => (string) ($o['allow'] ?? '0'), 'deny' => (string) ($o['deny'] ?? '0')];
+                }
+            }
+            return $out;
+        };
         $cats = [];
         foreach ($all as $c) {
             if (($c['type'] ?? null) === 4) {
-                $overwrites = [];
-                foreach (is_array($c['permission_overwrites'] ?? null) ? $c['permission_overwrites'] : [] as $o) {
-                    if (is_array($o) && isset($o['id'])) {
-                        $overwrites[] = ['id' => (string) $o['id'], 'type' => (int) ($o['type'] ?? 0), 'allow' => (string) ($o['allow'] ?? '0'), 'deny' => (string) ($o['deny'] ?? '0')];
-                    }
-                }
-                $cats[(string) $c['id']] = ['id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id']), 'overwrites' => $overwrites, 'channels' => []];
+                $cats[(string) $c['id']] = ['id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id']), 'overwrites' => $overwritesOf($c), 'channels' => []];
             }
         }
         $loose = [];
@@ -193,8 +197,11 @@ final class DiscordBot
             if (!in_array($type, [0, 2, 5, 13, 15], true)) {
                 continue;
             }
-            $row = ['id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id']), 'type' => $type];
             $parent = (string) ($c['parent_id'] ?? '');
+            $row = [
+                'id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id']), 'type' => $type, 'topic' => (string) ($c['topic'] ?? ''),
+                'parent' => isset($cats[$parent]) ? $parent : null, 'overwrites' => $overwritesOf($c),
+            ];
             if ($parent !== '' && isset($cats[$parent])) {
                 $cats[$parent]['channels'][] = $row;
             } else {
@@ -232,32 +239,70 @@ final class DiscordBot
         return self::createObject('/guilds/' . rawurlencode($guildId) . '/roles', $payload, 'Rollen verwalten', 'Rollen');
     }
 
+    /** Ändert einen Kanal oder eine Kategorie (name, topic, parent_id, permission_overwrites). @param array<string,mixed> $payload */
+    public static function updateChannel(string $channelId, array $payload): void
+    {
+        self::mutate('PATCH', '/channels/' . rawurlencode($channelId), $payload, 'Kanäle verwalten');
+    }
+
+    /** Löscht einen Kanal oder eine Kategorie (die Kanäle einer Kategorie bleiben ohne Kategorie bestehen). */
+    public static function deleteChannel(string $channelId): void
+    {
+        self::mutate('DELETE', '/channels/' . rawurlencode($channelId), null, 'Kanäle verwalten');
+    }
+
+    /** Ändert eine Rolle (name, permissions als Zahl-Text, color, hoist, mentionable). @param array<string,mixed> $payload */
+    public static function updateRole(string $guildId, string $roleId, array $payload): void
+    {
+        self::mutate('PATCH', '/guilds/' . rawurlencode($guildId) . '/roles/' . rawurlencode($roleId), $payload, 'Rollen verwalten');
+    }
+
+    public static function deleteRole(string $guildId, string $roleId): void
+    {
+        self::mutate('DELETE', '/guilds/' . rawurlencode($guildId) . '/roles/' . rawurlencode($roleId), null, 'Rollen verwalten');
+    }
+
     /** @param array<string,mixed> $payload */
     private static function createObject(string $path, array $payload, string $needed, string $what): string
     {
-        $res = self::call('POST', $path, $payload);
+        $c = self::mutate('POST', $path, $payload, $needed);
+        if (empty($c['id'])) {
+            throw new DiscordUnavailableError('Discord hat keine ID geliefert.');
+        }
+        return (string) $c['id'];
+    }
+
+    /**
+     * Schreibender Aufruf (anlegen, ändern, löschen); bei Ratenbegrenzung wartet er einmal kurz. Liefert die Antwort (leer bei DELETE).
+     * @param ?array<string,mixed> $payload
+     * @return array<string,mixed>
+     * @throws DiscordAuthError|DiscordUnavailableError
+     */
+    private static function mutate(string $method, string $path, ?array $payload, string $needed): array
+    {
+        $res = self::call($method, $path, $payload);
         if ($res['status'] === 429) {
             $wait = (float) ((json_decode($res['body'], true)['retry_after'] ?? 2));
             if ($wait <= 10) {
                 usleep((int) ($wait * 1_000_000) + 200_000);
-                $res = self::call('POST', $path, $payload);
+                $res = self::call($method, $path, $payload);
             }
         }
         if ($res['status'] === 401 || $res['status'] === 403) {
             throw new DiscordAuthError("Dem Bot fehlt die Berechtigung „{$needed}“, er besitzt ein gewünschtes Recht selbst nicht, oder seine Rolle steht zu tief.");
         }
+        if ($res['status'] === 404) {
+            throw new DiscordUnavailableError('Das gibt es in Discord nicht mehr. Bitte die Seite neu laden.');
+        }
         if ($res['status'] === 429) {
-            throw new DiscordUnavailableError("Discord bremst das Anlegen von {$what}. Bitte in einigen Minuten weitermachen.");
+            throw new DiscordUnavailableError('Discord bremst die Änderungen. Bitte in einigen Minuten weitermachen.');
         }
         if ($res['status'] < 200 || $res['status'] >= 300) {
-            $msg = json_decode($res['body'], true)['message'] ?? mb_substr(preg_replace('/s+/', ' ', $res['body']) ?? '', 0, 120);
-            throw new DiscordUnavailableError("Discord lehnt das Anlegen ab (Status {$res['status']}): $msg");
+            $msg = json_decode($res['body'], true)['message'] ?? mb_substr(preg_replace('/\s+/', ' ', $res['body']) ?? '', 0, 120);
+            throw new DiscordUnavailableError("Discord lehnt das ab (Status {$res['status']}): $msg");
         }
         $c = json_decode($res['body'], true);
-        if (!is_array($c) || empty($c['id'])) {
-            throw new DiscordUnavailableError('Discord hat keine ID geliefert.');
-        }
-        return (string) $c['id'];
+        return is_array($c) ? $c : [];
     }
 
     /**
@@ -284,6 +329,16 @@ final class DiscordBot
      */
     public static function botPermissions(string $guildId, array $roles): ?int
     {
+        return self::botMember($guildId, $roles)['permissions'] ?? null;
+    }
+
+    /**
+     * Rechte und höchste Rolle des Bots. Rollen ab dieser Position (und sie selbst) kann er nicht ändern. null = nicht zu ermitteln.
+     * @param list<array{id:string,permissions:int,position?:int}> $roles Ergebnis von roleDetails()
+     * @return ?array{permissions:int,top:int}
+     */
+    public static function botMember(string $guildId, array $roles): ?array
+    {
         $botId = self::selfId();
         if ($botId === null) {
             return null;
@@ -295,12 +350,14 @@ final class DiscordBot
         }
         $have = array_merge([$guildId], array_map('strval', is_array($m['roles'] ?? null) ? $m['roles'] : []));
         $bits = 0;
+        $top = 0;
         foreach ($roles as $r) {
             if (in_array($r['id'], $have, true)) {
                 $bits |= $r['permissions'];
+                $top = max($top, (int) ($r['position'] ?? 0));
             }
         }
-        return ($bits & (1 << 3)) !== 0 ? -1 : $bits;
+        return ['permissions' => ($bits & (1 << 3)) !== 0 ? -1 : $bits, 'top' => $top];
     }
 
     /** Alle Kanäle des Servers (roh). @return list<array<string,mixed>> */

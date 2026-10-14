@@ -98,14 +98,21 @@ Auf der Seite „Discord-Bot“ der Orga (nur Orga-Admins) legt der Bereich „D
 Sprach- und Ankündigungskanäle (Ankündigungen nur auf Community-Servern), je Kategorie neu oder in einer vorhandenen. Die PHP-App
 ruft dafür die Discord-Schnittstelle mit `DISCORD_BOT_TOKEN` auf (`src/DiscordSetup.php`), der Bot selbst ist nicht beteiligt.
 Rechte: „Sichtbar für“ alle oder nur bestimmte Rollen (für Kategorien und einzelne Kanäle), „nur lesen“ lässt nur den Bot und Admins
-schreiben. Zuerst wird die ganze Eingabe geprüft, dann angelegt; Vorhandenes wird nie geändert. Bricht Discord mittendrin ab, nennt die
+schreiben. Zuerst wird die ganze Eingabe geprüft, dann angelegt; beim Anlegen bleibt Vorhandenes unverändert. Bricht Discord mittendrin ab, nennt die
 Meldung, was bis dahin angelegt wurde. Der Bot braucht „Kanäle verwalten“ und eine Rolle über den Rollen, die er für Rechte einträgt.
 
 Der Bereich „Rollen und Rechte“ legt neue Rollen an (Name, Farbe, getrennte Anzeige, erwähnbar) und setzt ihre Rechte aus einem festen
 Katalog, mit Vorlagen für Gast, Mitglied und Moderator (`src/DiscordRoles.php`). Administrator, Server verwalten, Rollen verwalten und
 Webhooks gibt es dort mit Absicht nicht. Discord erlaubt dem Bot nur, Rechte zu vergeben, die er selbst hat (bei Rollen und bei
 Kanal-Rechten); die Seite ermittelt seine Rechte und sperrt die übrigen. Fehlt dem Bot ein gewünschtes Recht, gibt man es seiner Rolle
-in Discord. Vorhandene Rollen werden angezeigt, aber nie geändert. Die neuen Rollen stehen danach im Discord-Setup zur Auswahl.
+in Discord. Die neuen Rollen stehen danach im Discord-Setup zur Auswahl.
+
+**Vorhandenes ändern und löschen:** Jede Rolle (außer @everyone, Bot-Rollen und Rollen über der Bot-Rolle) und jede Kategorie und jeder Kanal lässt sich
+aufklappen und speichern oder löschen. Rollen: Name, Farbe, Anzeige, erwähnbar und die Rechte des Katalogs; Rechte außerhalb des Katalogs (z. B. Administrator)
+und Rechte, die der Bot nicht hat, bleiben unverändert. Kanäle und Kategorien: Name, Thema, Kategorie (verschieben), „Sichtbar für“ und „Nur lesen“; wer die
+Rechte ändert, ersetzt die bisherigen Rechte dieses Eintrags, „unverändert“ lässt sie. Gesendet wird nur, was sich geändert hat. Löschen fragt vorher nach
+und lässt sich nicht rückgängig machen; löscht man einen Kanal, den der Bot nutzt (Termine, Willkommen, Regeln, Protokoll, Bot-Einstellungen), wird die
+Einstellung geleert. Die Kanäle einer gelöschten Kategorie bleiben bestehen und liegen danach ohne Kategorie.
 
 ## Server-Struktur (`/discord-setup`)
 

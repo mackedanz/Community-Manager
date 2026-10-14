@@ -70,7 +70,8 @@ final class BotController extends Controller
             try {
                 $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
                 $details = DiscordBot::roleDetails($guild);
-                $roleInfo = ['roles' => $details, 'bot' => DiscordBot::botPermissions($guild, $details)];
+                $member = DiscordBot::botMember($guild, $details);
+                $roleInfo = ['roles' => $details, 'bot' => $member['permissions'] ?? null, 'top' => $member['top'] ?? null];
             } catch (DiscordAuthError | DiscordUnavailableError $e) {
                 $lists['problem'] = $e->getMessage();
             }
@@ -90,8 +91,99 @@ final class BotController extends Controller
             'messageContent' => BotSettings::messageContentActive($all),
             'structure' => $structure,
             'roleInfo' => $roleInfo,
+            'usedChannels' => self::usedChannels($all),
             'cases' => $cases,
         ], 'Discord-Bot', 'bot');
+    }
+
+    /** Kanäle, die der Bot nutzt: Einstellung => Bezeichnung. */
+    private const USED_CHANNELS = [
+        BotSettings::ANNOUNCE_CHANNEL => 'Terminankündigungen',
+        BotSettings::WELCOME_CHANNEL => 'Willkommen',
+        BotSettings::RULES_CHANNEL => 'Regeln',
+        BotSettings::MOD_LOG_CHANNEL => 'Moderations-Protokoll',
+        BotSettings::ADMIN_CHANNEL => 'Bot-Einstellungen',
+    ];
+
+    /** Kanal-ID => Bezeichnung für die Kanäle, die der Bot nutzt. @param array<string,string> $all @return array<string,string> */
+    private static function usedChannels(array $all): array
+    {
+        $out = [];
+        foreach (self::USED_CHANNELS as $name => $label) {
+            if (isset($all[$name])) {
+                $out[$all[$name]] = isset($out[$all[$name]]) ? $out[$all[$name]] . ', ' . $label : $label;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Gemeinsamer Rahmen der Änderungen: Admin, Server und Token prüfen, dann die Arbeit ausführen; Fehler werden zur Meldung.
+     * @param callable(string,array<string,mixed>):string $work liefert die Erfolgsmeldung
+     */
+    private static function change(Request $req, array $p, string $section, callable $work): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=' . $section;
+        $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+        if ($guild === '' || !DiscordBot::configured()) {
+            return Flash::error($to, 'Kein Bot-Token eingerichtet (DISCORD_BOT_TOKEN).');
+        }
+        try {
+            return Flash::ok($to, $work($guild, $org));
+        } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+    }
+
+    /** Ändert eine vorhandene Rolle. */
+    public static function roleUpdate(Request $req, array $p): Response
+    {
+        return self::change($req, $p, 'rollen', static function (string $guild) use ($req): string {
+            $details = DiscordBot::roleDetails($guild);
+            $plan = DiscordRoles::planUpdate($req->post, $details, DiscordBot::botMember($guild, $details));
+            DiscordBot::updateRole($guild, $plan['id'], $plan['payload']);
+            return "Rolle „{$plan['name']}“ geändert.";
+        });
+    }
+
+    /** Löscht eine vorhandene Rolle. */
+    public static function roleDelete(Request $req, array $p): Response
+    {
+        return self::change($req, $p, 'rollen', static function (string $guild) use ($req): string {
+            $details = DiscordBot::roleDetails($guild);
+            $plan = DiscordRoles::planDelete((string) $req->input('id', ''), $details, DiscordBot::botMember($guild, $details));
+            DiscordBot::deleteRole($guild, $plan['id']);
+            return "Rolle „{$plan['name']}“ gelöscht.";
+        });
+    }
+
+    /** Ändert einen vorhandenen Kanal oder eine Kategorie. */
+    public static function channelUpdate(Request $req, array $p): Response
+    {
+        return self::change($req, $p, 'setup', static function (string $guild) use ($req): string {
+            $plan = DiscordSetup::planUpdate($req->post, DiscordBot::structure($guild), array_column(DiscordBot::roles($guild), 'id'), $guild, DiscordBot::selfId());
+            DiscordBot::updateChannel($plan['id'], $plan['payload']);
+            return "„{$plan['name']}“ geändert.";
+        });
+    }
+
+    /** Löscht einen vorhandenen Kanal oder eine Kategorie; Einstellungen des Bots, die darauf zeigen, werden geleert. */
+    public static function channelDelete(Request $req, array $p): Response
+    {
+        return self::change($req, $p, 'setup', static function (string $guild, array $org) use ($req): string {
+            $plan = DiscordSetup::planDelete((string) $req->input('id', ''), DiscordBot::structure($guild));
+            DiscordBot::deleteChannel($plan['id']);
+            $cleared = 0;
+            foreach (BotSettings::all($org['id']) as $name => $value) {
+                if (isset(self::USED_CHANNELS[$name]) && $value === $plan['id']) {
+                    BotSettings::set($org['id'], $name, null);
+                    $cleared++;
+                }
+            }
+            return ($plan['category'] ? 'Kategorie' : 'Kanal') . " „{$plan['name']}“ gelöscht."
+                . ($cleared > 0 ? ' Der Bot nutzt ihn nicht mehr, bitte unter „Allgemein“ und „Termine“ einen neuen wählen.' : '');
+        });
     }
 
     /** Legt Rollen mit Rechten an (erst alles prüfen, dann anlegen). */
