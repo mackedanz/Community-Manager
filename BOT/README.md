@@ -81,6 +81,9 @@ Rollen stehen, die er moderieren soll.
 
 **Automod und Nachrichten-Protokoll** brauchen den Intent "Message Content": im Developer Portal unter Bot einschalten, in der `.env`
 `BOT_MESSAGE_CONTENT=1` setzen und den Bot neu starten. Ohne diesen Schalter startet der Bot wie bisher, nur ohne diese beiden Funktionen.
+Die Variable muss auch im Dienst `bot` der `docker-compose.yml` durchgereicht werden (`BOT_MESSAGE_CONTENT: ${BOT_MESSAGE_CONTENT:-}`); danach mit
+`docker compose up -d bot` neu erstellen, `restart` liest die `.env` nicht neu ein. Der Bot meldet beim Start in `bot_settings`
+(`message_content_active`), ob er Nachrichten liest; die Automod-Seite der Web-App zeigt ihren Hinweis nur, solange das nicht der Fall ist.
 `/automod` schaltet die Regeln einzeln ein (alle sind zunächst aus). Bei einem Verstoß wird die Nachricht gelöscht, ein kurzer Hinweis
 erscheint im Kanal, der Fall wird gespeichert; ab 3 Verstößen in einer Stunde gibt es 10 Minuten Timeout. Das Nachrichten-Protokoll
 meldet gelöschte und geänderte Nachrichten, die der Bot seit seinem Start gesehen hat (je Kanal die letzten 200); gespeichert wird
@@ -88,6 +91,15 @@ nichts in der Datenbank.
 
 Zusätzliche Rechte für die Moderation: Mitglieder kicken, Mitglieder bannen, Mitglieder moderieren, Nachrichten verwalten
 (`permissions=19009928424518`). `/discord-setup` braucht zusätzlich „Kanäle verwalten“ (`permissions=19009928424534`).
+
+## Discord-Setup in der Web-App
+
+Auf der Seite „Discord-Bot“ der Orga (nur Orga-Admins) legt der Bereich „Discord-Setup“ eigene Kategorien und Kanäle an: Text-,
+Sprach- und Ankündigungskanäle (Ankündigungen nur auf Community-Servern), je Kategorie neu oder in einer vorhandenen. Die PHP-App
+ruft dafür die Discord-Schnittstelle mit `DISCORD_BOT_TOKEN` auf (`src/DiscordSetup.php`), der Bot selbst ist nicht beteiligt.
+Rechte: „Sichtbar für“ alle oder nur bestimmte Rollen (für Kategorien und einzelne Kanäle), „nur lesen“ lässt nur den Bot und Admins
+schreiben. Zuerst wird die ganze Eingabe geprüft, dann angelegt; Vorhandenes wird nie geändert. Bricht Discord mittendrin ab, nennt die
+Meldung, was bis dahin angelegt wurde. Der Bot braucht „Kanäle verwalten“ und eine Rolle über den Rollen, die er für Rechte einträgt.
 
 ## Server-Struktur (`/discord-setup`)
 

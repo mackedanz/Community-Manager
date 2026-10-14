@@ -20,6 +20,8 @@ final class BotSettings
     public const MOD_ROLES = 'mod_role_ids';
     public const MOD_LOG_CHANNEL = 'mod_log_channel_id';
     public const AUTOMOD = 'automod';
+    /** Vom Bot beim Start geschrieben: '1' = läuft mit Message Content (Automod und Nachrichten-Protokoll aktiv). */
+    public const MESSAGE_CONTENT_STATUS = 'message_content_active';
 
     public const MAX_WELCOME_TEXT = 500;
     public const MAX_MOD_ROLES = 10;
@@ -36,6 +38,7 @@ final class BotSettings
         'willkommen' => 'Willkommen und Regeln',
         'moderation' => 'Moderation',
         'automod' => 'Automod',
+        'setup' => 'Discord-Setup',
     ];
 
     /** Alle Einstellungen der Orga. @return array<string,string> */
@@ -97,6 +100,12 @@ final class BotSettings
             'moderation' => isset($all[self::MOD_ROLES]) || isset($all[self::MOD_LOG_CHANNEL]),
             'automod' => self::automodActive(self::automod($all)),
         ];
+    }
+
+    /** Hat der Bot beim letzten Start gemeldet, dass er Nachrichten lesen darf? Ohne Meldung (alter Bot, noch nicht gestartet) gilt: nein. @param array<string,string> $all */
+    public static function messageContentActive(array $all): bool
+    {
+        return ($all[self::MESSAGE_CONTENT_STATUS] ?? '') === '1';
     }
 
     /** "https://www.Beispiel.de/seite" => "beispiel.de" @throws OrgError */

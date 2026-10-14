@@ -166,6 +166,84 @@ final class DiscordBot
         return array_map(static fn ($r) => ['id' => (string) $r['id'], 'name' => (string) ($r['name'] ?? $r['id']), 'color' => (int) ($r['color'] ?? 0)], $rows);
     }
 
+    /**
+     * Aufbau des Servers: Kategorien (mit ihren Rechten und Kanälen) und Kanäle ohne Kategorie, jeweils in der Reihenfolge von Discord.
+     * type: 0 Text, 2 Sprache, 5 Ankündigung, 13 Bühne, 15 Forum (andere Typen fehlen).
+     * @return array{categories:list<array{id:string,name:string,overwrites:list<array{id:string,type:int,allow:string,deny:string}>,channels:list<array{id:string,name:string,type:int}>}>,loose:list<array{id:string,name:string,type:int}>}
+     */
+    public static function structure(string $guildId): array
+    {
+        $all = self::channels($guildId);
+        usort($all, static fn ($a, $b) => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
+        $cats = [];
+        foreach ($all as $c) {
+            if (($c['type'] ?? null) === 4) {
+                $overwrites = [];
+                foreach (is_array($c['permission_overwrites'] ?? null) ? $c['permission_overwrites'] : [] as $o) {
+                    if (is_array($o) && isset($o['id'])) {
+                        $overwrites[] = ['id' => (string) $o['id'], 'type' => (int) ($o['type'] ?? 0), 'allow' => (string) ($o['allow'] ?? '0'), 'deny' => (string) ($o['deny'] ?? '0')];
+                    }
+                }
+                $cats[(string) $c['id']] = ['id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id']), 'overwrites' => $overwrites, 'channels' => []];
+            }
+        }
+        $loose = [];
+        foreach ($all as $c) {
+            $type = $c['type'] ?? null;
+            if (!in_array($type, [0, 2, 5, 13, 15], true)) {
+                continue;
+            }
+            $row = ['id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id']), 'type' => $type];
+            $parent = (string) ($c['parent_id'] ?? '');
+            if ($parent !== '' && isset($cats[$parent])) {
+                $cats[$parent]['channels'][] = $row;
+            } else {
+                $loose[] = $row;
+            }
+        }
+        return ['categories' => array_values($cats), 'loose' => $loose];
+    }
+
+    /** ID des Bots selbst (für dessen Rechte in neuen Kanälen), null wenn Discord sie nicht liefert. */
+    public static function selfId(): ?string
+    {
+        $res = self::call('GET', '/users/@me');
+        $u = json_decode($res['body'], true);
+        return $res['status'] === 200 && is_array($u) && !empty($u['id']) ? (string) $u['id'] : null;
+    }
+
+    /**
+     * Legt eine Kategorie oder einen Kanal an und liefert dessen ID. Bei Ratenbegrenzung wartet es einmal kurz.
+     * @param array<string,mixed> $payload
+     * @throws DiscordAuthError|DiscordUnavailableError
+     */
+    public static function createChannel(string $guildId, array $payload): string
+    {
+        $res = self::call('POST', '/guilds/' . rawurlencode($guildId) . '/channels', $payload);
+        if ($res['status'] === 429) {
+            $wait = (float) ((json_decode($res['body'], true)['retry_after'] ?? 2));
+            if ($wait <= 10) {
+                usleep((int) ($wait * 1_000_000) + 200_000);
+                $res = self::call('POST', '/guilds/' . rawurlencode($guildId) . '/channels', $payload);
+            }
+        }
+        if ($res['status'] === 401 || $res['status'] === 403) {
+            throw new DiscordAuthError('Dem Bot fehlt die Berechtigung „Kanäle verwalten“ (und „Rollen verwalten“ für Rechte), oder seine Rolle steht zu tief.');
+        }
+        if ($res['status'] === 429) {
+            throw new DiscordUnavailableError('Discord bremst das Anlegen von Kanälen. Bitte in einigen Minuten weitermachen.');
+        }
+        if ($res['status'] < 200 || $res['status'] >= 300) {
+            $msg = json_decode($res['body'], true)['message'] ?? mb_substr(preg_replace('/\s+/', ' ', $res['body']) ?? '', 0, 120);
+            throw new DiscordUnavailableError("Discord lehnt das Anlegen ab (Status {$res['status']}): $msg");
+        }
+        $c = json_decode($res['body'], true);
+        if (!is_array($c) || empty($c['id'])) {
+            throw new DiscordUnavailableError('Discord hat keine Kanal-ID geliefert.');
+        }
+        return (string) $c['id'];
+    }
+
     /** Alle Kanäle des Servers (roh). @return list<array<string,mixed>> */
     private static function channels(string $guildId): array
     {

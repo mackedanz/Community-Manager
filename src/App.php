@@ -91,6 +91,7 @@ final class App
         $r->get('/o/{slug}/settings', [OrgController::class, 'settings']);
         $r->get('/o/{slug}/bot', [BotController::class, 'show']);
         $r->post('/o/{slug}/bot/save', [BotController::class, 'save']);
+        $r->post('/o/{slug}/bot/setup', [BotController::class, 'setup']);
         $r->get('/o/{slug}/departments', [DepartmentController::class, 'index']);
         $r->post('/o/{slug}/departments/save', [DepartmentController::class, 'save']);
         $r->post('/o/{slug}/departments/delete', [DepartmentController::class, 'delete']);

@@ -9,6 +9,7 @@ use Hangar\BotSettings;
 use Hangar\Db;
 use Hangar\DiscordAuthError;
 use Hangar\DiscordBot;
+use Hangar\DiscordSetup;
 use Hangar\DiscordUnavailableError;
 use Hangar\Http\Flash;
 use Hangar\Http\HttpException;
@@ -55,6 +56,14 @@ final class BotController extends Controller
         }
         $all = BotSettings::all($org['id']);
         $lists = self::discordLists($org['id']);
+        $structure = null;
+        if ($section === 'setup' && $lists['problem'] === null) {
+            try {
+                $structure = DiscordBot::structure((string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]));
+            } catch (DiscordAuthError | DiscordUnavailableError $e) {
+                $lists['problem'] = $e->getMessage();
+            }
+        }
         $cases = [];
         if ($section === 'moderation') {
             $cases = Db::all('SELECT target_name, action, reason, created_at FROM bot_mod_cases WHERE org_id = ? ORDER BY id DESC LIMIT 5', [$org['id']]);
@@ -67,8 +76,30 @@ final class BotController extends Controller
             'channels' => $lists['channels'] ?? [],
             'roles' => $lists['roles'] ?? [],
             'problem' => $lists['problem'],
+            'messageContent' => BotSettings::messageContentActive($all),
+            'structure' => $structure,
             'cases' => $cases,
         ], 'Discord-Bot', 'bot');
+    }
+
+    /** Legt Kategorien und Kanäle aus dem Discord-Setup an (erst alles prüfen, dann anlegen). */
+    public static function setup(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=setup';
+        $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+        if ($guild === '' || !DiscordBot::configured()) {
+            return Flash::error($to, 'Kein Bot-Token eingerichtet (DISCORD_BOT_TOKEN).');
+        }
+        try {
+            $plan = DiscordSetup::plan($req->post, DiscordBot::structure($guild), array_column(DiscordBot::roles($guild), 'id'));
+            $done = DiscordSetup::run($guild, $plan);
+        } catch (OrgError $e) {
+            return Flash::error($to, $e->getMessage());
+        } catch (DiscordAuthError | DiscordUnavailableError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Flash::ok($to, "Angelegt: {$done['categories']} Kategorien und {$done['channels']} Kanäle.");
     }
 
     public static function save(Request $req, array $p): Response

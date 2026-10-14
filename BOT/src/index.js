@@ -1,7 +1,8 @@
 // Startpunkt des Bots: verbindet sich mit der Datenbank und mit Discord und verteilt die Slash-Befehle.
 import { Client, Events, GatewayIntentBits, MessageFlags, Options, Partials } from 'discord.js';
 import { readConfig, ConfigError } from './config.js';
-import { createPool, checkDatabase } from './db.js';
+import { createPool, checkDatabase, orgForGuild } from './db.js';
+import { MESSAGE_CONTENT_STATUS, setSetting } from './lib/settings.js';
 import { byName, componentOwners } from './commands/index.js';
 import { registerAutomod } from './events/automod.js';
 import { registerMemberEvents } from './events/members.js';
@@ -57,8 +58,17 @@ const announcer = startAnnouncer(client, { pool, config, log });
 // Neue Videos der Creator (alle 10 Minuten)
 const creatorWatch = startCreatorWatch(client, { pool, log });
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   log.info(`Angemeldet als ${c.user.tag} auf ${c.guilds.cache.size} Server(n)`);
+  // Der Web-App mitteilen, ob Automod und Nachrichten-Protokoll laufen (sie zeigt sonst einen Hinweis)
+  for (const guild of c.guilds.cache.values()) {
+    try {
+      const org = await orgForGuild(pool, guild.id);
+      if (org) await setSetting(pool, org.id, MESSAGE_CONTENT_STATUS, config.messageContent ? '1' : '0');
+    } catch (err) {
+      log.warn(`Status für ${guild.id} konnte nicht gespeichert werden: ${err.code ?? err.message}`);
+    }
+  }
 });
 
 /** Welche Funktion bearbeitet diese Interaktion? null = keine (wird ignoriert). */
