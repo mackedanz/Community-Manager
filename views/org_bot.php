@@ -17,6 +17,7 @@
 use Hangar\BotSettings;
 
 $base = '/o/' . $org['slug'] . '/bot';
+$navKey = BotSettings::SUBSECTIONS[$section] ?? $section; // Menüpunkt, unter dem die aktuelle Seite steht
 $field = 'w-full rounded-md border border-cyan-800/60 bg-zinc-950/60 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none';
 $card = 'rounded-lg border border-cyan-800/50 bg-teal-950/40';
 $hint = 'text-xs text-zinc-500';
@@ -85,6 +86,15 @@ $descriptions = [
     'vorlagen' => 'Den Aufbau des Servers (Rollen, Kategorien, Kanäle mit Rechten) als Vorlage festhalten und eine Vorlage auf den Server anwenden. Vor dem Anwenden siehst du, was sich ändert; gelöscht wird nur, was du ausdrücklich ankreuzt.',
     'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen lassen sich ändern und löschen.',
 ];
+// Reiter innerhalb von „Discord-Setup“: Aufbauen oder mit Vorlagen arbeiten.
+$setupTabs = static function (string $active) use ($base): string {
+    $html = '<div class="flex gap-2 border-b border-cyan-900/50 text-sm" role="tablist">';
+    foreach (['setup' => 'Server aufbauen', 'vorlagen' => 'Vorlagen'] as $k => $label) {
+        $html .= '<a href="' . e($base . '?m=' . $k) . '" role="tab"' . ($k === $active ? ' aria-selected="true"' : '')
+            . ' class="-mb-px border-b-2 px-4 py-2 transition ' . ($k === $active ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-zinc-400 hover:text-zinc-200') . '">' . e($label) . '</a>';
+    }
+    return $html . '</div>';
+};
 $typeIcon = [0 => '#', 2 => '🔊', 5 => '📢', 13 => '🎙', 15 => '💬'];
 // Rollen als anklickbare Chips für das Setup; der Name enthält Platzhalter, die das JavaScript beim Kopieren der Vorlage ersetzt.
 $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . $hint . '">Keine Rollen geladen.</p>' : $chips($name, $roles, [], '@');
@@ -106,7 +116,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
   <form method="get" action="<?= e($base) ?>" class="md:hidden">
     <select name="m" class="<?= $field ?>" onchange="this.form.submit()" aria-label="Bereich">
       <?php foreach (BotSettings::SECTIONS as $k => $label): ?>
-        <option value="<?= e($k) ?>"<?= $k === $section ? ' selected' : '' ?>><?= e($label) ?><?= isset($status[$k]) ? ($status[$k] ? ' · eingerichtet' : ' · aus') : '' ?></option>
+        <option value="<?= e($k) ?>"<?= $k === $navKey ? ' selected' : '' ?>><?= e($label) ?><?= isset($status[$k]) ? ($status[$k] ? ' · eingerichtet' : ' · aus') : '' ?></option>
       <?php endforeach; ?>
     </select>
     <noscript><button class="mt-2 rounded border border-zinc-600 px-3 py-1 text-sm">Anzeigen</button></noscript>
@@ -115,8 +125,8 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
   <div class="grid gap-6 md:grid-cols-[230px_minmax(0,1fr)]">
     <nav class="hidden self-start rounded-lg border border-cyan-800/50 bg-teal-950/30 p-2 md:block" aria-label="Bereiche">
       <?php foreach (BotSettings::SECTIONS as $k => $label): ?>
-        <a href="<?= e($base . '?m=' . $k) ?>"<?= $k === $section ? ' aria-current="page"' : '' ?>
-           class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition <?= $k === $section ? 'border-cyan-400/50 bg-teal-900/50 text-cyan-300' : 'border-transparent text-zinc-300 hover:bg-teal-900/30' ?>">
+        <a href="<?= e($base . '?m=' . $k) ?>"<?= $k === $navKey ? ' aria-current="page"' : '' ?>
+           class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition <?= $k === $navKey ? 'border-cyan-400/50 bg-teal-900/50 text-cyan-300' : 'border-transparent text-zinc-300 hover:bg-teal-900/30' ?>">
           <span><?= e($label) ?></span><?= isset($status[$k]) ? $dot($status[$k]) : '' ?>
         </a>
       <?php endforeach; ?>
@@ -274,6 +284,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     </div>
     <?php elseif ($section === 'vorlagen'): ?>
     <div class="space-y-4">
+      <?= $setupTabs('vorlagen') ?>
       <?php if ($preview !== null): ?>
         <?php
           $groups = [];
@@ -326,7 +337,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
 
       <section class="<?= $card ?>">
         <header class="border-b border-cyan-900/50 px-5 py-4">
-          <h2 class="text-lg font-semibold"><?= e(BotSettings::SECTIONS['vorlagen']) ?></h2>
+          <h2 class="text-lg font-semibold">Vorlagen</h2>
           <p class="text-sm text-zinc-400"><?= e($descriptions['vorlagen']) ?></p>
         </header>
         <ul class="divide-y divide-cyan-900/40">
@@ -386,6 +397,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     </div>
     <?php elseif ($section === 'setup'): ?>
     <div class="space-y-4">
+      <?= $setupTabs('setup') ?>
       <section class="<?= $card ?>">
         <header class="border-b border-cyan-900/50 px-5 py-4">
           <h2 class="text-lg font-semibold"><?= e(BotSettings::SECTIONS['setup']) ?></h2>

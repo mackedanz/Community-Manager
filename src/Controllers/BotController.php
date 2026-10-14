@@ -53,7 +53,7 @@ final class BotController extends Controller
     {
         [, $org] = self::requireAdmin($req, (string) $p['slug']);
         $section = (string) $req->query('m', 'allgemein');
-        if (!isset(BotSettings::SECTIONS[$section])) {
+        if (!isset(BotSettings::SECTIONS[$section]) && !isset(BotSettings::SUBSECTIONS[$section])) {
             $section = 'allgemein';
         }
         $all = BotSettings::all($org['id']);
@@ -394,7 +394,7 @@ final class BotController extends Controller
     {
         [, $org] = self::requireAdmin($req, (string) $p['slug']);
         $section = (string) $req->input('section', '');
-        $to = '/o/' . $org['slug'] . '/bot' . (isset(BotSettings::SECTIONS[$section]) ? '?m=' . $section : '');
+        $to = '/o/' . $org['slug'] . '/bot' . (isset(BotSettings::SECTIONS[$section]) || isset(BotSettings::SUBSECTIONS[$section]) ? '?m=' . $section : '');
         $lists = self::discordLists($org['id']);
         // Bereits gespeicherte IDs bleiben gültig, auch wenn Discord sie gerade nicht liefert (sonst ließe sich nichts mehr speichern).
         $stored = [];

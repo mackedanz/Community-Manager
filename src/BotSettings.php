@@ -40,7 +40,11 @@ final class BotSettings
         'automod' => 'Automod',
         'setup' => 'Discord-Setup',
         'rollen' => 'Rollen und Rechte',
-        'vorlagen' => 'Vorlagen',
+    ];
+
+    /** Unterseiten ohne eigenen Menüpunkt: Schlüssel => Bereich, unter dem sie im Menü stehen. */
+    public const SUBSECTIONS = [
+        'vorlagen' => 'setup',
     ];
 
     /** Alle Einstellungen der Orga. @return array<string,string> */
