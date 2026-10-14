@@ -79,6 +79,7 @@ $descriptions = [
     'moderation' => 'Wer mit /mod verwarnen, stummschalten, kicken und bannen darf und wohin der Bot das protokolliert.',
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
     'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen. Bestehendes bleibt unverändert.',
+    'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen bleiben unverändert.',
 ];
 $typeIcon = [0 => '#', 2 => '🔊', 5 => '📢', 13 => '🎙', 15 => '💬'];
 // Rollen als anklickbare Chips für das Setup; der Name enthält Platzhalter, die das JavaScript beim Kopieren der Vorlage ersetzt.
@@ -117,7 +118,116 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
       <?php endforeach; ?>
     </nav>
 
-    <?php if ($section === 'setup'): ?>
+    <?php if ($section === 'rollen'): ?>
+    <?php
+      $botPerms = $roleInfo['bot'] ?? null;
+      $mayGrant = static fn (int $bit): bool => $botPerms === null || ($botPerms & (1 << $bit)) !== 0;
+      $groups = [];
+      foreach (\Hangar\DiscordRoles::PERMISSIONS as $bit => [$title, $group]) {
+          $groups[$group][$bit] = $title;
+      }
+      $permBoxes = static function () use ($groups, $mayGrant): string {
+          $html = '';
+          foreach ($groups as $group => $items) {
+              $html .= '<fieldset class="space-y-1"><legend class="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">' . e($group) . '</legend>';
+              foreach ($items as $bit => $title) {
+                  $ok = $mayGrant($bit);
+                  $html .= '<label class="flex items-center gap-2 text-sm ' . ($ok ? 'text-zinc-300' : 'cursor-not-allowed text-zinc-600') . '"'
+                      . ($ok ? '' : ' title="Der Bot hat dieses Recht selbst nicht und kann es nicht vergeben"') . '>'
+                      . '<input type="checkbox" name="roles[__R__][perms][]" value="' . (int) $bit . '" class="accent-cyan-400"' . ($ok ? '' : ' disabled') . '> ' . e($title) . '</label>';
+              }
+              $html .= '</fieldset>';
+          }
+          return $html;
+      };
+      $presets = [];
+      foreach (\Hangar\DiscordRoles::PRESETS as $title => $bits) {
+          $presets[$title] = $bits;
+      }
+    ?>
+    <div class="space-y-4">
+      <section class="<?= $card ?>">
+        <header class="border-b border-cyan-900/50 px-5 py-4">
+          <h2 class="text-lg font-semibold"><?= e(BotSettings::SECTIONS['rollen']) ?></h2>
+          <p class="text-sm text-zinc-400"><?= e($descriptions['rollen']) ?></p>
+        </header>
+        <div class="space-y-4 p-5">
+          <?php if ($roleInfo === null): ?>
+            <p class="<?= $hint ?>">Die Rollen konnten nicht geladen werden, deshalb ist das Anlegen gesperrt.</p>
+          <?php else: ?>
+            <p class="<?= $hint ?>"><?php
+              if ($botPerms === null) { echo 'Welche Rechte der Bot vergeben darf, ließ sich nicht ermitteln; Discord prüft das beim Anlegen.'; }
+              elseif ($botPerms === -1) { echo 'Der Bot hat Administrator-Rechte und kann jedes Recht vergeben.'; }
+              else { echo 'Der Bot kann nur Rechte vergeben, die er selbst hat. Ausgegraute Rechte fehlen ihm.'; }
+            ?></p>
+            <details class="rounded-md border border-cyan-900/50">
+              <summary class="cursor-pointer px-4 py-2 text-sm text-zinc-300">Vorhandene Rollen (<?= count(array_filter($roleInfo['roles'], static fn ($r) => $r['name'] !== '@everyone')) ?>)</summary>
+              <ul class="divide-y divide-cyan-900/40 border-t border-cyan-900/50 text-sm">
+                <?php foreach ($roleInfo['roles'] as $r): ?>
+                  <?php $labels = \Hangar\DiscordRoles::labels($r['permissions']); ?>
+                  <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2">
+                    <span class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded-full border border-zinc-600" style="background: <?= $r['color'] > 0 ? e(sprintf('#%06x', $r['color'])) : 'transparent' ?>"></span>
+                      <?= e($r['name']) ?><?= $r['managed'] ? ' <span class="text-xs text-zinc-500">(Bot oder Integration)</span>' : '' ?></span>
+                    <span class="text-xs text-zinc-500"><?= e($labels === [] ? 'keine besonderen Rechte' : implode(', ', array_slice($labels, 0, 5)) . (count($labels) > 5 ? ' … +' . (count($labels) - 5) : '')) ?></span>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+            </details>
+          <?php endif; ?>
+        </div>
+      </section>
+
+      <?php if ($roleInfo !== null): ?>
+      <form method="post" action="<?= e($base . '/roles') ?>" class="space-y-4" data-roles-form data-presets="<?= e(json_encode($presets, JSON_UNESCAPED_UNICODE)) ?>" onsubmit="return confirm('Rollen jetzt auf dem Discord-Server anlegen?')">
+        <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+        <section class="<?= $card ?>">
+          <header class="border-b border-cyan-900/50 px-5 py-4">
+            <h2 class="text-lg font-semibold">Neue Rollen</h2>
+            <p class="text-sm text-zinc-400">Die Rollen entstehen unten in der Rollenliste, vorhandene werden nicht verändert. Die Mitglieder weist du in Discord zu; in „Discord-Setup“ stehen die neuen Rollen für Sichtbarkeit zur Auswahl.</p>
+          </header>
+          <div class="space-y-4 p-5">
+            <noscript><p class="text-sm text-amber-300">Zum Zusammenstellen der Rollen braucht diese Seite JavaScript.</p></noscript>
+            <div class="space-y-4" data-role-list></div>
+            <button type="button" class="rounded-md border border-cyan-700/60 px-4 py-2 text-sm text-cyan-300 hover:bg-cyan-500/10" data-add-role>+ Rolle hinzufügen</button>
+          </div>
+        </section>
+        <div class="flex items-center justify-between gap-4">
+          <span class="<?= $hint ?>">Administrator, Server verwalten, Rollen verwalten und Webhooks gibt es hier mit Absicht nicht; das stellst du bei Bedarf direkt in Discord ein.</span>
+          <button class="shrink-0 rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Anlegen</button>
+        </div>
+      </form>
+
+      <template id="tpl-role">
+        <div class="space-y-3 rounded-lg border border-cyan-800/50 bg-teal-950/30 p-4" data-role>
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-sm font-medium text-cyan-300">Rolle</span>
+            <button type="button" class="text-xs text-zinc-400 hover:text-red-400" data-remove-role>entfernen</button>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Name</span>
+              <input type="text" name="roles[__R__][name]" maxlength="<?= \Hangar\DiscordRoles::MAX_NAME ?>" class="<?= $field ?>" placeholder="z. B. Pilot"></label>
+            <div class="space-y-1.5"><span class="block text-sm text-zinc-300">Farbe</span>
+              <span class="flex items-center gap-2"><input type="checkbox" class="accent-cyan-400" aria-label="Farbe setzen" data-usecolor>
+                <input type="color" name="roles[__R__][color]" value="#3b82f6" disabled class="h-9 w-14 cursor-pointer rounded border border-cyan-800/60 bg-zinc-950/60" data-color></span></div>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 pb-2 text-sm text-zinc-300">
+              <label class="flex items-center gap-2"><input type="checkbox" name="roles[__R__][hoist]" value="1" class="accent-cyan-400"> in der Liste getrennt zeigen</label>
+              <label class="flex items-center gap-2"><input type="checkbox" name="roles[__R__][mentionable]" value="1" class="accent-cyan-400"> erwähnbar</label>
+            </div>
+          </div>
+          <label class="block max-w-xs space-y-1.5"><span class="text-sm text-zinc-300">Rechte aus Vorlage</span>
+            <select class="<?= $field ?>" data-preset>
+              <option value="">– Vorlage wählen –</option>
+              <?php foreach (array_keys($presets) as $title): ?><option value="<?= e($title) ?>"><?= e($title) ?></option><?php endforeach; ?>
+            </select></label>
+          <details class="rounded-md border border-cyan-900/50">
+            <summary class="cursor-pointer px-3 py-2 text-sm text-zinc-300">Rechte einzeln wählen (<span data-permcount>0</span> gewählt)</summary>
+            <div class="grid gap-4 border-t border-cyan-900/50 p-3 sm:grid-cols-2 lg:grid-cols-3"><?= $permBoxes() ?></div>
+          </details>
+        </div>
+      </template>
+      <?php endif; ?>
+    </div>
+    <?php elseif ($section === 'setup'): ?>
     <div class="space-y-4">
       <section class="<?= $card ?>">
         <header class="border-b border-cyan-900/50 px-5 py-4">
@@ -448,6 +558,33 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     };
     form.querySelector("[data-add-block]").addEventListener("click", addBlock);
     addBlock();
+  }
+
+  // Rollen und Rechte: Rollen aus einer Vorlage zusammenstellen; __R__ ist die laufende Nummer für die Feldnamen.
+  var rform = document.querySelector("[data-roles-form]");
+  if (rform) {
+    var list = rform.querySelector("[data-role-list]"), nextRole = 0, presets = JSON.parse(rform.dataset.presets || "{}");
+    var addRole = function () {
+      var wrap = document.createElement("div");
+      wrap.innerHTML = document.getElementById("tpl-role").innerHTML.split("__R__").join(nextRole++);
+      var role = wrap.firstElementChild;
+      var boxes = role.querySelectorAll('input[name$="[perms][]"]'), count = role.querySelector("[data-permcount]");
+      var recount = function () { count.textContent = role.querySelectorAll('input[name$="[perms][]"]:checked').length; };
+      boxes.forEach(function (b) { b.addEventListener("change", recount); });
+      role.querySelector("[data-preset]").addEventListener("change", function (e) {
+        var bits = (presets[e.target.value] || []).map(String);
+        if (!bits.length) { return; }
+        // Nur Rechte ankreuzen, die der Bot vergeben darf (gesperrte Kästchen bleiben aus)
+        boxes.forEach(function (b) { if (!b.disabled) { b.checked = bits.indexOf(b.value) >= 0; } });
+        recount();
+      });
+      var color = role.querySelector("[data-color]");
+      role.querySelector("[data-usecolor]").addEventListener("change", function (e) { color.disabled = !e.target.checked; });
+      role.querySelector("[data-remove-role]").addEventListener("click", function () { role.remove(); });
+      list.appendChild(role);
+    };
+    rform.querySelector("[data-add-role]").addEventListener("click", addRole);
+    addRole();
   }
 })();
 </script>

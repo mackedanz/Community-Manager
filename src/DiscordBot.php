@@ -219,29 +219,88 @@ final class DiscordBot
      */
     public static function createChannel(string $guildId, array $payload): string
     {
-        $res = self::call('POST', '/guilds/' . rawurlencode($guildId) . '/channels', $payload);
+        return self::createObject('/guilds/' . rawurlencode($guildId) . '/channels', $payload, 'Kanäle verwalten', 'Kanälen');
+    }
+
+    /**
+     * Legt eine Rolle an (name, permissions als Zahl-Text, color, hoist, mentionable) und liefert deren ID.
+     * @param array<string,mixed> $payload
+     * @throws DiscordAuthError|DiscordUnavailableError
+     */
+    public static function createRole(string $guildId, array $payload): string
+    {
+        return self::createObject('/guilds/' . rawurlencode($guildId) . '/roles', $payload, 'Rollen verwalten', 'Rollen');
+    }
+
+    /** @param array<string,mixed> $payload */
+    private static function createObject(string $path, array $payload, string $needed, string $what): string
+    {
+        $res = self::call('POST', $path, $payload);
         if ($res['status'] === 429) {
             $wait = (float) ((json_decode($res['body'], true)['retry_after'] ?? 2));
             if ($wait <= 10) {
                 usleep((int) ($wait * 1_000_000) + 200_000);
-                $res = self::call('POST', '/guilds/' . rawurlencode($guildId) . '/channels', $payload);
+                $res = self::call('POST', $path, $payload);
             }
         }
         if ($res['status'] === 401 || $res['status'] === 403) {
-            throw new DiscordAuthError('Dem Bot fehlt die Berechtigung „Kanäle verwalten“ (und „Rollen verwalten“ für Rechte), oder seine Rolle steht zu tief.');
+            throw new DiscordAuthError("Dem Bot fehlt die Berechtigung „{$needed}“, er besitzt ein gewünschtes Recht selbst nicht, oder seine Rolle steht zu tief.");
         }
         if ($res['status'] === 429) {
-            throw new DiscordUnavailableError('Discord bremst das Anlegen von Kanälen. Bitte in einigen Minuten weitermachen.');
+            throw new DiscordUnavailableError("Discord bremst das Anlegen von {$what}. Bitte in einigen Minuten weitermachen.");
         }
         if ($res['status'] < 200 || $res['status'] >= 300) {
-            $msg = json_decode($res['body'], true)['message'] ?? mb_substr(preg_replace('/\s+/', ' ', $res['body']) ?? '', 0, 120);
+            $msg = json_decode($res['body'], true)['message'] ?? mb_substr(preg_replace('/s+/', ' ', $res['body']) ?? '', 0, 120);
             throw new DiscordUnavailableError("Discord lehnt das Anlegen ab (Status {$res['status']}): $msg");
         }
         $c = json_decode($res['body'], true);
         if (!is_array($c) || empty($c['id'])) {
-            throw new DiscordUnavailableError('Discord hat keine Kanal-ID geliefert.');
+            throw new DiscordUnavailableError('Discord hat keine ID geliefert.');
         }
         return (string) $c['id'];
+    }
+
+    /**
+     * Alle Rollen mit ihren Rechten, die höchste zuerst; @everyone hat die Server-ID als ID.
+     * @return list<array{id:string,name:string,color:int,hoist:bool,mentionable:bool,managed:bool,position:int,permissions:int}>
+     */
+    public static function roleDetails(string $guildId): array
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/roles');
+        self::checkRead($res, 'Rollen');
+        $rows = array_values(array_filter(json_decode($res['body'], true) ?: [], static fn ($r) => is_array($r) && !empty($r['id'])));
+        usort($rows, static fn ($a, $b) => ($b['position'] ?? 0) <=> ($a['position'] ?? 0));
+        return array_map(static fn ($r) => [
+            'id' => (string) $r['id'], 'name' => (string) ($r['name'] ?? $r['id']), 'color' => (int) ($r['color'] ?? 0),
+            'hoist' => !empty($r['hoist']), 'mentionable' => !empty($r['mentionable']), 'managed' => !empty($r['managed']),
+            'position' => (int) ($r['position'] ?? 0), 'permissions' => (int) ($r['permissions'] ?? 0),
+        ], $rows);
+    }
+
+    /**
+     * Rechte, die der Bot selbst hat (alle seine Rollen und @everyone); -1 = alle (Administrator), null = nicht zu ermitteln.
+     * Nur diese Rechte kann er an neue Rollen und in Kanälen vergeben.
+     * @param list<array{id:string,permissions:int}> $roles Ergebnis von roleDetails()
+     */
+    public static function botPermissions(string $guildId, array $roles): ?int
+    {
+        $botId = self::selfId();
+        if ($botId === null) {
+            return null;
+        }
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/members/' . rawurlencode($botId));
+        $m = json_decode($res['body'], true);
+        if ($res['status'] !== 200 || !is_array($m)) {
+            return null;
+        }
+        $have = array_merge([$guildId], array_map('strval', is_array($m['roles'] ?? null) ? $m['roles'] : []));
+        $bits = 0;
+        foreach ($roles as $r) {
+            if (in_array($r['id'], $have, true)) {
+                $bits |= $r['permissions'];
+            }
+        }
+        return ($bits & (1 << 3)) !== 0 ? -1 : $bits;
     }
 
     /** Alle Kanäle des Servers (roh). @return list<array<string,mixed>> */

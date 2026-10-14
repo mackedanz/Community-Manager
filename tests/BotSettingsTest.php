@@ -46,6 +46,12 @@ final class BotSettingsTest extends DbTestCase
                     ['id' => '14', 'type' => 5, 'name' => 'news', 'position' => 0],
                 ]);
             }
+            if (str_ends_with($url, '/users/@me')) {
+                return $json(['id' => '555']);
+            }
+            if (str_ends_with($url, '/guilds/900/members/555')) {
+                return $json(['roles' => ['20']]);
+            }
             if (str_ends_with($url, '/guilds/900/roles')) {
                 return $json([
                     ['id' => '900', 'name' => '@everyone', 'position' => 0],

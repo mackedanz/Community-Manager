@@ -101,6 +101,12 @@ Rechte: „Sichtbar für“ alle oder nur bestimmte Rollen (für Kategorien und 
 schreiben. Zuerst wird die ganze Eingabe geprüft, dann angelegt; Vorhandenes wird nie geändert. Bricht Discord mittendrin ab, nennt die
 Meldung, was bis dahin angelegt wurde. Der Bot braucht „Kanäle verwalten“ und eine Rolle über den Rollen, die er für Rechte einträgt.
 
+Der Bereich „Rollen und Rechte“ legt neue Rollen an (Name, Farbe, getrennte Anzeige, erwähnbar) und setzt ihre Rechte aus einem festen
+Katalog, mit Vorlagen für Gast, Mitglied und Moderator (`src/DiscordRoles.php`). Administrator, Server verwalten, Rollen verwalten und
+Webhooks gibt es dort mit Absicht nicht. Discord erlaubt dem Bot nur, Rechte zu vergeben, die er selbst hat (bei Rollen und bei
+Kanal-Rechten); die Seite ermittelt seine Rechte und sperrt die übrigen. Fehlt dem Bot ein gewünschtes Recht, gibt man es seiner Rolle
+in Discord. Vorhandene Rollen werden angezeigt, aber nie geändert. Die neuen Rollen stehen danach im Discord-Setup zur Auswahl.
+
 ## Server-Struktur (`/discord-setup`)
 
 | Kategorie | Wer sieht sie | Kanäle |

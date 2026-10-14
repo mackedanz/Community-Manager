@@ -39,6 +39,7 @@ final class BotSettings
         'moderation' => 'Moderation',
         'automod' => 'Automod',
         'setup' => 'Discord-Setup',
+        'rollen' => 'Rollen und Rechte',
     ];
 
     /** Alle Einstellungen der Orga. @return array<string,string> */

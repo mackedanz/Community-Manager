@@ -151,7 +151,7 @@ final class DiscordSetupTest extends DbTestCase
         $by = array_column($o, null, 'id');
         $this->assertSame((string) DiscordSetup::VIEW, $by['900']['deny']);
         $this->assertSame('0', $by['900']['allow']);
-        $this->assertSame(0, (int) $by['20']['allow'] & ~(DiscordSetup::VIEW | DiscordSetup::HISTORY | DiscordSetup::CONNECT));
+        $this->assertSame(DiscordSetup::VIEW | DiscordSetup::HISTORY, (int) $by['20']['allow']);
         $this->assertSame(1, $by['555']['type']);
         $this->assertSame([], DiscordSetup::categoryOverwrites(['mode' => 'all', 'roles' => []], '900', '555'));
     }
@@ -182,7 +182,7 @@ final class DiscordSetupTest extends DbTestCase
         )));
         $voice = DiscordSetup::channelOverwrites(['type' => 2, 'access' => 'roles', 'roles' => ['21'], 'readonly' => true] , [], '900', '555');
         $this->assertNotContains('555', array_column($voice, 'id'));
-        $this->assertNotSame(0, (int) array_column($voice, null, 'id')['21']['allow'] & DiscordSetup::CONNECT);
+        $this->assertSame(DiscordSetup::VIEW | DiscordSetup::HISTORY, (int) array_column($voice, null, 'id')['21']['allow']);
         $this->assertSame('0', array_column($voice, null, 'id')['900']['allow']);
         $this->assertSame([], DiscordSetup::channelOverwrites($inherit, [], '900', null));
     }

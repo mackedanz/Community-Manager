@@ -9,6 +9,7 @@ use Hangar\BotSettings;
 use Hangar\Db;
 use Hangar\DiscordAuthError;
 use Hangar\DiscordBot;
+use Hangar\DiscordRoles;
 use Hangar\DiscordSetup;
 use Hangar\DiscordUnavailableError;
 use Hangar\Http\Flash;
@@ -64,6 +65,16 @@ final class BotController extends Controller
                 $lists['problem'] = $e->getMessage();
             }
         }
+        $roleInfo = null;
+        if ($section === 'rollen' && $lists['problem'] === null) {
+            try {
+                $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+                $details = DiscordBot::roleDetails($guild);
+                $roleInfo = ['roles' => $details, 'bot' => DiscordBot::botPermissions($guild, $details)];
+            } catch (DiscordAuthError | DiscordUnavailableError $e) {
+                $lists['problem'] = $e->getMessage();
+            }
+        }
         $cases = [];
         if ($section === 'moderation') {
             $cases = Db::all('SELECT target_name, action, reason, created_at FROM bot_mod_cases WHERE org_id = ? ORDER BY id DESC LIMIT 5', [$org['id']]);
@@ -78,8 +89,28 @@ final class BotController extends Controller
             'problem' => $lists['problem'],
             'messageContent' => BotSettings::messageContentActive($all),
             'structure' => $structure,
+            'roleInfo' => $roleInfo,
             'cases' => $cases,
         ], 'Discord-Bot', 'bot');
+    }
+
+    /** Legt Rollen mit Rechten an (erst alles prüfen, dann anlegen). */
+    public static function roles(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=rollen';
+        $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+        if ($guild === '' || !DiscordBot::configured()) {
+            return Flash::error($to, 'Kein Bot-Token eingerichtet (DISCORD_BOT_TOKEN).');
+        }
+        try {
+            $details = DiscordBot::roleDetails($guild);
+            $plan = DiscordRoles::plan($req->post, $details, DiscordBot::botPermissions($guild, $details));
+            $done = DiscordRoles::run($guild, $plan);
+        } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Flash::ok($to, "Angelegt: $done Rollen. Zum Vergeben der Rolle in Discord die Mitglieder zuweisen; in Kategorien und Kanälen steht sie jetzt zur Auswahl.");
     }
 
     /** Legt Kategorien und Kanäle aus dem Discord-Setup an (erst alles prüfen, dann anlegen). */

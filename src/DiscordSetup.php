@@ -15,9 +15,11 @@ final class DiscordSetup
     public const SEND = 1 << 11;
     public const EMBED = 1 << 14;
     public const HISTORY = 1 << 16;
-    public const CONNECT = 1 << 20;
-    /** Schreiben im Kanal und in Threads: das nimmt „nur lesen“ weg. */
-    public const WRITE = (1 << 11) | (1 << 35) | (1 << 36) | (1 << 38);
+    /**
+     * Schreiben im Kanal und in öffentlichen Threads: das nimmt „nur lesen“ weg. Es sind nur Rechte, die der Bot selbst hat (Discord erlaubt
+     * in Rechten von Kanälen nur, was man selbst besitzt); „Verbinden“ braucht es nicht, das hat @everyone ohnehin, die Sichtbarkeit entscheidet.
+     */
+    public const WRITE = (1 << 11) | (1 << 35) | (1 << 38);
 
     public const MAX_BLOCKS = 10;
     public const MAX_PER_BLOCK = 30;
@@ -254,7 +256,7 @@ final class DiscordSetup
         $map = [];
         self::bits($map, $guildId, 0, 0, self::VIEW);
         foreach ($access['roles'] as $id) {
-            self::bits($map, $id, 0, self::VIEW | self::HISTORY | self::CONNECT, 0);
+            self::bits($map, $id, 0, self::VIEW | self::HISTORY, 0);
         }
         if ($botId !== null) {
             self::bits($map, $botId, 1, self::VIEW | self::SEND | self::EMBED | self::HISTORY, 0);
@@ -278,7 +280,7 @@ final class DiscordSetup
         } elseif ($ch['access'] === 'roles') {
             self::bits($map, $guildId, 0, 0, self::VIEW);
             foreach ($ch['roles'] as $id) {
-                self::bits($map, $id, 0, self::VIEW | self::HISTORY | ($voice ? self::CONNECT : 0), 0);
+                self::bits($map, $id, 0, self::VIEW | self::HISTORY, 0);
             }
         } else {
             foreach ($base as $o) {
