@@ -33,7 +33,7 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
 <link rel="stylesheet" href="/css/app.css">
 <style><?= \Hangar\Branding::css() ?></style>
 </head>
-<body class="flex h-dvh flex-col overflow-hidden bg-zinc-950 text-zinc-100">
+<body class="flex h-dvh flex-col overflow-clip bg-zinc-950 text-zinc-100">
 <?php /* Kopf (Logo, Navigation) und Fußzeile bleiben stehen, nur der Bereich dazwischen scrollt. */ ?>
 <?php if (!$bare): ?>
 <?php

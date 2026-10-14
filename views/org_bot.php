@@ -59,7 +59,7 @@ $chips = static function (string $name, array $items, array $selected, string $p
     }
     $html = '<div class="flex flex-wrap gap-2">';
     foreach ($items as $it) {
-        $html .= '<label class="cursor-pointer"><input type="checkbox" name="' . e($name) . '[]" value="' . e($it['id']) . '" class="peer sr-only"'
+        $html .= '<label class="relative cursor-pointer"><input type="checkbox" name="' . e($name) . '[]" value="' . e($it['id']) . '" class="peer sr-only"'
             . (in_array($it['id'], $selected, true) ? ' checked' : '') . '>'
             . '<span class="inline-block rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-400 transition hover:border-cyan-600 '
             . 'peer-checked:border-cyan-400/70 peer-checked:bg-cyan-500/15 peer-checked:text-cyan-300 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-500">'
