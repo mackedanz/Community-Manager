@@ -6,6 +6,7 @@ namespace Hangar;
 
 use Hangar\Controllers\AdminController;
 use Hangar\Controllers\ApiController;
+use Hangar\Controllers\BotController;
 use Hangar\Controllers\CatalogController;
 use Hangar\Controllers\DevController;
 use Hangar\Controllers\EventController;
@@ -88,6 +89,8 @@ final class App
         $r->get('/o/{slug}/hangar', [OrgController::class, 'hangar']);
         $r->get('/o/{slug}/stats', [OrgController::class, 'stats']);
         $r->get('/o/{slug}/settings', [OrgController::class, 'settings']);
+        $r->get('/o/{slug}/bot', [BotController::class, 'show']);
+        $r->post('/o/{slug}/bot/save', [BotController::class, 'save']);
         $r->get('/o/{slug}/departments', [DepartmentController::class, 'index']);
         $r->post('/o/{slug}/departments/save', [DepartmentController::class, 'save']);
         $r->post('/o/{slug}/departments/delete', [DepartmentController::class, 'delete']);

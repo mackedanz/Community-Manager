@@ -121,16 +121,68 @@ final class DiscordBot
      */
     public static function voiceChannels(string $guildId): array
     {
+        $rows = array_filter(self::channels($guildId), static fn ($c) => ($c['type'] ?? null) === 2);
+        usort($rows, static fn ($a, $b) => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
+        return array_map(static fn ($c) => ['id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id'])], array_values($rows));
+    }
+
+    /**
+     * Text- und Ankündigungskanäle, sortiert wie in Discord (ohne Kategorie zuerst, dann je Kategorie).
+     * @return list<array{id:string,name:string,category:?string}>
+     */
+    public static function textChannels(string $guildId): array
+    {
+        $all = self::channels($guildId);
+        $cats = [];
+        foreach ($all as $c) {
+            if (($c['type'] ?? null) === 4) {
+                $cats[(string) $c['id']] = ['name' => (string) ($c['name'] ?? ''), 'position' => (int) ($c['position'] ?? 0)];
+            }
+        }
+        $rows = array_values(array_filter($all, static fn ($c) => in_array($c['type'] ?? null, [0, 5], true)));
+        $key = static function (array $c) use ($cats): array {
+            $cat = $cats[(string) ($c['parent_id'] ?? '')] ?? null;
+            return [$cat === null ? -1 : $cat['position'], (int) ($c['position'] ?? 0)];
+        };
+        usort($rows, static fn ($a, $b) => $key($a) <=> $key($b));
+        return array_map(static fn ($c) => [
+            'id' => (string) $c['id'],
+            'name' => (string) ($c['name'] ?? $c['id']),
+            'category' => $cats[(string) ($c['parent_id'] ?? '')]['name'] ?? null,
+        ], $rows);
+    }
+
+    /**
+     * Rollen, die man vergeben kann: ohne @everyone und ohne Rollen von Bots und Integrationen, die höchste zuerst.
+     * @return list<array{id:string,name:string,color:int}>
+     */
+    public static function roles(string $guildId): array
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/roles');
+        self::checkRead($res, 'Rollen');
+        $rows = array_values(array_filter(json_decode($res['body'], true) ?: [], static fn ($r) => is_array($r) && !empty($r['id'])
+            && (string) $r['id'] !== $guildId && empty($r['managed'])));
+        usort($rows, static fn ($a, $b) => ($b['position'] ?? 0) <=> ($a['position'] ?? 0));
+        return array_map(static fn ($r) => ['id' => (string) $r['id'], 'name' => (string) ($r['name'] ?? $r['id']), 'color' => (int) ($r['color'] ?? 0)], $rows);
+    }
+
+    /** Alle Kanäle des Servers (roh). @return list<array<string,mixed>> */
+    private static function channels(string $guildId): array
+    {
         $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/channels');
+        self::checkRead($res, 'Kanäle');
+        return array_values(array_filter(json_decode($res['body'], true) ?: [], static fn ($c) => is_array($c) && !empty($c['id'])));
+    }
+
+    /** @param array{status:int,body:string,headers:array<string,string>} $res */
+    private static function checkRead(array $res, string $what): void
+    {
         if ($res['status'] === 403 || $res['status'] === 401) {
-            throw new DiscordAuthError('Der Bot darf die Kanäle dieses Servers nicht lesen.');
+            throw new DiscordAuthError("Der Bot darf die $what dieses Servers nicht lesen.");
         }
         if ($res['status'] < 200 || $res['status'] >= 300) {
             throw new DiscordUnavailableError("Discord antwortet mit Status {$res['status']}.");
         }
-        $rows = array_filter(json_decode($res['body'], true) ?: [], static fn ($c) => is_array($c) && ($c['type'] ?? null) === 2 && !empty($c['id']));
-        usort($rows, static fn ($a, $b) => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
-        return array_map(static fn ($c) => ['id' => (string) $c['id'], 'name' => (string) ($c['name'] ?? $c['id'])], array_values($rows));
     }
 
     /** @param array{status:int,body:string,headers:array<string,string>} $res */

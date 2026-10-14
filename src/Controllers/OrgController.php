@@ -274,6 +274,7 @@ final class OrgController extends Controller
             'departmentCount' => \Hangar\Departments::count($org['id']),
             'departmentsEnabled' => \Hangar\Departments::enabled($org['id']),
             'upcomingCount' => count(Events::listUpcoming($org['id'], $viewer, $now, 100)),
+            'botStatus' => $org['role'] === 'ADMIN' ? \Hangar\BotSettings::status(\Hangar\BotSettings::all($org['id'])) : null,
             'now' => $now,
         ], 'Übersicht', 'home');
     }
