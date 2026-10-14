@@ -97,6 +97,7 @@ final class App
         $r->post('/o/{slug}/bot/role/delete', [BotController::class, 'roleDelete']);
         $r->post('/o/{slug}/bot/creator/add', [BotController::class, 'creatorAdd']);
         $r->post('/o/{slug}/bot/mod/action', [BotController::class, 'modAction']);
+        $r->post('/o/{slug}/bot/rules/publish', [BotController::class, 'rulesPublish']);
         $r->post('/o/{slug}/bot/mod/unwarn', [BotController::class, 'modUnwarn']);
         $r->post('/o/{slug}/bot/creator/update', [BotController::class, 'creatorUpdate']);
         $r->post('/o/{slug}/bot/creator/delete', [BotController::class, 'creatorDelete']);

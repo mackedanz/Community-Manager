@@ -48,6 +48,7 @@ final class BotSettings
         'vorlagen' => 'setup',
         'zuordnung' => 'setup',
         'faelle' => 'moderation',
+        'regeln' => 'willkommen',
     ];
 
     /** Alle Einstellungen der Orga. @return array<string,string> */

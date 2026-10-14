@@ -11,6 +11,7 @@ use Hangar\Db;
 use Hangar\DiscordAuthError;
 use Hangar\DiscordBot;
 use Hangar\DiscordRoles;
+use Hangar\DiscordRules;
 use Hangar\DiscordSetup;
 use Hangar\DiscordTemplates;
 use Hangar\DiscordUnavailableError;
@@ -188,6 +189,26 @@ final class BotController extends Controller
             return Flash::error($to, $e->getMessage());
         }
         return Flash::ok($to, $msg);
+    }
+
+    /** Veröffentlicht die Regeln mit „Bestätigen“-Knopf in einem Kanal. */
+    public static function rulesPublish(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=regeln';
+        $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+        if ($guild === '' || !DiscordBot::configured()) {
+            return Flash::error($to, 'Kein Bot-Token eingerichtet (DISCORD_BOT_TOKEN).');
+        }
+        try {
+            $url = DiscordRules::publish(
+                $guild, trim((string) $req->input('channel', '')), trim((string) $req->input('role', '')),
+                (string) $req->input('title', ''), str_replace("\r\n", "\n", (string) $req->input('text', '')),
+            );
+        } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Flash::ok($to, 'Die Regeln sind veröffentlicht: ' . $url);
     }
 
     /** Nimmt eine Verwarnung zurück. */

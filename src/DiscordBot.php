@@ -460,6 +460,20 @@ final class DiscordBot
         }
     }
 
+    /**
+     * Nachricht in einen Kanal schreiben und deren ID liefern (anders als post() mit Fehlern).
+     * @param array<string,mixed> $payload
+     * @throws DiscordAuthError|DiscordUnavailableError
+     */
+    public static function sendMessage(string $channelId, array $payload): string
+    {
+        $m = self::mutate('POST', '/channels/' . rawurlencode($channelId) . '/messages', $payload, 'Nachrichten senden und Links einbetten');
+        if (empty($m['id'])) {
+            throw new DiscordUnavailableError('Discord hat keine Nachricht geliefert.');
+        }
+        return (string) $m['id'];
+    }
+
     /** Nachricht in einen Kanal schreiben (z. B. Protokoll); Fehler werden verschluckt. @param array<string,mixed> $payload */
     public static function post(string $channelId, array $payload): bool
     {

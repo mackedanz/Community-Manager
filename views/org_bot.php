@@ -90,6 +90,7 @@ $descriptions = [
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
     'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen, vorhandene ändern, verschieben oder löschen.',
     'creator' => 'YouTube-Kanäle, deren neue Videos der Bot automatisch in einen Discord-Kanal postet. Der Bot schaut alle 10 Minuten nach; schon vorhandene Videos werden nicht nachträglich gepostet.',
+    'regeln' => 'Veröffentlicht einen Regeltext in einem Kanal, darunter der Knopf „Bestätigen“. Wer ihn drückt, bekommt die gewählte Rolle (meist die Besucher-Rolle).',
     'faelle' => 'Verwarnen, Timeout, Kick und Bann direkt im Manager und die Liste aller Fälle.',
     'zuordnung' => 'Legt fest, welchen Kanal und welche Rolle der Bot wofür nutzt. Nach dem Aufbau des Servers kannst du hier alles auf einmal eintragen; die Vorschläge kommen aus den Namen.',
     'vorlagen' => 'Den Aufbau des Servers (Rollen, Kategorien, Kanäle mit Rechten) als Vorlage festhalten und eine Vorlage auf den Server anwenden. Vor dem Anwenden siehst du, was sich ändert; gelöscht wird nur, was du ausdrücklich ankreuzt.',
@@ -105,6 +106,7 @@ $tabsOf = static function (array $items, string $active) use ($base): string {
     return $html . '</div>';
 };
 $setupTabs = static fn (string $active): string => $tabsOf(['setup' => 'Server aufbauen', 'vorlagen' => 'Vorlagen', 'zuordnung' => 'Zuordnung'], $active);
+$welcomeTabs = static fn (string $active): string => $tabsOf(['willkommen' => 'Begrüßung', 'regeln' => 'Regeln veröffentlichen'], $active);
 $modTabs = static fn (string $active): string => $tabsOf(['moderation' => 'Einstellungen', 'faelle' => 'Fälle und Maßnahmen'], $active);
 $typeIcon = [0 => '#', 2 => '🔊', 5 => '📢', 13 => '🎙', 15 => '💬'];
 // Rollen als anklickbare Chips für das Setup; der Name enthält Platzhalter, die das JavaScript beim Kopieren der Vorlage ersetzt.
@@ -585,6 +587,38 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
       </template>
       <?php endif; ?>
     </div>
+    <?php elseif ($section === 'regeln'): ?>
+    <div class="space-y-4">
+      <?= $welcomeTabs('regeln') ?>
+      <section class="<?= $card ?>">
+        <header class="border-b border-cyan-900/50 px-5 py-4">
+          <h2 class="text-lg font-semibold">Regeln veröffentlichen</h2>
+          <p class="text-sm text-zinc-400"><?= e($descriptions['regeln']) ?></p>
+        </header>
+        <?php if ($channels === [] || $roles === []): ?>
+          <p class="p-5 text-sm text-zinc-400">Kanäle und Rollen des Servers konnten nicht geladen werden, deshalb ist das Veröffentlichen gesperrt.</p>
+        <?php else: ?>
+        <form method="post" action="<?= e($base . '/rules/publish') ?>" class="space-y-4 p-5" onsubmit="return confirm('Die Regeln jetzt im gewählten Kanal veröffentlichen?')">
+          <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Kanal</span>
+              <?= $channelSelect('channel', $set(BotSettings::RULES_CHANNEL), '– Kanal wählen –') ?>
+              <span class="block <?= $hint ?>">Vorgewählt ist der Regelkanal aus den Einstellungen. Der Bot braucht dort „Kanal ansehen“, „Nachrichten senden“ und „Links einbetten“.</span></label>
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Rolle für „Bestätigen“</span>
+              <?= $roleSelect('role', $set(BotSettings::VISITOR_ROLE)) ?>
+              <span class="block <?= $hint ?>">Wer „Bestätigen“ drückt, bekommt diese Rolle. Vorgewählt ist die Besucher-Rolle. Die Rolle des Bots muss im Server darüber stehen.</span></label>
+          </div>
+          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Überschrift</span>
+            <input type="text" name="title" value="<?= e(\Hangar\DiscordRules::DEFAULT_TITLE) ?>" maxlength="<?= \Hangar\DiscordRules::MAX_TITLE ?>" class="<?= $field ?>"></label>
+          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Text der Regeln</span>
+            <textarea name="text" rows="10" required maxlength="<?= \Hangar\DiscordRules::MAX_TEXT ?>" class="<?= $field ?>"><?= e(\Hangar\DiscordRules::DEFAULT_TEXT) ?></textarea>
+            <span class="block <?= $hint ?>">Discord-Formatierung wie **fett** geht. Höchstens <?= \Hangar\DiscordRules::MAX_TEXT ?> Zeichen. Der Standardtext ist derselbe wie bei /discord-setup, ändere ihn nach Bedarf.</span></label>
+          <p class="<?= $hint ?>">Jedes Veröffentlichen schreibt eine neue Nachricht. Eine ältere Regelnachricht lässt du bei Bedarf in Discord von Hand löschen; ihr Knopf bleibt sonst weiter wirksam.</p>
+          <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Veröffentlichen</button>
+        </form>
+        <?php endif; ?>
+      </section>
+    </div>
     <?php elseif ($section === 'faelle'): ?>
     <div class="space-y-4">
       <?= $modTabs('faelle') ?>
@@ -756,7 +790,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     <form method="post" action="<?= e($base . '/save') ?>" class="space-y-4">
       <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="section" value="<?= e($section) ?>">
-      <?= $section === 'zuordnung' ? $setupTabs('zuordnung') : ($section === 'moderation' ? $modTabs('moderation') : '') ?>
+      <?= $section === 'zuordnung' ? $setupTabs('zuordnung') : ($section === 'moderation' ? $modTabs('moderation') : ($section === 'willkommen' ? $welcomeTabs('willkommen') : '')) ?>
       <section class="<?= $card ?>">
         <header class="flex items-start justify-between gap-4 border-b border-cyan-900/50 px-5 py-4">
           <div>
