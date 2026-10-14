@@ -45,6 +45,7 @@ final class BotSettings
     /** Unterseiten ohne eigenen Menüpunkt: Schlüssel => Bereich, unter dem sie im Menü stehen. */
     public const SUBSECTIONS = [
         'vorlagen' => 'setup',
+        'zuordnung' => 'setup',
     ];
 
     /** Alle Einstellungen der Orga. @return array<string,string> */
@@ -169,17 +170,25 @@ final class BotSettings
                 ];
                 break;
             case 'moderation':
-                $ids = [];
-                foreach (is_array($post['modRoles'] ?? null) ? $post['modRoles'] : [] as $id) {
-                    $id = self::checkId(trim((string) $id), $roleIds, 'Rolle');
-                    if ($id !== null && !in_array($id, $ids, true)) {
-                        $ids[] = $id;
+                $ids = self::modRoleIds($post, $roleIds);
+                $values = [self::MOD_ROLES => implode(',', $ids), self::MOD_LOG_CHANNEL => $channel('modLogChannel')];
+                break;
+            case 'zuordnung':
+                // Leer = unverändert; nur was gewählt wurde, wird eingetragen.
+                $values = [];
+                foreach ([self::ADMIN_CHANNEL => 'adminChannel', self::ANNOUNCE_CHANNEL => 'announceChannel', self::WELCOME_CHANNEL => 'welcomeChannel',
+                    self::RULES_CHANNEL => 'rulesChannel', self::MOD_LOG_CHANNEL => 'modLogChannel'] as $name => $key) {
+                    if ($str($key) !== '') {
+                        $values[$name] = $channel($key);
                     }
                 }
-                if (count($ids) > self::MAX_MOD_ROLES) {
-                    throw new OrgError('Höchstens ' . self::MAX_MOD_ROLES . ' Moderatoren-Rollen.');
+                if ($str('visitorRole') !== '') {
+                    $values[self::VISITOR_ROLE] = $role('visitorRole');
                 }
-                $values = [self::MOD_ROLES => implode(',', $ids), self::MOD_LOG_CHANNEL => $channel('modLogChannel')];
+                $ids = self::modRoleIds($post, $roleIds);
+                if ($ids !== []) {
+                    $values[self::MOD_ROLES] = implode(',', $ids);
+                }
                 break;
             case 'automod':
                 $values = [self::AUTOMOD => json_encode(self::automodFromPost($post, $channelIds), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
@@ -225,6 +234,59 @@ final class BotSettings
             'spam' => $on('spam'), 'invites' => $on('invites'), 'links' => $on('links'), 'mentions' => (int) $mentions,
             'words' => $words, 'domains' => $domains, 'exemptChannels' => $exempt,
         ];
+    }
+
+    /** Moderatoren-Rollen aus dem Formular (ohne Doppelte, höchstens MAX_MOD_ROLES). @param array<string,mixed> $post @param ?list<string> $roleIds @return list<string> @throws OrgError */
+    private static function modRoleIds(array $post, ?array $roleIds): array
+    {
+        $ids = [];
+        foreach (is_array($post['modRoles'] ?? null) ? $post['modRoles'] : [] as $id) {
+            $id = self::checkId(trim((string) $id), $roleIds, 'Rolle');
+            if ($id !== null && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+        if (count($ids) > self::MAX_MOD_ROLES) {
+            throw new OrgError('Höchstens ' . self::MAX_MOD_ROLES . ' Moderatoren-Rollen.');
+        }
+        return $ids;
+    }
+
+    /** Suchwörter (kleingeschrieben, ohne Sonderzeichen) für den Vorschlag der Zuordnung: Einstellung => Wörter, nach Wichtigkeit. */
+    private const SUGGEST_WORDS = [
+        self::ANNOUNCE_CHANNEL => ['ankuendigung', 'ankündigung', 'termin', 'event', 'announce'],
+        self::WELCOME_CHANNEL => ['willkommen', 'welcome'],
+        self::RULES_CHANNEL => ['regel', 'rules'],
+        self::MOD_LOG_CHANNEL => ['modlog', 'modprotokoll', 'protokoll', 'moderationlog'],
+        self::ADMIN_CHANNEL => ['botadmin', 'adminbot', 'botein', 'admin'],
+        self::VISITOR_ROLE => ['besucher', 'gast', 'visitor', 'guest'],
+        self::MOD_ROLES => ['moderator'],
+    ];
+
+    /**
+     * Schlägt nach den Namen vor, welcher Kanal und welche Rolle zu welcher Einstellung passt. Nur für Einstellungen, die noch leer sind.
+     * @param array<string,string> $all @param list<array{id:string,name:string}> $channels @param list<array{id:string,name:string}> $roles
+     * @return array<string,string> Einstellung => ID (bei MOD_ROLES eine ID)
+     */
+    public static function suggest(array $all, array $channels, array $roles): array
+    {
+        $norm = static fn (string $n): string => preg_replace('/[^\p{L}\p{N}]+/u', '', mb_strtolower($n)) ?? '';
+        $out = [];
+        foreach (self::SUGGEST_WORDS as $name => $words) {
+            if (($all[$name] ?? '') !== '') {
+                continue;
+            }
+            $list = in_array($name, [self::VISITOR_ROLE, self::MOD_ROLES], true) ? $roles : $channels;
+            foreach ($words as $word) {
+                foreach ($list as $item) {
+                    if (str_contains($norm($item['name']), $word)) {
+                        $out[$name] = $item['id'];
+                        continue 3;
+                    }
+                }
+            }
+        }
+        return $out;
     }
 
     /** Leer => null; sonst muss die ID eine Discord-ID sein und (wenn bekannt) auf dem Server existieren. @param ?list<string> $known @throws OrgError */

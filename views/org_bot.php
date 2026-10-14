@@ -10,6 +10,7 @@
 /** @var bool $messageContent */
 /** @var list<array<string,mixed>> $templates */
 /** @var ?array{template:array<string,mixed>,plan:array{items:list<array<string,mixed>>,warnings:list<string>}} $preview */
+/** @var array<string,string> $suggest Einstellung => vorgeschlagene Kanal-/Rollen-ID (nur Zuordnung) */
 /** @var array<string,string> $usedChannels Kanal-ID => wofür der Bot ihn nutzt */
 /** @var ?array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure */
 /** @var list<array<string,mixed>> $cases */
@@ -83,13 +84,14 @@ $descriptions = [
     'moderation' => 'Wer mit /mod verwarnen, stummschalten, kicken und bannen darf und wohin der Bot das protokolliert.',
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
     'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen, vorhandene ändern, verschieben oder löschen.',
+    'zuordnung' => 'Legt fest, welchen Kanal und welche Rolle der Bot wofür nutzt. Nach dem Aufbau des Servers kannst du hier alles auf einmal eintragen; die Vorschläge kommen aus den Namen.',
     'vorlagen' => 'Den Aufbau des Servers (Rollen, Kategorien, Kanäle mit Rechten) als Vorlage festhalten und eine Vorlage auf den Server anwenden. Vor dem Anwenden siehst du, was sich ändert; gelöscht wird nur, was du ausdrücklich ankreuzt.',
     'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen lassen sich ändern und löschen.',
 ];
 // Reiter innerhalb von „Discord-Setup“: Aufbauen oder mit Vorlagen arbeiten.
 $setupTabs = static function (string $active) use ($base): string {
     $html = '<div class="flex gap-2 border-b border-cyan-900/50 text-sm" role="tablist">';
-    foreach (['setup' => 'Server aufbauen', 'vorlagen' => 'Vorlagen'] as $k => $label) {
+    foreach (['setup' => 'Server aufbauen', 'vorlagen' => 'Vorlagen', 'zuordnung' => 'Zuordnung'] as $k => $label) {
         $html .= '<a href="' . e($base . '?m=' . $k) . '" role="tab"' . ($k === $active ? ' aria-selected="true"' : '')
             . ' class="-mb-px border-b-2 px-4 py-2 transition ' . ($k === $active ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-zinc-400 hover:text-zinc-200') . '">' . e($label) . '</a>';
     }
@@ -578,10 +580,11 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     <form method="post" action="<?= e($base . '/save') ?>" class="space-y-4">
       <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="section" value="<?= e($section) ?>">
+      <?= $section === 'zuordnung' ? $setupTabs('zuordnung') : '' ?>
       <section class="<?= $card ?>">
         <header class="flex items-start justify-between gap-4 border-b border-cyan-900/50 px-5 py-4">
           <div>
-            <h2 class="text-lg font-semibold"><?= e(BotSettings::SECTIONS[$section]) ?></h2>
+            <h2 class="text-lg font-semibold"><?= e(BotSettings::SECTIONS[$section] ?? 'Zuordnung') ?></h2>
             <p class="text-sm text-zinc-400"><?= e($descriptions[$section]) ?></p>
           </div>
           <?php if (isset($status[$section])): ?>
@@ -652,6 +655,43 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
               </ul>
             </div>
           <?php endif; ?>
+
+        <?php elseif ($section === 'zuordnung'): ?>
+          <?php
+            // Aktueller Wert, sonst der Vorschlag nach dem Namen; $from sagt, woher der Wert kommt.
+            $pick = static fn (string $name): array => $set($name) !== '' ? [$set($name), 'gesetzt'] : (isset($suggest[$name]) ? [$suggest[$name], 'Vorschlag'] : ['', '']);
+            $rows = [
+                ['adminChannel', BotSettings::ADMIN_CHANNEL, 'Admin-Kanal', 'c', 'Bot-Einstellungen, nur für Admins sichtbar.'],
+                ['announceChannel', BotSettings::ANNOUNCE_CHANNEL, 'Ankündigungskanal', 'c', 'Neue Termine mit Schiffen und Plätzen.'],
+                ['welcomeChannel', BotSettings::WELCOME_CHANNEL, 'Willkommenskanal', 'c', 'Hier begrüßt der Bot neue Mitglieder.'],
+                ['rulesChannel', BotSettings::RULES_CHANNEL, 'Regelkanal', 'c', 'Für {regeln} im Begrüßungstext.'],
+                ['modLogChannel', BotSettings::MOD_LOG_CHANNEL, 'Protokollkanal', 'c', 'Moderations-Fälle, Beitritte und Austritte.'],
+                ['visitorRole', BotSettings::VISITOR_ROLE, 'Besucher-Rolle', 'r', 'Bekommt man mit „Bestätigen“ unter den Regeln.'],
+            ];
+          ?>
+          <p class="<?= $hint ?>">Leere Felder bleiben, wie sie sind. Gespeichert wird erst mit „Speichern“. Vorschläge sind vorausgewählt, prüfe sie vorher.</p>
+          <div class="grid gap-5 sm:grid-cols-2">
+            <?php foreach ($rows as [$field_, $setting, $label, $kind, $help]): ?>
+              <?php [$value, $from] = $pick($setting); ?>
+              <label class="block space-y-1.5"><span class="text-sm text-zinc-300"><?= e($label) ?>
+                  <?php if ($from === 'Vorschlag'): ?><span class="ml-1 rounded-full border border-cyan-700/50 px-2 text-xs text-cyan-300">Vorschlag</span><?php endif; ?></span>
+                <?= $kind === 'c' ? $channelSelect($field_, $value, '– nicht zuordnen –') : $roleSelect($field_, $value) ?>
+                <span class="block <?= $hint ?>"><?= e($help) ?></span></label>
+            <?php endforeach; ?>
+          </div>
+          <?php
+            $modNow = array_values(array_filter(explode(',', $set(BotSettings::MOD_ROLES))));
+            $modFrom = $modNow !== [] ? 'gesetzt' : (isset($suggest[BotSettings::MOD_ROLES]) ? 'Vorschlag' : '');
+            if ($modNow === [] && $modFrom === 'Vorschlag') {
+                $modNow = [$suggest[BotSettings::MOD_ROLES]];
+            }
+          ?>
+          <div class="space-y-1.5"><span class="text-sm text-zinc-300">Moderatoren-Rollen
+              <?php if ($modFrom === 'Vorschlag'): ?><span class="ml-1 rounded-full border border-cyan-700/50 px-2 text-xs text-cyan-300">Vorschlag</span><?php endif; ?></span>
+            <?= $roles === [] ? '<p class="' . $hint . '">Keine Rollen geladen.</p>' : $chips('modRoles', $roles, $modNow, '@') ?>
+            <span class="block <?= $hint ?>">Dürfen mit /mod verwarnen, stummschalten, kicken und bannen. Ohne Auswahl bleibt die bisherige Einstellung.</span></div>
+          <p class="rounded-md border border-cyan-900/50 px-4 py-3 text-sm text-zinc-400">Die Orga-Rollen (Mitglied, Planer, Rekrutierer, Ausbilder, Abteilungsleiter) stellst du unter
+            <a href="/o/<?= e($org['slug']) ?>/settings" class="text-cyan-300 hover:underline">Orga verwalten</a> ein. Sie bestimmen, wer in der Web-App was darf, und werden deshalb nicht automatisch gesetzt.</p>
 
         <?php elseif ($section === 'automod'): ?>
           <?php if ($messageContent): ?>

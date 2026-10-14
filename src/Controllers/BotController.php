@@ -94,6 +94,7 @@ final class BotController extends Controller
                 }
             }
         }
+        $suggest = $section === 'zuordnung' ? BotSettings::suggest($all, $lists['channels'] ?? [], $lists['roles'] ?? []) : [];
         $cases = [];
         if ($section === 'moderation') {
             $cases = Db::all('SELECT target_name, action, reason, created_at FROM bot_mod_cases WHERE org_id = ? ORDER BY id DESC LIMIT 5', [$org['id']]);
@@ -113,6 +114,7 @@ final class BotController extends Controller
             'templates' => $templates,
             'preview' => $preview,
             'cases' => $cases,
+            'suggest' => $suggest,
         ], 'Discord-Bot', 'bot');
     }
 
@@ -347,7 +349,7 @@ final class BotController extends Controller
             $plan = DiscordTemplates::plan($t['template'], $structure, $details, DiscordBot::botMember($guild, $details), $guild, self::usedChannels(BotSettings::all($org['id'])));
             @set_time_limit(300);
             $done = DiscordTemplates::apply($guild, $plan, $selected, $structure, $details);
-            return "Vorlage „{$t['name']}“ angewendet: " . DiscordTemplates::summary($done) . '.';
+            return "Vorlage „{$t['name']}“ angewendet: " . DiscordTemplates::summary($done) . '. Unter „Zuordnung“ legst du fest, welche Kanäle und Rollen der Bot nutzt.';
         });
     }
 
@@ -387,7 +389,7 @@ final class BotController extends Controller
         } catch (DiscordAuthError | DiscordUnavailableError $e) {
             return Flash::error($to, $e->getMessage());
         }
-        return Flash::ok($to, "Angelegt: {$done['categories']} Kategorien und {$done['channels']} Kanäle.");
+        return Flash::ok($to, "Angelegt: {$done['categories']} Kategorien und {$done['channels']} Kanäle. Unter „Zuordnung“ legst du fest, welche der Bot nutzt.");
     }
 
     public static function save(Request $req, array $p): Response

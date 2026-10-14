@@ -91,6 +91,42 @@ final class BotSettingsTest extends DbTestCase
         }
     }
 
+    public function testSuggestionsComeFromNamesAndOnlyForEmptySettings(): void
+    {
+        $channels = \Hangar\DiscordBot::textChannels('900');
+        $roles = \Hangar\DiscordBot::roles('900');
+        $this->assertSame(
+            ['welcome_channel_id' => '12', 'rules_channel_id' => '11', 'visitor_role_id' => '21', 'mod_role_ids' => '20'],
+            BotSettings::suggest([], $channels, $roles),
+        );
+        $this->assertSame(
+            ['welcome_channel_id' => '12', 'visitor_role_id' => '21'],
+            BotSettings::suggest(['rules_channel_id' => '14', 'mod_role_ids' => '21'], $channels, $roles),
+        );
+        $page = $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'zuordnung']);
+        $this->assertSame(200, $page->status);
+        $this->assertStringContainsString('<option value="12" selected># willkommen</option>', $page->body);
+        $this->assertStringContainsString('Vorschlag', $page->body);
+        $this->assertStringContainsString('/o/alpha/settings', $page->body);
+    }
+
+    public function testAssignmentSavesOnlyWhatWasChosen(): void
+    {
+        BotSettings::set($this->orgId, BotSettings::ANNOUNCE_CHANNEL, '14');
+        $this->save('zuordnung', [
+            'welcomeChannel' => '12', 'rulesChannel' => '11', 'announceChannel' => '', 'visitorRole' => '21', 'modRoles' => ['20'],
+        ]);
+        $this->assertSame([
+            'announce_channel_id' => '14', 'mod_role_ids' => '20', 'rules_channel_id' => '11', 'visitor_role_id' => '21', 'welcome_channel_id' => '12',
+        ], $this->sorted());
+
+        // Ohne Auswahl bleibt alles; unbekannte Kanäle werden abgelehnt.
+        $this->save('zuordnung', ['modRoles' => []]);
+        $this->assertSame('20', BotSettings::all($this->orgId)['mod_role_ids']);
+        $this->save('zuordnung', ['rulesChannel' => '999']);
+        $this->assertSame('11', BotSettings::all($this->orgId)['rules_channel_id']);
+    }
+
     public function testChannelsAreGroupedAndRolesWithoutEveryoneAndBots(): void
     {
         $this->assertSame([
