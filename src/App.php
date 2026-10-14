@@ -97,6 +97,11 @@ final class App
         $r->post('/o/{slug}/bot/role/delete', [BotController::class, 'roleDelete']);
         $r->post('/o/{slug}/bot/channel/update', [BotController::class, 'channelUpdate']);
         $r->post('/o/{slug}/bot/channel/delete', [BotController::class, 'channelDelete']);
+        $r->post('/o/{slug}/bot/template/save', [BotController::class, 'templateSave']);
+        $r->post('/o/{slug}/bot/template/import', [BotController::class, 'templateImport']);
+        $r->post('/o/{slug}/bot/template/delete', [BotController::class, 'templateDelete']);
+        $r->post('/o/{slug}/bot/template/apply', [BotController::class, 'templateApply']);
+        $r->get('/o/{slug}/bot/template/export', [BotController::class, 'templateExport']);
         $r->get('/o/{slug}/departments', [DepartmentController::class, 'index']);
         $r->post('/o/{slug}/departments/save', [DepartmentController::class, 'save']);
         $r->post('/o/{slug}/departments/delete', [DepartmentController::class, 'delete']);

@@ -17,7 +17,7 @@ final class Flash
     /** @param 'ok'|'error' $type */
     public static function to(Response $r, string $type, string $message): Response
     {
-        $value = json_encode(['t' => $type === 'error' ? 'error' : 'ok', 'm' => mb_substr($message, 0, 300)], JSON_UNESCAPED_UNICODE);
+        $value = json_encode(['t' => $type === 'error' ? 'error' : 'ok', 'm' => mb_substr($message, 0, 600)], JSON_UNESCAPED_UNICODE);
         return $r->withCookie(self::COOKIE, (string) $value, self::options(time() + 60));
     }
 

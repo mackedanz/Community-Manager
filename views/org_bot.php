@@ -8,6 +8,8 @@
 /** @var list<array{id:string,name:string,color:int}> $roles */
 /** @var ?string $problem */
 /** @var bool $messageContent */
+/** @var list<array<string,mixed>> $templates */
+/** @var ?array{template:array<string,mixed>,plan:array{items:list<array<string,mixed>>,warnings:list<string>}} $preview */
 /** @var array<string,string> $usedChannels Kanal-ID => wofür der Bot ihn nutzt */
 /** @var ?array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure */
 /** @var list<array<string,mixed>> $cases */
@@ -80,6 +82,7 @@ $descriptions = [
     'moderation' => 'Wer mit /mod verwarnen, stummschalten, kicken und bannen darf und wohin der Bot das protokolliert.',
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
     'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen, vorhandene ändern, verschieben oder löschen.',
+    'vorlagen' => 'Den Aufbau des Servers (Rollen, Kategorien, Kanäle mit Rechten) als Vorlage festhalten und eine Vorlage auf den Server anwenden. Vor dem Anwenden siehst du, was sich ändert; gelöscht wird nur, was du ausdrücklich ankreuzt.',
     'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen lassen sich ändern und löschen.',
 ];
 $typeIcon = [0 => '#', 2 => '🔊', 5 => '📢', 13 => '🎙', 15 => '💬'];
@@ -268,6 +271,118 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
         </div>
       </template>
       <?php endif; ?>
+    </div>
+    <?php elseif ($section === 'vorlagen'): ?>
+    <div class="space-y-4">
+      <?php if ($preview !== null): ?>
+        <?php
+          $groups = [];
+          foreach ($preview['plan']['items'] as $it) {
+              $groups[$it['section']][] = $it;
+          }
+        ?>
+        <section class="<?= $card ?> border-cyan-400/50" id="vorschau">
+          <header class="border-b border-cyan-900/50 px-5 py-4">
+            <h2 class="text-lg font-semibold">Vorlage „<?= e($preview['template']['name']) ?>“ anwenden</h2>
+            <p class="text-sm text-zinc-400">So würde der Server angeglichen. Nimm den Haken weg, was du nicht willst. Löschen ist nie vorgewählt.</p>
+          </header>
+          <div class="space-y-4 p-5">
+            <?php foreach ($preview['plan']['warnings'] as $w): ?>
+              <p class="rounded-md border border-amber-500/40 bg-amber-950/40 px-4 py-2 text-sm text-amber-200"><?= e($w) ?></p>
+            <?php endforeach; ?>
+            <?php if ($groups === []): ?>
+              <p class="text-sm text-cyan-300">Der Server entspricht schon der Vorlage. Es gibt nichts anzugleichen.</p>
+              <a href="<?= e($base . '?m=vorlagen') ?>" class="inline-block text-sm text-zinc-400 hover:text-cyan-300">Zurück zur Liste</a>
+            <?php else: ?>
+              <form method="post" action="<?= e($base . '/template/apply') ?>" class="space-y-4" onsubmit="return confirm('Die gewählten Änderungen jetzt auf dem Discord-Server durchführen? Gelöschtes lässt sich nicht zurückholen.')">
+                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                <input type="hidden" name="id" value="<?= e($preview['template']['id']) ?>">
+                <?php foreach ($groups as $title => $items): ?>
+                  <fieldset class="rounded-md border border-cyan-900/50">
+                    <legend class="ml-3 px-2 text-sm font-medium text-cyan-300"><?= e($title) ?> (<?= count($items) ?>)</legend>
+                    <div class="flex gap-3 px-4 pt-1 text-xs text-zinc-500">
+                      <button type="button" class="hover:text-cyan-300" data-check-all="1">alle</button>
+                      <button type="button" class="hover:text-cyan-300" data-check-all="0">keine</button>
+                    </div>
+                    <ul class="space-y-1 p-4 pt-2 text-sm">
+                      <?php foreach ($items as $it): ?>
+                        <li><label class="flex items-start gap-2 <?= $it['locked'] !== null ? 'cursor-not-allowed text-zinc-600' : 'text-zinc-300' ?>">
+                          <input type="checkbox" name="do[]" value="<?= e($it['key']) ?>" class="mt-1 accent-cyan-400"<?= $it['default'] ? ' checked' : '' ?><?= $it['locked'] !== null ? ' disabled' : '' ?>>
+                          <span><?= e($it['label']) ?><?= $it['locked'] !== null ? ' <span class="text-xs text-zinc-500">(' . e($it['locked']) . ')</span>' : '' ?></span></label></li>
+                      <?php endforeach; ?>
+                    </ul>
+                  </fieldset>
+                <?php endforeach; ?>
+                <p class="<?= $hint ?>">Die Reihenfolge der Kanäle wird nicht angeglichen, neue Einträge kommen ans Ende. Rechte einzelner Mitglieder bleiben unberührt. Bei vielen neuen Kanälen bremst Discord, dann dauert es etwas.</p>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Auswahl durchführen</button>
+                  <a href="<?= e($base . '?m=vorlagen') ?>" class="text-sm text-zinc-400 hover:text-cyan-300">Abbrechen</a>
+                </div>
+              </form>
+            <?php endif; ?>
+          </div>
+        </section>
+      <?php endif; ?>
+
+      <section class="<?= $card ?>">
+        <header class="border-b border-cyan-900/50 px-5 py-4">
+          <h2 class="text-lg font-semibold"><?= e(BotSettings::SECTIONS['vorlagen']) ?></h2>
+          <p class="text-sm text-zinc-400"><?= e($descriptions['vorlagen']) ?></p>
+        </header>
+        <ul class="divide-y divide-cyan-900/40">
+          <?php foreach ($templates as $t): ?>
+            <li class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+              <div class="min-w-0 max-w-2xl">
+                <div class="font-medium"><?= e($t['name']) ?><?= $t['builtin'] ? ' <span class="ml-1 rounded-full border border-cyan-700/50 px-2 text-xs font-normal text-cyan-300">mitgeliefert</span>' : '' ?></div>
+                <?php if ($t['description'] !== ''): ?><p class="text-sm text-zinc-400"><?= e($t['description']) ?></p><?php endif; ?>
+                <p class="<?= $hint ?>"><?= (int) $t['counts']['roles'] ?> Rollen · <?= (int) $t['counts']['categories'] ?> Kategorien · <?= (int) $t['counts']['channels'] ?> Kanäle</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-3 text-sm">
+                <a href="<?= e($base . '?m=vorlagen&t=' . rawurlencode($t['id']) . '#vorschau') ?>" class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-4 py-1.5 hover:bg-cyan-500/30">Anwenden …</a>
+                <a href="<?= e($base . '/template/export?id=' . rawurlencode($t['id'])) ?>" class="text-zinc-400 hover:text-cyan-300">Herunterladen</a>
+                <?php if (!$t['builtin']): ?>
+                  <form method="post" action="<?= e($base . '/template/delete') ?>" onsubmit="return confirm('Die Vorlage &quot;<?= e(addslashes($t['name'])) ?>&quot; löschen? Der Server bleibt, wie er ist.')">
+                    <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                    <input type="hidden" name="id" value="<?= e($t['id']) ?>">
+                    <button class="text-red-400 hover:text-red-300">Löschen</button>
+                  </form>
+                <?php endif; ?>
+              </div>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      </section>
+
+      <section class="<?= $card ?>">
+        <header class="border-b border-cyan-900/50 px-5 py-4">
+          <h2 class="text-lg font-semibold">Aktuellen Server als Vorlage speichern</h2>
+          <p class="text-sm text-zinc-400">Hält Rollen (mit Farbe und Rechten), Kategorien und Kanäle (Art, Thema, Sichtbarkeit, „nur lesen“) fest. Rechte einzelner Mitglieder, Bühnen- und Forenkanäle und die Reihenfolge werden nicht gespeichert.</p>
+        </header>
+        <form method="post" action="<?= e($base . '/template/save') ?>" class="grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:items-end" onsubmit="return confirm('Den aktuellen Aufbau des Servers als Vorlage speichern?')">
+          <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Name</span>
+            <input type="text" name="name" maxlength="100" required class="<?= $field ?>" placeholder="z. B. Unser Server"></label>
+          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Beschreibung (optional)</span>
+            <input type="text" name="description" maxlength="300" class="<?= $field ?>"></label>
+          <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Speichern</button>
+        </form>
+      </section>
+
+      <details class="<?= $card ?>">
+        <summary class="cursor-pointer px-5 py-4 text-sm text-zinc-300">Vorlage importieren (JSON einfügen)</summary>
+        <form method="post" action="<?= e($base . '/template/import') ?>" class="space-y-3 border-t border-cyan-900/50 p-5">
+          <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Name</span>
+              <input type="text" name="name" maxlength="100" required class="<?= $field ?>"></label>
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Beschreibung (optional)</span>
+              <input type="text" name="description" maxlength="300" class="<?= $field ?>"></label>
+          </div>
+          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Vorlage (JSON, wie von „Herunterladen“)</span>
+            <textarea name="json" rows="6" required class="<?= $field ?> font-mono text-xs"></textarea></label>
+          <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Importieren</button>
+        </form>
+      </details>
     </div>
     <?php elseif ($section === 'setup'): ?>
     <div class="space-y-4">
@@ -631,6 +746,13 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
       add.value = ""; draw();
     });
     draw();
+  });
+
+  // Vorlagen: alle Haken eines Blocks setzen oder entfernen (gesperrte bleiben aus)
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-check-all]");
+    if (!b) { return; }
+    b.closest("fieldset").querySelectorAll('input[type=checkbox]:not(:disabled)').forEach(function (c) { c.checked = b.dataset.checkAll === "1"; });
   });
 
   // Vorhandenes bearbeiten: Rollen-Auswahl nur bei „nur bestimmte Rollen“, Farbfeld nur mit gesetztem Haken

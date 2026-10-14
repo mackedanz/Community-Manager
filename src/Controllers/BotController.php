@@ -11,6 +11,7 @@ use Hangar\DiscordAuthError;
 use Hangar\DiscordBot;
 use Hangar\DiscordRoles;
 use Hangar\DiscordSetup;
+use Hangar\DiscordTemplates;
 use Hangar\DiscordUnavailableError;
 use Hangar\Http\Flash;
 use Hangar\Http\HttpException;
@@ -76,6 +77,23 @@ final class BotController extends Controller
                 $lists['problem'] = $e->getMessage();
             }
         }
+        $templates = [];
+        $preview = null;
+        if ($section === 'vorlagen') {
+            $templates = self::templateList($org['id']);
+            $wanted = (string) $req->query('t', '');
+            $tpl = $wanted !== '' ? self::loadTemplate($org['id'], $wanted) : null;
+            if ($tpl !== null && $lists['problem'] === null) {
+                try {
+                    $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+                    $details = DiscordBot::roleDetails($guild);
+                    $plan = DiscordTemplates::plan($tpl['template'], DiscordBot::structure($guild), $details, DiscordBot::botMember($guild, $details), $guild, self::usedChannels($all));
+                    $preview = ['template' => $tpl, 'plan' => $plan];
+                } catch (DiscordAuthError | DiscordUnavailableError $e) {
+                    $lists['problem'] = $e->getMessage();
+                }
+            }
+        }
         $cases = [];
         if ($section === 'moderation') {
             $cases = Db::all('SELECT target_name, action, reason, created_at FROM bot_mod_cases WHERE org_id = ? ORDER BY id DESC LIMIT 5', [$org['id']]);
@@ -92,6 +110,8 @@ final class BotController extends Controller
             'structure' => $structure,
             'roleInfo' => $roleInfo,
             'usedChannels' => self::usedChannels($all),
+            'templates' => $templates,
+            'preview' => $preview,
             'cases' => $cases,
         ], 'Discord-Bot', 'bot');
     }
@@ -183,6 +203,151 @@ final class BotController extends Controller
             }
             return ($plan['category'] ? 'Kategorie' : 'Kanal') . " „{$plan['name']}“ gelöscht."
                 . ($cleared > 0 ? ' Der Bot nutzt ihn nicht mehr, bitte unter „Allgemein“ und „Termine“ einen neuen wählen.' : '');
+        });
+    }
+
+    /**
+     * Eine Vorlage laden: mitgelieferte ("builtin:schlüssel") oder gespeicherte der Orga.
+     * @return ?array{id:string,name:string,description:string,builtin:bool,template:array<string,mixed>}
+     */
+    private static function loadTemplate(string $orgId, string $id): ?array
+    {
+        if (str_starts_with($id, 'builtin:')) {
+            $b = DiscordTemplates::builtin()[substr($id, 8)] ?? null;
+            return $b === null ? null : ['id' => $id, 'name' => $b['name'], 'description' => $b['description'], 'builtin' => true, 'template' => $b['template']];
+        }
+        $row = Db::one('SELECT id, name, description, data FROM discord_templates WHERE org_id = ? AND id = ?', [$orgId, $id]);
+        if ($row === null) {
+            return null;
+        }
+        try {
+            $tpl = DiscordTemplates::normalize(json_decode((string) $row['data'], true));
+        } catch (OrgError) {
+            return null;
+        }
+        return ['id' => (string) $row['id'], 'name' => (string) $row['name'], 'description' => (string) ($row['description'] ?? ''), 'builtin' => false, 'template' => $tpl];
+    }
+
+    /** Alle Vorlagen der Orga mit Größenangaben: erst die mitgelieferten, dann die eigenen. @return list<array<string,mixed>> */
+    private static function templateList(string $orgId): array
+    {
+        $out = [];
+        foreach (array_keys(DiscordTemplates::builtin()) as $key) {
+            $t = self::loadTemplate($orgId, 'builtin:' . $key);
+            $out[] = $t + ['counts' => DiscordTemplates::counts($t['template'])];
+        }
+        foreach (Db::all('SELECT id FROM discord_templates WHERE org_id = ? ORDER BY name', [$orgId]) as $row) {
+            $t = self::loadTemplate($orgId, (string) $row['id']);
+            if ($t !== null) {
+                $out[] = $t + ['counts' => DiscordTemplates::counts($t['template'])];
+            }
+        }
+        return $out;
+    }
+
+    /** Speichert eine geprüfte Vorlage der Orga. @param array<string,mixed> $template @throws OrgError */
+    private static function storeTemplate(string $orgId, string $name, string $description, array $template): void
+    {
+        $name = trim($name);
+        if ($name === '' || mb_strlen($name) > 100) {
+            throw new OrgError('Die Vorlage braucht einen Namen (höchstens 100 Zeichen).');
+        }
+        if ((int) Db::val('SELECT COUNT(*) FROM discord_templates WHERE org_id = ?', [$orgId]) >= DiscordTemplates::MAX_TEMPLATES) {
+            throw new OrgError('Höchstens ' . DiscordTemplates::MAX_TEMPLATES . ' eigene Vorlagen. Bitte eine löschen.');
+        }
+        $names = array_map(static fn ($b) => mb_strtolower($b['name']), DiscordTemplates::builtin());
+        if (in_array(mb_strtolower($name), $names, true) || Db::val('SELECT 1 FROM discord_templates WHERE org_id = ? AND name = ?', [$orgId, $name]) !== null) {
+            throw new OrgError("Eine Vorlage „{$name}“ gibt es schon. Bitte einen anderen Namen wählen.");
+        }
+        $json = json_encode($template, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false || strlen($json) > DiscordTemplates::MAX_JSON) {
+            throw new OrgError('Die Vorlage ist zu groß.');
+        }
+        Db::insert('discord_templates', ['id' => new_id(), 'org_id' => $orgId, 'name' => $name, 'description' => mb_substr(trim($description), 0, 300) ?: null, 'data' => $json]);
+    }
+
+    /** Hält den aktuellen Aufbau des Servers als Vorlage fest. */
+    public static function templateSave(Request $req, array $p): Response
+    {
+        return self::change($req, $p, 'vorlagen', static function (string $guild, array $org) use ($req): string {
+            $details = DiscordBot::roleDetails($guild);
+            $captured = DiscordTemplates::capture(DiscordBot::structure($guild), $details, $guild);
+            self::storeTemplate($org['id'], (string) $req->input('name', ''), (string) $req->input('description', ''), $captured['template']);
+            $c = DiscordTemplates::counts($captured['template']);
+            return "Vorlage „" . trim((string) $req->input('name', '')) . "“ gespeichert ({$c['roles']} Rollen, {$c['categories']} Kategorien, {$c['channels']} Kanäle)."
+                . ($captured['skipped'] > 0 ? " {$captured['skipped']} Bühnen- oder Forenkanäle wurden nicht aufgenommen." : '');
+        });
+    }
+
+    /** Legt eine Vorlage aus eingefügtem JSON an (z. B. von einem anderen Server heruntergeladen). */
+    public static function templateImport(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=vorlagen';
+        try {
+            $text = trim((string) $req->input('json', ''));
+            if ($text === '' || strlen($text) > DiscordTemplates::MAX_JSON) {
+                throw new OrgError('Bitte die Vorlage als JSON einfügen (höchstens ' . (int) (DiscordTemplates::MAX_JSON / 1000) . ' KB).');
+            }
+            $data = json_decode($text, true);
+            if (!is_array($data)) {
+                throw new OrgError('Das ist kein gültiges JSON.');
+            }
+            $template = DiscordTemplates::normalize($data['template'] ?? $data);
+            self::storeTemplate($org['id'], (string) $req->input('name', ''), (string) $req->input('description', ''), $template);
+        } catch (OrgError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Flash::ok($to, 'Vorlage importiert.');
+    }
+
+    /** Lädt eine Vorlage als JSON-Datei herunter. */
+    public static function templateExport(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $t = self::loadTemplate($org['id'], (string) $req->query('id', ''));
+        if ($t === null) {
+            throw HttpException::notFound();
+        }
+        $file = (string) preg_replace('/[^a-z0-9]+/', '-', mb_strtolower($t['name'])) ?: 'vorlage';
+        return Response::text(
+            (string) json_encode(['name' => $t['name'], 'description' => $t['description'], 'template' => $t['template']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
+            200,
+            'application/json; charset=utf-8',
+        )->withHeader('Content-Disposition', 'attachment; filename="vorlage-' . trim($file, '-') . '.json"');
+    }
+
+    /** Löscht eine eigene Vorlage (die mitgelieferten bleiben). */
+    public static function templateDelete(Request $req, array $p): Response
+    {
+        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/bot?m=vorlagen';
+        $t = self::loadTemplate($org['id'], (string) $req->input('id', ''));
+        if ($t === null || $t['builtin']) {
+            return Flash::error($to, 'Diese Vorlage gibt es nicht oder sie lässt sich nicht löschen.');
+        }
+        Db::run('DELETE FROM discord_templates WHERE org_id = ? AND id = ?', [$org['id'], $t['id']]);
+        return Flash::ok($to, "Vorlage „{$t['name']}“ gelöscht.");
+    }
+
+    /** Wendet eine Vorlage an: nur die in der Vorschau gewählten Einträge, der Plan wird dazu frisch berechnet. */
+    public static function templateApply(Request $req, array $p): Response
+    {
+        return self::change($req, $p, 'vorlagen', static function (string $guild, array $org) use ($req): string {
+            $t = self::loadTemplate($org['id'], (string) $req->input('id', ''));
+            if ($t === null) {
+                throw new OrgError('Diese Vorlage gibt es nicht mehr.');
+            }
+            $selected = array_values(array_map('strval', is_array($req->post['do'] ?? null) ? $req->post['do'] : []));
+            if ($selected === []) {
+                throw new OrgError('Es ist nichts ausgewählt.');
+            }
+            $structure = DiscordBot::structure($guild);
+            $details = DiscordBot::roleDetails($guild);
+            $plan = DiscordTemplates::plan($t['template'], $structure, $details, DiscordBot::botMember($guild, $details), $guild, self::usedChannels(BotSettings::all($org['id'])));
+            @set_time_limit(300);
+            $done = DiscordTemplates::apply($guild, $plan, $selected, $structure, $details);
+            return "Vorlage „{$t['name']}“ angewendet: " . DiscordTemplates::summary($done) . '.';
         });
     }
 
