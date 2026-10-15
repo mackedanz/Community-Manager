@@ -266,4 +266,60 @@ final class DiscordEditTest extends DbTestCase
         $this->assertSame(5, substr_count($setup, 'action="/o/alpha/bot/channel/delete"'));
         $this->assertStringContainsString('data-edit-access', $setup);
     }
+
+    public function testRolesRightsPageShowsTheCurrentStateAndLocksWhatTheBotLacks(): void
+    {
+        $page = $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'rechte', 'c' => '12', 'r' => '21'])->body;
+        $this->assertSame(200, $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'rechte', 'c' => '12', 'r' => '21'])->status);
+        // „news“: Pilot darf senden (Bit 11); der Bot darf senden, aber nicht einbetten (Bit 14)
+        $this->assertMatchesRegularExpression('/name="perm\[11\]"[^>]*>\s*<option value="">[^<]*<\/option>\s*<option value="allow" selected>/', $page);
+        $this->assertMatchesRegularExpression('/name="perm\[14\]"[^>]*disabled/', $page);
+        $this->assertDoesNotMatchRegularExpression('/name="perm\[11\]"[^>]*disabled/', $page);
+        $this->assertStringContainsString('@Pilot', $page);
+        $this->assertStringNotContainsString('Community-Manager', $page); // Bot-Rolle nicht änderbar
+        // Sprachkanal: Sprach-Rechte, keine Text-Rechte
+        $voice = $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'rechte', 'c' => '13'])->body;
+        $this->assertStringContainsString('name="perm[20]"', $voice);
+        $this->assertStringNotContainsString('name="perm[13]"', $voice);
+        // Aus dem Bearbeiten-Formular verlinkt
+        $this->assertStringContainsString('?m=rechte&amp;c=12', $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'setup'])->body);
+        // Unbekannter Kanal: freundliche Seite
+        $this->assertStringContainsString('gibt es nicht', $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'rechte', 'c' => '999'])->body);
+    }
+
+    public function testRolesRightsOnlyTouchesThatRolesEntryAndWhatTheBotMaySet(): void
+    {
+        // Pilot in „regeln“ (hat dort noch keinen Eintrag): senden erlauben, Nachrichten verwalten verbieten, Einbetten (Bot hat es nicht) wird ignoriert
+        $m = $this->post('channel/rights', ['id' => '11', 'role' => '21', 'perm' => ['11' => 'allow', '13' => 'deny', '14' => 'allow']]);
+        $this->assertStringContainsString('gespeichert', $m);
+        $this->assertSame([['PUT', '/channels/11/permissions/21', ['allow' => (string) (1 << 11), 'deny' => (string) (1 << 13), 'type' => 0]]], $this->calls);
+
+        // Alles auf „nicht festgelegt“ entfernt den Eintrag von Pilot in „news“ (dort steht nur Senden erlauben)
+        $this->calls = [];
+        $this->post('channel/rights', ['id' => '12', 'role' => '21', 'perm' => ['11' => '']]);
+        $this->assertSame([['DELETE', '/channels/12/permissions/21', null]], $this->calls);
+    }
+
+    public function testRolesRightsKeepsUnknownBitsAndChecksInput(): void
+    {
+        // Bit 3 (Administrator) und Bit 14 stehen im Eintrag; nur Bit 11 darf der Bot ändern, der Rest bleibt
+        $this->assertSame(
+            ['allow' => (1 << 3) | (1 << 14) | (1 << 11), 'deny' => 0],
+            (function (): array {
+                $structure = ['categories' => [], 'loose' => [['id' => '5', 'name' => 'x', 'type' => 0, 'overwrites' => [['id' => '21', 'type' => 0, 'allow' => (string) ((1 << 3) | (1 << 14)), 'deny' => '0']]]]];
+                $roles = [['id' => '21', 'name' => 'Pilot', 'managed' => false, 'position' => 2]];
+                $p = \Hangar\DiscordRights::plan(['id' => '5', 'role' => '21', 'perm' => ['11' => 'allow', '14' => 'deny']], $structure, $roles, ['permissions' => $this->bit(10, 11), 'top' => 5]);
+                return ['allow' => $p['allow'], 'deny' => $p['deny']];
+            })(),
+        );
+
+        // Ohne Änderung, mit unbekannter Rolle, unbekanntem Kanal, Bot-Rolle und als Mitglied
+        $this->assertStringContainsString('Nichts geändert', $this->post('channel/rights', ['id' => '12', 'role' => '21', 'perm' => ['11' => 'allow']]));
+        $this->assertStringContainsString('Rolle gibt es', $this->post('channel/rights', ['id' => '12', 'role' => '77', 'perm' => ['11' => 'allow']]));
+        $this->assertStringContainsString('nicht mehr', $this->post('channel/rights', ['id' => '99', 'role' => '21', 'perm' => ['11' => 'allow']]));
+        $this->assertStringContainsString('Bots und Integrationen', $this->post('channel/rights', ['id' => '12', 'role' => '20', 'perm' => ['11' => 'allow']]));
+        $this->assertSame([], $this->calls);
+        $this->assertSame(404, $this->call('POST', '/o/alpha/bot/channel/rights', 'member', ['id' => '12', 'role' => '21', 'perm' => ['11' => '']])->status);
+        $this->assertSame([], $this->calls);
+    }
 }

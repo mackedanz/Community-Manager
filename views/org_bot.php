@@ -17,6 +17,7 @@
 /** @var list<array<string,mixed>> $creators */
 /** @var string $guildId */
 /** @var bool $twitchActive */
+/** @var ?array<string,mixed> $rights */
 /** @var array{rows:list<array<string,mixed>>,total:int} $modCases */
 /** @var string $modQuery */
 /** @var string $modAction */
@@ -471,6 +472,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
                         <?php endif; ?>
                       </div>
                       <div<?= $cur['access'] === 'roles' ? '' : ' hidden' ?> data-edit-roles><?= $roles === [] ? '<p class="' . $hint . '">Keine Rollen geladen.</p>' : $chips('roles', $roles, array_values(array_intersect($cur['roles'], array_column($roles, 'id'))), '@') ?></div>
+                      <p class="<?= $hint ?>"><a href="<?= e($base . '?m=rechte&c=' . rawurlencode($id)) ?>" class="text-cyan-300 hover:underline">Rechte einzelner Rollen …</a> (z. B. wer hier schreiben oder sprechen darf)</p>
                       <p class="<?= $hint ?>">Die Felder zeigen den aktuellen Stand. Wer „Sichtbar für“ oder „Nur lesen“ ändert, ersetzt die bisherigen Rechte <?= $isCategory ? 'dieser Kategorie' : 'dieses Kanals' ?>; bleiben beide, wie sie sind, ändern sich die Rechte nicht.</p>
                       <div class="flex flex-wrap items-center justify-between gap-3">
                         <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-4 py-1.5 text-sm hover:bg-cyan-500/30">Speichern</button>
@@ -708,6 +710,100 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
         <?php endif; ?>
         <?php endif; ?>
       </section>
+    </div>
+    <?php elseif ($section === 'rechte'): ?>
+    <div class="space-y-4">
+      <?php if ($rights === null): ?>
+        <section class="<?= $card ?>">
+          <div class="space-y-2 p-5 text-sm text-zinc-300">
+            <p>Diesen Kanal gibt es nicht (mehr) oder der Aufbau des Servers konnte nicht geladen werden.</p>
+            <a href="<?= e($base . '?m=setup') ?>" class="text-cyan-300 hover:underline">Zurück zum Discord-Setup</a>
+          </div>
+        </section>
+      <?php else: ?>
+        <?php
+          $item = $rights['item'];
+          $type = $rights['isCategory'] ? 4 : (int) $item['type'];
+          $free = \Hangar\DiscordRights::grantable($type, $rights['bot']);
+          $guildRole = $rights['guildId'];
+          // @everyone zuerst, danach die Rollen von oben nach unten; Rollen von Bots und Integrationen lassen sich nicht ändern
+          $list = array_values(array_filter($rights['roles'], static fn ($r) => !$r['managed'] && $r['id'] === $guildRole));
+          foreach ($rights['roles'] as $r) {
+              if (!$r['managed'] && $r['id'] !== $guildRole) {
+                  $list[] = $r;
+              }
+          }
+          $selected = $guildRole;
+          foreach ($list as $r) {
+              if ($r['id'] === $rights['selected']) {
+                  $selected = $r['id'];
+              }
+          }
+          if ($rights['selected'] === '') {
+              foreach ($list as $r) {
+                  if (\Hangar\DiscordRights::current($item['overwrites'] ?? [], $r['id'])['exists']) {
+                      $selected = $r['id'];
+                      break;
+                  }
+              }
+          }
+          $cur = \Hangar\DiscordRights::current($item['overwrites'] ?? [], $selected);
+          $selName = '@everyone';
+          foreach ($list as $r) {
+              if ($r['id'] === $selected) {
+                  $selName = $r['id'] === $guildRole ? '@everyone' : '@' . $r['name'];
+              }
+          }
+          $kindName = $rights['isCategory'] ? 'Kategorie' : 'Kanal';
+        ?>
+        <section class="<?= $card ?>">
+          <header class="border-b border-cyan-900/50 px-5 py-4">
+            <a href="<?= e($base . '?m=setup') ?>" class="text-sm text-zinc-400 hover:text-cyan-300">← Zurück zum Discord-Setup</a>
+            <h2 class="mt-1 text-lg font-semibold">Rechte einzelner Rollen: <?= e($kindName) ?> „<?= e($item['name']) ?>“</h2>
+            <p class="text-sm text-zinc-400">Wähle links eine Rolle und stelle rechts ein, was sie in diesem <?= e($kindName) ?> darf. ✓ erlaubt es, „nicht festgelegt“ lässt es bei dem, was die Rolle sonst darf, ✗ verbietet es. Ein ✓ einer Rolle gilt vor einem ✗ einer anderen; nur @everyone wird zuerst angewendet. Änderungen wirken sofort.</p>
+          </header>
+          <div class="grid gap-0 md:grid-cols-[230px_minmax(0,1fr)]">
+            <nav class="border-b border-cyan-900/50 p-3 md:border-b-0 md:border-r" aria-label="Rollen">
+              <ul class="space-y-1">
+                <?php foreach ($list as $r): ?>
+                  <?php $has = \Hangar\DiscordRights::current($item['overwrites'] ?? [], $r['id'])['exists']; ?>
+                  <li><a href="<?= e($base . '?m=rechte&c=' . rawurlencode((string) $item['id']) . '&r=' . rawurlencode($r['id'])) ?>"
+                         class="flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm <?= $r['id'] === $selected ? 'border-cyan-400/50 bg-teal-900/50 text-cyan-300' : 'border-transparent text-zinc-300 hover:bg-teal-900/30' ?>">
+                    <span><?= $r['id'] === $guildRole ? '@everyone' : '@' . e($r['name']) ?></span><?= $has ? $dot(true) : '' ?></a></li>
+                <?php endforeach; ?>
+              </ul>
+              <p class="mt-3 text-xs text-zinc-500">Ein Punkt heißt: Für diese Rolle gibt es hier schon Einstellungen.</p>
+            </nav>
+            <form method="post" action="<?= e($base . '/channel/rights') ?>" class="space-y-4 p-5">
+              <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+              <input type="hidden" name="id" value="<?= e((string) $item['id']) ?>">
+              <input type="hidden" name="role" value="<?= e($selected) ?>">
+              <h3 class="font-medium text-cyan-300"><?= e($selName) ?></h3>
+              <?php foreach (\Hangar\DiscordRights::groupsFor($type) as $group => $perms): ?>
+                <fieldset class="space-y-1.5">
+                  <legend class="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500"><?= e($group) ?></legend>
+                  <?php foreach ($perms as $bit => $title): ?>
+                    <?php
+                      $ok = ($free & (1 << $bit)) !== 0;
+                      $state = ($cur['allow'] & (1 << $bit)) !== 0 ? 'allow' : (($cur['deny'] & (1 << $bit)) !== 0 ? 'deny' : '');
+                    ?>
+                    <label class="flex items-center justify-between gap-3 text-sm <?= $ok ? 'text-zinc-300' : 'text-zinc-600' ?>"<?= $ok ? '' : ' title="Der Bot hat dieses Recht selbst nicht und kann es nicht ändern"' ?>>
+                      <span><?= e($title) ?></span>
+                      <select name="perm[<?= (int) $bit ?>]" class="<?= $field ?> w-auto min-w-[11rem]"<?= $ok ? '' : ' disabled' ?>>
+                        <option value=""<?= $state === '' ? ' selected' : '' ?>>– nicht festgelegt</option>
+                        <option value="allow"<?= $state === 'allow' ? ' selected' : '' ?>>✓ erlauben</option>
+                        <option value="deny"<?= $state === 'deny' ? ' selected' : '' ?>>✗ verbieten</option>
+                      </select>
+                    </label>
+                  <?php endforeach; ?>
+                </fieldset>
+              <?php endforeach; ?>
+              <p class="<?= $hint ?>">Wer bei @everyone „Kanäle ansehen“ verbietet, macht den <?= e($kindName) ?> für alle unsichtbar, die ihn nicht über eine Rolle wieder erlaubt bekommen. Rechte einzelner Mitglieder und Rechte, die der Bot selbst nicht hat (ausgegraut), bleiben unverändert. Administrator, Rollen, Berechtigungen und Webhooks verwalten gibt es hier mit Absicht nicht.</p>
+              <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Speichern</button>
+            </form>
+          </div>
+        </section>
+      <?php endif; ?>
     </div>
     <?php elseif ($section === 'creator'): ?>
     <div class="space-y-4">

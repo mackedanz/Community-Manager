@@ -249,6 +249,18 @@ final class DiscordBot
     }
 
     /** Löscht einen Kanal oder eine Kategorie (die Kanäle einer Kategorie bleiben ohne Kategorie bestehen). */
+    /** Rechte einer Rolle in einem Kanal oder einer Kategorie setzen (allow und deny als Bitmasken); die übrigen Einträge bleiben. @throws DiscordAuthError|DiscordUnavailableError */
+    public static function setOverwrite(string $channelId, string $roleId, int $allow, int $deny): void
+    {
+        self::mutate('PUT', '/channels/' . rawurlencode($channelId) . '/permissions/' . rawurlencode($roleId), ['allow' => (string) $allow, 'deny' => (string) $deny, 'type' => 0], 'Rollen verwalten');
+    }
+
+    /** Den Eintrag einer Rolle in einem Kanal entfernen. @throws DiscordAuthError|DiscordUnavailableError */
+    public static function deleteOverwrite(string $channelId, string $roleId): void
+    {
+        self::mutate('DELETE', '/channels/' . rawurlencode($channelId) . '/permissions/' . rawurlencode($roleId), null, 'Rollen verwalten');
+    }
+
     public static function deleteChannel(string $channelId): void
     {
         self::mutate('DELETE', '/channels/' . rawurlencode($channelId), null, 'Kanäle verwalten');

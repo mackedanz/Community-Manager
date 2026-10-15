@@ -10,6 +10,7 @@ use Hangar\Creators;
 use Hangar\Db;
 use Hangar\DiscordAuthError;
 use Hangar\DiscordBot;
+use Hangar\DiscordRights;
 use Hangar\DiscordRoles;
 use Hangar\DiscordRules;
 use Hangar\DiscordSetup;
@@ -80,6 +81,22 @@ final class BotController extends Controller
                 $lists['problem'] = $e->getMessage();
             }
         }
+        $rights = null;
+        if ($section === 'rechte' && $lists['problem'] === null) {
+            try {
+                $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
+                $found = DiscordSetup::locate((string) $req->query('c', ''), DiscordBot::structure($guild));
+                if ($found !== null) {
+                    $details = DiscordBot::roleDetails($guild);
+                    $rights = [
+                        'item' => $found['row'], 'isCategory' => $found['category'], 'roles' => $details, 'guildId' => $guild,
+                        'bot' => DiscordBot::botMember($guild, $details)['permissions'] ?? null, 'selected' => (string) $req->query('r', ''),
+                    ];
+                }
+            } catch (DiscordAuthError | DiscordUnavailableError $e) {
+                $lists['problem'] = $e->getMessage();
+            }
+        }
         $templates = [];
         $preview = null;
         if ($section === 'vorlagen') {
@@ -124,6 +141,7 @@ final class BotController extends Controller
             'cases' => $cases,
             'suggest' => $suggest,
             'creators' => $creators,
+            'rights' => $rights,
             'twitchActive' => BotSettings::twitchActive($all),
             'guildId' => (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]),
             'modCases' => $modCases,
@@ -158,10 +176,10 @@ final class BotController extends Controller
      * Gemeinsamer Rahmen der Änderungen: Admin, Server und Token prüfen, dann die Arbeit ausführen; Fehler werden zur Meldung.
      * @param callable(string,array<string,mixed>):string $work liefert die Erfolgsmeldung
      */
-    private static function change(Request $req, array $p, string $section, callable $work): Response
+    private static function change(Request $req, array $p, string $section, callable $work, string $extra = ''): Response
     {
         [, $org] = self::requireAdmin($req, (string) $p['slug']);
-        $to = '/o/' . $org['slug'] . '/bot?m=' . $section;
+        $to = '/o/' . $org['slug'] . '/bot?m=' . $section . $extra;
         $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
         if ($guild === '' || !DiscordBot::configured()) {
             return Flash::error($to, 'Kein Bot-Token eingerichtet (DISCORD_BOT_TOKEN).');
@@ -312,6 +330,22 @@ final class BotController extends Controller
     }
 
     /** Ändert einen vorhandenen Kanal oder eine Kategorie. */
+    /** Rechte einer Rolle in einem Kanal oder einer Kategorie ändern (nur deren Eintrag). */
+    public static function channelRights(Request $req, array $p): Response
+    {
+        $extra = '&c=' . rawurlencode((string) $req->input('id', '')) . '&r=' . rawurlencode((string) $req->input('role', ''));
+        return self::change($req, $p, 'rechte', static function (string $guild) use ($req): string {
+            $details = DiscordBot::roleDetails($guild);
+            $plan = DiscordRights::plan($req->post, DiscordBot::structure($guild), $details, DiscordBot::botMember($guild, $details));
+            if ($plan['remove']) {
+                DiscordBot::deleteOverwrite($plan['id'], $plan['roleId']);
+            } else {
+                DiscordBot::setOverwrite($plan['id'], $plan['roleId'], $plan['allow'], $plan['deny']);
+            }
+            return "Rechte von {$plan['roleName']} in „{$plan['name']}“ gespeichert.";
+        }, $extra);
+    }
+
     public static function channelUpdate(Request $req, array $p): Response
     {
         return self::change($req, $p, 'setup', static function (string $guild) use ($req): string {

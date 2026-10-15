@@ -103,6 +103,7 @@ final class App
         $r->post('/o/{slug}/bot/creator/delete', [BotController::class, 'creatorDelete']);
         $r->post('/o/{slug}/bot/channel/update', [BotController::class, 'channelUpdate']);
         $r->post('/o/{slug}/bot/channel/delete', [BotController::class, 'channelDelete']);
+        $r->post('/o/{slug}/bot/channel/rights', [BotController::class, 'channelRights']);
         $r->post('/o/{slug}/bot/template/save', [BotController::class, 'templateSave']);
         $r->post('/o/{slug}/bot/template/import', [BotController::class, 'templateImport']);
         $r->post('/o/{slug}/bot/template/delete', [BotController::class, 'templateDelete']);

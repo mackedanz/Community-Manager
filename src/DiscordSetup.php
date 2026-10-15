@@ -352,7 +352,8 @@ final class DiscordSetup
         return ['access' => $access, 'roles' => $own[1], 'readonly' => $readonly];
     }
 
-    private static function locate(string $id, array $structure): ?array
+    /** Kanal oder Kategorie zur ID. @return ?array{category:bool,row:array<string,mixed>} */
+    public static function locate(string $id, array $structure): ?array
     {
         foreach ($structure['categories'] as $cat) {
             if ((string) $cat['id'] === $id) {
