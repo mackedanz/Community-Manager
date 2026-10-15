@@ -18,6 +18,7 @@
 /** @var string $guildId */
 /** @var bool $twitchActive */
 /** @var ?array<string,mixed> $rights */
+/** @var list<array{label:string,hint:string,required:bool,long:bool}> $recruitQuestions */
 /** @var array{rows:list<array<string,mixed>>,total:int} $modCases */
 /** @var string $modQuery */
 /** @var string $modAction */
@@ -95,6 +96,7 @@ $descriptions = [
     'creator' => 'YouTube-Kanäle, deren neue Videos der Bot in einen Discord-Kanal postet (Prüfung alle 10 Minuten, ältere Videos nicht), und Twitch-Kanäle, bei denen er meldet, wenn sie live gehen (Prüfung alle 2 Minuten).',
     'regeln' => 'Veröffentlicht einen Regeltext in einem Kanal, darunter der Knopf „Bestätigen“. Wer ihn drückt, bekommt die gewählte Rolle (meist die Besucher-Rolle).',
     'faelle' => 'Verwarnen, Timeout, Kick und Bann direkt im Manager und die Liste aller Fälle.',
+    'recruiting' => 'Mit /recruit führt der Bot Recruiter durch einen Fragenkatalog und postet die Antworten als Übersicht in einen Kanal. Hier legst du Kanal, berechtigte Rollen und die Fragen fest.',
     'zuordnung' => 'Legt fest, welchen Kanal und welche Rolle der Bot wofür nutzt. Nach dem Aufbau des Servers kannst du hier alles auf einmal eintragen; die Vorschläge kommen aus den Namen.',
     'vorlagen' => 'Den Aufbau des Servers (Rollen, Kategorien, Kanäle mit Rechten) als Vorlage festhalten und eine Vorlage auf den Server anwenden. Vor dem Anwenden siehst du, was sich ändert; gelöscht wird nur, was du ausdrücklich ankreuzt.',
     'rollen' => 'Neue Rollen mit Rechten auf dem Server anlegen: Name, Farbe und was die Rolle darf. Vorhandene Rollen lassen sich ändern und löschen.',
@@ -987,6 +989,52 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
             </div>
           <?php endif; ?>
 
+        <?php elseif ($section === 'recruiting'): ?>
+          <?php
+            $qMax = \Hangar\Recruiting::MAX_QUESTIONS;
+            $recruitRoles = array_values(array_filter(explode(',', $set(BotSettings::RECRUIT_ROLES))));
+            $rows = $recruitQuestions !== [] ? $recruitQuestions : [['label' => 'Wie heißt du im Spiel (RSI-Handle)?', 'hint' => 'Der Name aus deinem RSI-Profil', 'required' => true, 'long' => false]];
+            // Eine Frage als Zeile: Frage, Hilfetext, Pflicht, mehrzeilig, verschieben, entfernen. $n ist die laufende Nummer im Feldnamen.
+            $qRow = static function (string $n, array $q) use ($field): string {
+                $btn = 'rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:border-cyan-600 hover:text-cyan-300';
+                return '<div class="space-y-2 rounded-md border border-cyan-900/50 bg-teal-950/30 p-3" data-q>'
+                    . '<div class="flex items-center justify-between gap-2"><span class="text-sm font-medium text-cyan-300">Frage <span data-q-num></span></span>'
+                    . '<span class="flex gap-1.5"><button type="button" class="' . $btn . '" data-q-up aria-label="nach oben">↑</button>'
+                    . '<button type="button" class="' . $btn . '" data-q-down aria-label="nach unten">↓</button>'
+                    . '<button type="button" class="' . $btn . ' hover:!border-red-500 hover:!text-red-400" data-q-remove>entfernen</button></span></div>'
+                    . '<div class="grid gap-3 sm:grid-cols-2">'
+                    . '<label class="block space-y-1"><span class="text-xs text-zinc-400">Frage (höchstens ' . \Hangar\Recruiting::MAX_LABEL . ' Zeichen)</span>'
+                    . '<input type="text" name="q[' . e($n) . '][label]" value="' . e($q['label']) . '" maxlength="' . \Hangar\Recruiting::MAX_LABEL . '" class="' . $field . '"></label>'
+                    . '<label class="block space-y-1"><span class="text-xs text-zinc-400">Hilfetext im Antwortfeld (freiwillig, höchstens ' . \Hangar\Recruiting::MAX_HINT . ')</span>'
+                    . '<input type="text" name="q[' . e($n) . '][hint]" value="' . e($q['hint']) . '" maxlength="' . \Hangar\Recruiting::MAX_HINT . '" class="' . $field . '"></label></div>'
+                    . '<div class="flex flex-wrap gap-x-5 gap-y-1 text-sm text-zinc-300">'
+                    . '<label class="flex items-center gap-2"><input type="checkbox" name="q[' . e($n) . '][required]" value="1" class="accent-cyan-400"' . ($q['required'] ? ' checked' : '') . '> Antwort ist Pflicht</label>'
+                    . '<label class="flex items-center gap-2"><input type="checkbox" name="q[' . e($n) . '][long]" value="1" class="accent-cyan-400"' . ($q['long'] ? ' checked' : '') . '> langes Antwortfeld (mehrere Zeilen)</label></div>'
+                    . '</div>';
+            };
+          ?>
+          <div class="grid gap-5 sm:grid-cols-2">
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Kanal für die Übersichten</span>
+              <?= $channelSelect('recruitChannel', $set(BotSettings::RECRUIT_CHANNEL), '– keiner (/recruit ist aus) –') ?>
+              <span class="block <?= $hint ?>">Hier postet der Bot die fertig ausgefüllte Übersicht. Er braucht dort „Kanal ansehen“, „Nachrichten senden“ und „Links einbetten“. Wähle einen Kanal, den nur Recruiter sehen, denn die Antworten enthalten persönliche Angaben.</span></label>
+          </div>
+          <div class="space-y-1.5"><span class="text-sm text-zinc-300">Wer darf /recruit nutzen?</span>
+            <?= $roles === [] && $recruitRoles === [] ? '<p class="' . $hint . '">Keine Rollen geladen.</p>' : $chips('recruitRoles', $roles, $recruitRoles, '@') ?>
+            <span class="block <?= $hint ?>">Anklicken zum Auswählen, höchstens <?= BotSettings::MAX_MOD_ROLES ?>. Server-Admins dürfen immer.</span></div>
+
+          <div class="space-y-3" data-q-box data-max="<?= $qMax ?>">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <span class="text-sm text-zinc-300">Fragenkatalog</span>
+              <span class="<?= $hint ?>"><span data-q-count></span> von <?= $qMax ?> Fragen, <span data-q-parts></span> Eingabefenster (je 5 Fragen)</span>
+            </div>
+            <p class="<?= $hint ?>">Die Fragen erscheinen im Discord in dieser Reihenfolge, je Fenster fünf. Die erste Frage ist nur eine Vorlage: ändere sie, oder setze mit „Frage hinzufügen“ weitere darunter. Leere Zeilen werden beim Speichern ignoriert.</p>
+            <div class="space-y-3" data-q-list>
+              <?php foreach ($rows as $i => $q): ?><?= $qRow((string) $i, $q) ?><?php endforeach; ?>
+            </div>
+            <button type="button" class="rounded-md border border-cyan-700/60 px-4 py-2 text-sm text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40" data-q-add>+ Frage hinzufügen</button>
+            <template id="tpl-q"><?= $qRow('__Q__', ['label' => '', 'hint' => '', 'required' => true, 'long' => false]) ?></template>
+          </div>
+
         <?php elseif ($section === 'zuordnung'): ?>
           <?php
             // Aktueller Wert, sonst der Vorschlag nach dem Namen; $from sagt, woher der Wert kommt.
@@ -1092,6 +1140,36 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     text.addEventListener("input", render);
     render();
   }
+  // Recruiting: Fragen hinzufügen, entfernen und verschieben; Nummern und Zähler nachführen. Die Reihenfolge der Zeilen ist die der Fragen.
+  document.querySelectorAll("[data-q-box]").forEach(function (box) {
+    var list = box.querySelector("[data-q-list]"), add = box.querySelector("[data-q-add]"), tpl = document.getElementById("tpl-q");
+    var max = +box.dataset.max, next = 1000;
+    var refresh = function () {
+      var rows = list.querySelectorAll("[data-q]");
+      rows.forEach(function (r, i) { r.querySelector("[data-q-num]").textContent = i + 1; });
+      box.querySelector("[data-q-count]").textContent = rows.length;
+      box.querySelector("[data-q-parts]").textContent = Math.ceil(rows.length / 5);
+      add.disabled = rows.length >= max;
+    };
+    add.addEventListener("click", function () {
+      if (list.querySelectorAll("[data-q]").length >= max) return;
+      var holder = document.createElement("div");
+      holder.innerHTML = tpl.innerHTML.split("__Q__").join(String(next++));
+      var row = holder.firstElementChild;
+      list.appendChild(row);
+      refresh();
+      row.querySelector("input[type=text]").focus();
+    });
+    list.addEventListener("click", function (ev) {
+      var row = ev.target.closest("[data-q]");
+      if (!row) return;
+      if (ev.target.closest("[data-q-remove]")) row.remove();
+      else if (ev.target.closest("[data-q-up]") && row.previousElementSibling) list.insertBefore(row, row.previousElementSibling);
+      else if (ev.target.closest("[data-q-down]") && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
+      refresh();
+    });
+    refresh();
+  });
   // Maßnahme: nur die passenden Felder zeigen, vor dem Ausführen nachfragen.
   var mod = document.querySelector("[data-mod-form]");
   if (mod) {

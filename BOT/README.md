@@ -24,6 +24,7 @@ an und ändert sie nicht.
 | `/orga` | Server-Admins | Einstellungen der Orga ansehen; `name:` benennt sie um, `discord_events:` schaltet die Übernahme der Discord-Events |
 | `/betreiber` | nur `SERVER_ADMIN_DISCORD_ID` | `orgas` (alle Orgas und Sperren), `sperren`, `entsperren`, `loeschen` (mit Rückfrage) |
 | `/creator` | Server-Admins | YouTube-Creator: `hinzufuegen` (Link oder @Name, Discord-Kanal, optional Rolle zum Erwähnen und ohne Shorts), `entfernen`, `liste` |
+| `/recruit` | Recruiter und Admins | Fragenkatalog für ein Bewerbungsgespräch ausfüllen (in Teilen zu 5 Fragen); die Übersicht geht in den eingestellten Kanal, Fragen, Kanal und Rollen stehen in der Web-App (siehe Abschnitt Recruiting) |
 | `/mod` | Moderatoren und Admins | `verwarnen`, `timeout`, `timeout-aufheben`, `kick`, `bann`, `entbannen`, `warnungen`, `warnung-entfernen`, `loeschen` (siehe Abschnitt Moderation) |
 | `/mod-einstellungen` | Server-Admins | Moderatoren-Rollen und Protokoll-Kanal festlegen |
 | `/automod` | Server-Admins | automatische Moderation: Spam, Einladungslinks, Links, verbotene Wörter, Massen-Erwähnungen |
@@ -84,6 +85,18 @@ neu anlegen (`docker compose up -d bot`). Beide Variablen müssen im Dienst `bot
 (`TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}`, `TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}`). Ohne beide Werte meldet der Bot
 kein Twitch; die Web-App zeigt dann einen Hinweis. Der Slash-Befehl `/creator` trägt weiter nur YouTube-Kanäle ein, zeigt aber
 alle in `liste` an.
+
+## Recruiting (`/recruit`)
+
+Ein Recruiter geht mit `/recruit` (auf Wunsch mit `bewerber:` als Auswahl) den Fragenkatalog der Orga durch. Die Antworten stehen am
+Ende als Übersicht in einem Kanal. Eingerichtet wird alles in der Web-App unter Bot, Recruiting: der Kanal für die Übersichten, die Rollen,
+die `/recruit` nutzen dürfen (Server-Admins immer), und die Fragen (Reihenfolge, Pflicht, kurzes oder langes Antwortfeld, Hilfetext).
+
+Discord erlaubt höchstens 5 Felder je Eingabefenster, die Frage darf dort 45 Zeichen lang sein, der Hilfetext 100. Der Bot teilt den
+Katalog deshalb in Teile zu je 5 Fragen (höchstens 25): `/recruit` zeigt „Teil 1 starten“, nach jedem Fenster gibt es „Weiter“. Die Antworten
+liegen zwischen den Schritten in `bot_recruit_drafts` und werden nach dem Posten, nach „Abbrechen“ oder nach 24 Stunden gelöscht. Klappt
+das Posten nicht (z. B. fehlende Rechte im Kanal), bleiben sie erhalten und „Erneut senden“ wiederholt es. Dauerhaft gespeichert wird nichts;
+die Übersicht im Kanal ist das Ergebnis. Braucht Migration `026_recruiting.sql`.
 
 ## Moderation
 

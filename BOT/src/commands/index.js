@@ -16,6 +16,7 @@ import { makeHelp } from './help.js';
 import * as panel from './panel.js';
 import * as ping from './ping.js';
 import * as profil from './profil.js';
+import * as recruit from './recruit.js';
 import * as serverregeln from './serverregeln.js';
 import * as terminNeu from './termin-neu.js';
 import * as termine from './termine.js';
@@ -23,7 +24,7 @@ import * as termineKanal from './termine-kanal.js';
 import * as werHat from './wer-hat.js';
 import * as willkommen from './willkommen.js';
 
-export const commands = [einrichten, design, abgleichen, termine, terminNeu, termineKanal, ausbildung, hangar, flotte, werHat, profil, orga, creator, mod, modEinstellungen, automod, discordSetup, willkommen, serverregeln, betreiber, ping];
+export const commands = [einrichten, design, abgleichen, termine, terminNeu, termineKanal, ausbildung, hangar, flotte, werHat, profil, orga, creator, recruit, mod, modEinstellungen, automod, discordSetup, willkommen, serverregeln, betreiber, ping];
 // /hilfe und /help zeigen alle Befehle dieser Liste (auch sich selbst)
 commands.push(
   makeHelp('hilfe', 'Übersicht aller Befehle des Bots (auch als /help)', () => commands),
@@ -33,4 +34,4 @@ commands.push(
 export const byName = new Map(commands.map((c) => [c.data.name, c]));
 
 /** Module mit Schaltflächen, Auswahlmenüs oder Eingabefenstern: handles(customId) und handleComponent(). */
-export const componentOwners = [panel, termine, terminNeu, serverregeln, betreiber, discordSetup];
+export const componentOwners = [panel, termine, terminNeu, serverregeln, betreiber, discordSetup, recruit];

@@ -19,6 +19,8 @@ import { confirm, participants, qualifications } from '../src/lib/training.js';
 import { nowDb } from '../src/db.js';
 import { createEvent, deleteEvent, setCancelled } from '../src/lib/eventadmin.js';
 import { addCreator, checkCreator, checkTwitch, listCreators, removeCreator } from '../src/lib/creators.js';
+import { execute as recruitExecute, handleComponent as recruitComponent } from '../src/commands/recruit.js';
+import { getDraft, purgeDrafts, RECRUIT_CHANNEL, RECRUIT_ROLES, saveAnswers, startDraft } from '../src/lib/recruit.js';
 import { banGuild, deleteOrg, listAllOrgs, listBans, orgCounts, renameOrg, setDiscordEventsMode, unbanGuild } from '../src/lib/orgadmin.js';
 import { activeWarnings, addCase, listCases, modRoleIds, MOD_ROLES, removeWarning } from '../src/lib/moderation.js';
 import { AUTOMOD_SETTING, DEFAULTS, guildContext, loadConfig, saveConfig } from '../src/lib/automod.js';
@@ -391,6 +393,114 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.match((await creator()).last_error, /gibt es nicht/);
     assert.equal(await removeCreator(pool, org.id, a.id), 1);
     assert.deepEqual(await listCreators(pool, org.id), []);
+  });
+
+  test('Recruiting: Fragenkatalog in Teilen durchgehen, Übersicht im Kanal, Entwurf danach weg', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Recruit-Test' }, iconUrl: null });
+    for (let i = 1; i <= 7; i++) {
+      await run(pool, 'INSERT INTO bot_recruit_questions (id, org_id, position, label, hint, required, long_answer) VALUES (?,?,?,?,?,?,?)', [newId(), org.id, i, `Frage ${i}`, i === 2 ? 'Tipp' : null, i === 7 ? 0 : 1, i === 3 ? 1 : 0]);
+    }
+    const RECRUITER = '800000000000000001';
+    const sent = [];
+    const client = { channels: { fetch: async () => ({ send: async (m) => { sent.push(m); return { url: 'https://discord.test/msg' }; } }) } };
+    const fake = (extra) => {
+      const out = { replies: [], updates: [], modals: [] };
+      const i = {
+        guildId, client, user: { id: RECRUITER, username: 'recruiter' }, memberPermissions: { has: () => false }, member: { roles: ['555'] },
+        deferReply: async () => {}, editReply: async (p) => out.replies.push(p), reply: async (p) => out.replies.push(p), update: async (p) => out.updates.push(p),
+        showModal: async (m) => out.modals.push(m), isFromMessage: () => true,
+        options: { getUser: () => null }, ...extra,
+      };
+      return [i, out];
+    };
+
+    // Ohne Rolle, ohne Kanal geht nichts
+    let [i, out] = fake({});
+    await recruitExecute(i, { pool });
+    assert.match(out.replies[0].content, /Das dürfen nur Recruiter/);
+    await setSetting(pool, org.id, RECRUIT_ROLES, '555');
+    [i, out] = fake({});
+    await recruitExecute(i, { pool });
+    assert.match(out.replies[0].content, /noch kein Kanal/);
+    await setSetting(pool, org.id, RECRUIT_CHANNEL, '901');
+
+    // Start: 7 Fragen in 2 Teilen, Bewerber als Auswahl
+    [i, out] = fake({ options: { getUser: () => ({ id: '700000000000000007', username: 'bewerber', globalName: 'Bewerberin', toString: () => '<@700000000000000007>' }) } });
+    await recruitExecute(i, { pool });
+    assert.match(out.replies[0].content, /7 Fragen in 2 Teilen/);
+    const goId = out.replies[0].components[0].components[0].custom_id;
+    const draftId = goId.split(':')[2];
+    assert.equal(goId, `recruit:go:${draftId}:0`);
+
+    // Ein anderer Recruiter darf diesen Katalog nicht öffnen
+    [i, out] = fake({ customId: goId, user: { id: '800000000000000002' } });
+    await recruitComponent(i, { pool });
+    assert.match(out.replies[0].content, /anderen Recruiters/);
+
+    // Teil 1 öffnen: 5 Felder, Hilfetext, mehrzeilig
+    [i, out] = fake({ customId: goId });
+    await recruitComponent(i, { pool });
+    assert.deepEqual(out.modals[0].components.map((r) => r.components[0].custom_id), ['q0', 'q1', 'q2', 'q3', 'q4']);
+    assert.equal(out.modals[0].components[1].components[0].placeholder, 'Tipp');
+    assert.equal(out.modals[0].components[2].components[0].style, 2);
+
+    // Teil 1 abschicken: gespeichert, „Weiter“ führt zu Teil 2
+    const fields = (map) => ({ getTextInputValue: (id) => map[id] ?? '' });
+    [i, out] = fake({ customId: `recruit:modal:${draftId}:0`, fields: fields({ q0: ' A1 ', q1: 'A2', q2: 'A3', q3: 'A4', q4: 'A5' }) });
+    await recruitComponent(i, { pool });
+    assert.match(out.updates[0].content, /Teil 1 von 2 ist gespeichert \(5 von 7/);
+    assert.equal(out.updates[0].components[0].components[0].custom_id, `recruit:go:${draftId}:1`);
+    assert.deepEqual((await getDraft(pool, org.id, draftId)).answers, { 0: 'A1', 1: 'A2', 2: 'A3', 3: 'A4', 4: 'A5' });
+    assert.equal(sent.length, 0);
+
+    // Teil 2 abschicken: Übersicht im Kanal, Entwurf gelöscht
+    [i, out] = fake({ customId: `recruit:modal:${draftId}:1`, fields: fields({ q5: 'A6', q6: '' }) });
+    await recruitComponent(i, { pool });
+    assert.match(out.updates[0].content, /Fertig\. Die Übersicht steht in <#901>/);
+    assert.equal(sent.length, 1);
+    const embed = sent[0].embeds[0];
+    assert.equal(embed.title, 'Bewerbung: Bewerberin');
+    assert.match(embed.description, new RegExp(`Recruiter: <@${RECRUITER}>`));
+    assert.deepEqual(embed.fields.map((f) => f.value), ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', '–']);
+    assert.equal(await getDraft(pool, org.id, draftId), null);
+    [i, out] = fake({ customId: goId });
+    await recruitComponent(i, { pool });
+    assert.match(out.updates[0].content, /abgelaufen oder erledigt/);
+
+    // Posten schlägt fehl: Entwurf bleibt, „Erneut senden“; Abbrechen löscht
+    const id2 = await startDraft(pool, { orgId: org.id, recruiterId: RECRUITER, questions: [{ label: 'Nur eine', hint: '', required: true, long: false }] });
+    const broken = { channels: { fetch: async () => { throw new DiscordAPIError({ message: 'Missing Access' }, 50001, 403, 'GET', 'x', {}); } } };
+    [i, out] = fake({ customId: `recruit:modal:${id2}:0`, fields: fields({ q0: 'Antwort' }), client: broken });
+    await recruitComponent(i, { pool });
+    assert.match(out.updates[0].content, /konnte nicht gepostet werden/);
+    assert.equal(out.updates[0].components[0].components[0].custom_id, `recruit:send:${id2}`);
+    [i, out] = fake({ customId: `recruit:send:${id2}` });
+    await recruitComponent(i, { pool });
+    assert.equal(sent.length, 2);
+    assert.equal(await getDraft(pool, org.id, id2), null);
+    const id3 = await startDraft(pool, { orgId: org.id, recruiterId: RECRUITER, questions: [{ label: 'x', hint: '', required: true, long: false }] });
+    [i, out] = fake({ customId: `recruit:cancel:${id3}` });
+    await recruitComponent(i, { pool });
+    assert.equal(await getDraft(pool, org.id, id3), null);
+    assert.equal(sent.length, 2, 'nach Abbrechen nichts gepostet');
+  });
+
+  test('Recruiting: ein neuer Entwurf ersetzt den alten, abgelaufene werden gelöscht', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Recruit-Test 2' }, iconUrl: null });
+    const questions = [{ label: 'Eins', hint: '', required: true, long: false }];
+    const a = await startDraft(pool, { orgId: org.id, recruiterId: '800000000000000009', questions });
+    const b = await startDraft(pool, { orgId: org.id, recruiterId: '800000000000000009', questions });
+    assert.equal(await getDraft(pool, org.id, a), null);
+    const draft = await getDraft(pool, org.id, b);
+    await saveAnswers(pool, draft, { 0: '  Ja  ' });
+    assert.deepEqual((await getDraft(pool, org.id, b)).answers, { 0: 'Ja' });
+    // 25 Stunden später ist er abgelaufen
+    assert.equal(await getDraft(pool, org.id, b, Date.now() + 25 * 3600_000), null);
+    const c = await startDraft(pool, { orgId: org.id, recruiterId: '800000000000000008', questions });
+    assert.equal(await purgeDrafts(pool, Date.now() + 25 * 3600_000) >= 1, true);
+    assert.equal(await getDraft(pool, org.id, c), null);
   });
 
   test('Twitch: neue Kanäle werden geprüft, nur neue Streams gemeldet, nicht doppelt und nicht beim Eintragen', async () => {

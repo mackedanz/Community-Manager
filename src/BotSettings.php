@@ -24,6 +24,9 @@ final class BotSettings
     public const MESSAGE_CONTENT_STATUS = 'message_content_active';
     /** Vom Bot beim Start geschrieben: '1' = Twitch-Zugangsdaten sind eingetragen, Live-Meldungen laufen. */
     public const TWITCH_STATUS = 'twitch_active';
+    /** Kanal für die Übersichten von /recruit und die Rollen (kommagetrennt), die den Befehl nutzen dürfen. */
+    public const RECRUIT_CHANNEL = 'recruit_channel_id';
+    public const RECRUIT_ROLES = 'recruit_role_ids';
 
     public const MAX_WELCOME_TEXT = 500;
     public const MAX_MOD_ROLES = 10;
@@ -41,6 +44,7 @@ final class BotSettings
         'moderation' => 'Moderation',
         'automod' => 'Automod',
         'creator' => 'Creator',
+        'recruiting' => 'Recruiting',
         'setup' => 'Discord-Setup',
         'rollen' => 'Rollen und Rechte',
     ];
@@ -112,6 +116,7 @@ final class BotSettings
             'willkommen' => isset($all[self::WELCOME_CHANNEL]),
             'moderation' => isset($all[self::MOD_ROLES]) || isset($all[self::MOD_LOG_CHANNEL]),
             'automod' => self::automodActive(self::automod($all)),
+            'recruiting' => isset($all[self::RECRUIT_CHANNEL]),
         ];
     }
 
@@ -181,6 +186,10 @@ final class BotSettings
                 $ids = self::modRoleIds($post, $roleIds);
                 $values = [self::MOD_ROLES => implode(',', $ids), self::MOD_LOG_CHANNEL => $channel('modLogChannel')];
                 break;
+            case 'recruiting':
+                $ids = self::modRoleIds($post, $roleIds, 'recruitRoles');
+                $values = [self::RECRUIT_CHANNEL => $channel('recruitChannel'), self::RECRUIT_ROLES => $ids === [] ? null : implode(',', $ids)];
+                break;
             case 'zuordnung':
                 // Leer = unverändert; nur was gewählt wurde, wird eingetragen.
                 $values = [];
@@ -245,10 +254,10 @@ final class BotSettings
     }
 
     /** Moderatoren-Rollen aus dem Formular (ohne Doppelte, höchstens MAX_MOD_ROLES). @param array<string,mixed> $post @param ?list<string> $roleIds @return list<string> @throws OrgError */
-    private static function modRoleIds(array $post, ?array $roleIds): array
+    private static function modRoleIds(array $post, ?array $roleIds, string $key = 'modRoles'): array
     {
         $ids = [];
-        foreach (is_array($post['modRoles'] ?? null) ? $post['modRoles'] : [] as $id) {
+        foreach (is_array($post[$key] ?? null) ? $post[$key] : [] as $id) {
             $id = self::checkId(trim((string) $id), $roleIds, 'Rolle');
             if ($id !== null && !in_array($id, $ids, true)) {
                 $ids[] = $id;

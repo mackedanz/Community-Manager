@@ -4,12 +4,14 @@ import { MessageFlags } from 'discord.js';
 import { orgForGuild } from '../db.js';
 import { isGuildAdmin, memberRoleIds } from '../lib/guild.js';
 import { canModerate, modRoleIds } from '../lib/moderation.js';
+import { canRecruit, recruitRoleIds } from '../lib/recruit.js';
 
 const GROUPS = [
   ['everyone', 'Für alle'],
   ['members', 'Für Mitglieder der Orga'],
   ['planners', 'Für Planer und Admins'],
   ['mods', 'Für Moderatoren und Admins'],
+  ['recruiters', 'Für Recruiter und Admins'],
   ['admins', 'Für Server-Admins'],
   ['operator', 'Für den Betreiber der Installation'],
 ];
@@ -28,12 +30,13 @@ export function usage(data) {
 }
 
 /** Text der Übersicht. ids: Befehlsname => ID bei Discord (dann sind die Befehle anklickbar). */
-export function helpText(commands, { admin, mod = false, operator = false, ids = new Map(), appUrl }) {
+export function helpText(commands, { admin, mod = false, recruiter = false, operator = false, ids = new Map(), appUrl }) {
   const seen = new Set();
   const sections = [];
   for (const [group, title] of GROUPS) {
     if (group === 'admins' && !admin) continue;
     if (group === 'mods' && !admin && !mod) continue;
+    if (group === 'recruiters' && !admin && !recruiter) continue;
     if (group === 'operator' && !operator) continue;
     const lines = commands
       .filter((c) => audienceOf(c) === group && !c.hideInHelp && !seen.has(c.data.name))
@@ -75,15 +78,19 @@ export function makeHelp(name, description, getCommands) {
       const admin = isGuildAdmin(interaction);
       // Moderatoren sehen die Moderationsbefehle auch ohne Admin-Rechte; fehlt die Tabelle noch, bleibt es bei Admins
       let mod = false;
+      let recruiter = false;
       try {
         const org = await orgForGuild(pool, interaction.guildId);
         mod = org !== null && canModerate({ admin, roles: memberRoleIds(interaction) }, await modRoleIds(pool, org.id));
+        recruiter = org !== null && canRecruit({ admin, roles: memberRoleIds(interaction) }, await recruitRoleIds(pool, org.id));
       } catch {
         mod = false;
+        recruiter = false;
       }
       const text = helpText(getCommands(), {
         admin,
         mod,
+        recruiter,
         operator: config.serverAdminIds.includes(interaction.user.id),
         ids: await commandIds(interaction.client),
         appUrl: config.appUrl,

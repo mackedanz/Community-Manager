@@ -22,6 +22,7 @@ use Hangar\Http\Request;
 use Hangar\Http\Response;
 use Hangar\Moderation;
 use Hangar\OrgError;
+use Hangar\Recruiting;
 
 /** Einstellungen des Discord-Bots im Web (nur Orga-Admins), als Alternative zu den Slash-Befehlen. */
 final class BotController extends Controller
@@ -118,6 +119,7 @@ final class BotController extends Controller
         $modAction = (string) $req->query('a', '');
         $modPage = max(1, (int) $req->query('p', '1'));
         $modCases = $section === 'faelle' ? Moderation::cases($org['id'], $modQuery, $modAction, $modPage) : ['rows' => [], 'total' => 0];
+        $recruitQuestions = $section === 'recruiting' ? Recruiting::questions($org['id']) : [];
         $creators = $section === 'creator' ? Creators::list($org['id']) : [];
         $suggest = $section === 'zuordnung' ? BotSettings::suggest($all, $lists['channels'] ?? [], $lists['roles'] ?? []) : [];
         $cases = [];
@@ -141,6 +143,7 @@ final class BotController extends Controller
             'cases' => $cases,
             'suggest' => $suggest,
             'creators' => $creators,
+            'recruitQuestions' => $recruitQuestions,
             'rights' => $rights,
             'twitchActive' => BotSettings::twitchActive($all),
             'guildId' => (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]),
@@ -574,7 +577,12 @@ final class BotController extends Controller
         }
         $known = static fn (?array $list): ?array => $list === null ? null : array_merge(array_column($list, 'id'), $stored);
         try {
+            // Beim Recruiting gehört der Fragenkatalog dazu: erst alles prüfen, dann speichern
+            $questions = $section === 'recruiting' ? Recruiting::parse($req->post) : null;
             BotSettings::save($org['id'], $section, $req->post, $known($lists['channels']), $known($lists['roles']));
+            if ($questions !== null) {
+                Recruiting::save($org['id'], $questions);
+            }
         } catch (OrgError $e) {
             return Flash::error($to, $e->getMessage());
         }
