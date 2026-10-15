@@ -124,6 +124,7 @@ final class BotController extends Controller
             'cases' => $cases,
             'suggest' => $suggest,
             'creators' => $creators,
+            'twitchActive' => BotSettings::twitchActive($all),
             'guildId' => (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]),
             'modCases' => $modCases,
             'modQuery' => $modQuery,
@@ -251,11 +252,18 @@ final class BotController extends Controller
         $to = '/o/' . $org['slug'] . '/bot?m=creator';
         try {
             [$channel, $role] = self::creatorTarget($req, $org['id']);
-            $r = Creators::add($org['id'], (string) $req->input('youtube', ''), $channel, $role, $req->input('skipShorts', '') === '1');
+            $platform = (string) $req->input('platform', 'youtube');
+            if (!isset(Creators::PLATFORMS[$platform])) {
+                throw new OrgError('Diese Plattform gibt es nicht.');
+            }
+            $r = Creators::add($org['id'], (string) $req->input('source', ''), $channel, $role, $req->input('skipShorts', '') === '1', $platform);
         } catch (OrgError $e) {
             return Flash::error($to, 'Nicht hinzugefügt: ' . $e->getMessage());
         }
-        return Flash::ok($to, ($r['updated'] ? 'Geändert: ' : 'Hinzugefügt: ') . $r['name'] . '. Ab jetzt postet der Bot jedes neue Video (geprüft wird alle 10 Minuten). Bisherige Videos werden nicht nachträglich gepostet.');
+        $what = $platform === 'twitch'
+            ? 'Der Bot prüft den Kanal bei Twitch (innerhalb von 2 Minuten) und meldet dann jeden Stream, der live geht. Läuft der Kanal schon, wird erst der nächste gemeldet.'
+            : 'Ab jetzt postet der Bot jedes neue Video (geprüft wird alle 10 Minuten). Bisherige Videos werden nicht nachträglich gepostet.';
+        return Flash::ok($to, ($r['updated'] ? 'Geändert: ' : 'Hinzugefügt: ') . $r['name'] . '. ' . $what);
     }
 
     /** Ändert Discord-Kanal, Rolle und Shorts eines Creators. */

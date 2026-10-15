@@ -36,15 +36,17 @@ const unix = (dbTime) => Math.floor(Date.parse(`${dbTime.replace(' ', 'T')}Z`) /
 /** Übersicht aller Creator. */
 export function creatorsEmbed(org, creators) {
   const lines = creators.map((c) => {
-    const extras = [c.mention_role_id ? `erwähnt <@&${c.mention_role_id}>` : null, Number(c.skip_shorts) ? 'ohne Shorts' : null].filter(Boolean).join(', ');
+    const twitch = c.platform === 'twitch';
+    const extras = [twitch ? 'Twitch, Live-Meldung' : null, c.mention_role_id ? `erwähnt <@&${c.mention_role_id}>` : null, Number(c.skip_shorts) ? 'ohne Shorts' : null].filter(Boolean).join(', ');
     const state = c.last_error ? ` – ⚠ ${c.last_error}` : c.checked_at ? ` – geprüft <t:${unix(c.checked_at)}:R>` : '';
-    return `**[${c.name}](https://www.youtube.com/channel/${c.channel_id})** → <#${c.discord_channel_id}>${extras ? ` (${extras})` : ''}${state}`;
+    const url = twitch ? `https://www.twitch.tv/${c.channel_id}` : `https://www.youtube.com/channel/${c.channel_id}`;
+    return `**[${c.name}](${url})** → <#${c.discord_channel_id}>${extras ? ` (${extras})` : ''}${state}`;
   });
   return {
     title: cut(`Creator – ${org.name} (${creators.length}/${MAX_CREATORS})`, 256),
     description: cut(lines.length > 0 ? lines.join('\n') : 'Noch keine Creator. Hinzufügen mit /creator hinzufuegen.', 4000),
     color: 0x0ea5e9,
-    footer: { text: 'Der Bot schaut alle 10 Minuten nach neuen Videos.' },
+    footer: { text: 'Der Bot schaut alle 10 Minuten nach neuen Videos (Twitch: alle 2 Minuten nach Live-Streams).' },
   };
 }
 

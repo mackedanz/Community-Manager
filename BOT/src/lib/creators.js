@@ -109,3 +109,84 @@ export async function checkCreator(pool, client, creator, { fetchFn = fetch, log
   await run(pool, 'UPDATE bot_creators SET name = ?, checked_at = ?, last_error = ? WHERE id = ?', [cut(feed.name ?? creator.name, 190), nowDb(), error, creator.id]);
   return posted;
 }
+
+/** Nach einer Meldung wird derselbe Kanal 30 Minuten lang nicht erneut gemeldet (Twitch vergibt nach einem Verbindungsabbruch oft eine neue Stream-ID). */
+export const NOTIFY_COOLDOWN_MS = 30 * 60_000;
+
+const dbMs = (dbTime) => Date.parse(`${String(dbTime).replace(' ', 'T')}Z`);
+
+/** Text der Nachricht, wenn ein Twitch-Kanal live geht; Discord zeigt den Link als Vorschau. */
+export function liveMessage(creator, stream) {
+  const ping = creator.mention_role_id ? `<@&${creator.mention_role_id}> ` : '';
+  const game = stream.game ? ` (${stream.game})` : '';
+  return {
+    content: `${ping}**${creator.name}** ist live auf Twitch: **${stream.title || 'ohne Titel'}**${game}\nhttps://www.twitch.tv/${creator.channel_id}`,
+    allowedMentions: creator.mention_role_id ? { roles: [creator.mention_role_id] } : { parse: [] },
+  };
+}
+
+/**
+ * Twitch-Creator prüfen: neue Kanäle bei Twitch nachschlagen (Anzeigename, oder Fehler, wenn es sie nicht gibt), dann mit einer
+ * Abfrage für alle sehen, wer live ist, und je neuem Stream einmal melden. Ein Kanal, der schon beim Eintragen live ist, meldet
+ * sich erst mit dem nächsten Stream. Der Stream wird vor dem Posten vermerkt, damit auch ein Neustart nichts doppelt meldet.
+ * @param {Array<object>} creators Zeilen aus bot_creators mit platform = 'twitch'
+ * @param {{users: Function, streams: Function}} twitch Ergebnis von createTwitch()
+ * @returns {Promise<number>} Anzahl Meldungen @throws {OrgError} wenn Twitch nicht zu erreichen ist
+ */
+export async function checkTwitch(pool, client, creators, twitch, { log, now = Date.now() } = {}) {
+  const baseline = new Set();
+  const fresh = creators.filter((c) => !Number(c.resolved));
+  const known = fresh.length > 0 ? await twitch.users([...new Set(fresh.map((c) => c.channel_id))]) : new Map();
+  const active = [];
+  for (const c of creators) {
+    if (Number(c.resolved)) {
+      active.push(c);
+      continue;
+    }
+    const u = known.get(c.channel_id);
+    if (u === undefined) {
+      await run(pool, 'UPDATE bot_creators SET checked_at = ?, last_error = ? WHERE id = ?', [nowDb(), 'Diesen Twitch-Kanal gibt es nicht.', c.id]);
+      continue;
+    }
+    await run(pool, 'UPDATE bot_creators SET resolved = 1, name = ?, last_error = NULL WHERE id = ?', [cut(u.name, 190), c.id]);
+    c.name = u.name;
+    baseline.add(c.id);
+    active.push(c);
+  }
+  if (active.length === 0) return 0;
+
+  const live = await twitch.streams([...new Set(active.map((c) => c.channel_id))]);
+  let posted = 0;
+  for (const c of active) {
+    const s = live.get(c.channel_id);
+    let error = null;
+    if (s !== undefined && s.id !== c.last_stream_id) {
+      // Wer den Stream zuerst vermerkt, meldet ihn (verhindert Doppelte, falls zwei Läufe sich überschneiden)
+      const claimed = await run(pool, 'UPDATE bot_creators SET last_stream_id = ? WHERE id = ? AND (last_stream_id IS NULL OR last_stream_id <> ?)', [s.id, c.id, s.id]);
+      const cooling = c.notified_at && now - dbMs(c.notified_at) < NOTIFY_COOLDOWN_MS;
+      if (claimed > 0 && !baseline.has(c.id) && !cooling) {
+        let channel = null;
+        try {
+          channel = await client.channels.fetch(c.discord_channel_id);
+        } catch (err) {
+          if (!(err instanceof DiscordAPIError)) throw err;
+        }
+        if (channel === null) {
+          error = 'Der Discord-Kanal ist nicht erreichbar (gelöscht oder keine Rechte).';
+        } else {
+          try {
+            await channel.send(liveMessage(c, s));
+            await run(pool, 'UPDATE bot_creators SET notified_at = ? WHERE id = ?', [nowDb(), c.id]);
+            posted++;
+          } catch (err) {
+            if (!(err instanceof DiscordAPIError)) throw err;
+            error = `Posten nicht möglich: ${err.message}`;
+            log?.warn(`Live-Meldung von ${c.name} nicht gepostet: ${err.message}`);
+          }
+        }
+      }
+    }
+    await run(pool, 'UPDATE bot_creators SET checked_at = ?, last_error = ? WHERE id = ?', [nowDb(), error, c.id]);
+  }
+  return posted;
+}

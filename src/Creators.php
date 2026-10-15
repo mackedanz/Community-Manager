@@ -25,6 +25,19 @@ final class Creators
         'Cookie' => 'SOCS=CAI; CONSENT=YES+1',
     ];
 
+    public const PLATFORMS = ['youtube' => 'YouTube', 'twitch' => 'Twitch'];
+
+    /** Anmeldename aus einem Link (twitch.tv/name), @Name oder dem Namen selbst, klein geschrieben; null, wenn es keiner sein kann. */
+    public static function parseTwitchLogin(string $input): ?string
+    {
+        $s = trim($input);
+        if (preg_match('~^(?:https?://)?(?:www\.|m\.)?twitch\.tv/([A-Za-z0-9_]+)/?(?:[?#].*)?$~i', $s, $m) === 1) {
+            $s = $m[1];
+        }
+        $s = strtolower(ltrim($s, '@'));
+        return preg_match('/^[a-z0-9_]{3,25}$/', $s) === 1 ? $s : null;
+    }
+
     /** @return list<array<string,mixed>> */
     public static function list(string $orgId): array
     {
@@ -136,8 +149,11 @@ final class Creators
      * Creator hinzufügen oder Kanal, Rolle und Shorts eines vorhandenen ändern. Videos, die schon im Feed stehen, gelten als bekannt.
      * @return array{id:string,updated:bool,name:string} @throws OrgError
      */
-    public static function add(string $orgId, string $input, string $discordChannelId, ?string $roleId, bool $skipShorts): array
+    public static function add(string $orgId, string $input, string $discordChannelId, ?string $roleId, bool $skipShorts, string $platform = 'youtube'): array
     {
+        if ($platform === 'twitch') {
+            return self::addTwitch($orgId, $input, $discordChannelId, $roleId);
+        }
         $yt = self::resolve($input);
         $existing = Db::val("SELECT id FROM bot_creators WHERE org_id = ? AND platform = 'youtube' AND channel_id = ?", [$orgId, $yt['channelId']]);
         if ($existing === null || $existing === false) {
@@ -160,6 +176,30 @@ final class Creators
             Db::run('INSERT IGNORE INTO bot_creator_videos (creator_id, video_id) VALUES (?, ?)', [$id, $v['id']]);
         }
         return ['id' => $id, 'updated' => $existing !== null && $existing !== false, 'name' => $yt['name']];
+    }
+
+    /**
+     * Twitch-Kanal eintragen (oder Discord-Kanal und Rolle eines vorhandenen ändern). Die Web-App fragt Twitch nicht selbst: der Bot prüft
+     * den Kanal beim nächsten Durchlauf (resolved = 0), trägt den Anzeigenamen ein oder meldet in last_error, dass es ihn nicht gibt.
+     * @return array{id:string,updated:bool,name:string} @throws OrgError
+     */
+    private static function addTwitch(string $orgId, string $input, string $discordChannelId, ?string $roleId): array
+    {
+        $login = self::parseTwitchLogin($input) ?? throw new OrgError('Das sieht nicht nach einem Twitch-Kanal aus. Erlaubt: Link zum Kanal (twitch.tv/name), @Name oder der Anmeldename (3 bis 25 Zeichen: Buchstaben, Ziffern, Unterstrich).');
+        $existing = Db::val("SELECT id FROM bot_creators WHERE org_id = ? AND platform = 'twitch' AND channel_id = ?", [$orgId, $login]);
+        if ($existing !== null && $existing !== false) {
+            Db::run('UPDATE bot_creators SET discord_channel_id = ?, mention_role_id = ?, last_error = NULL WHERE id = ?', [$discordChannelId, $roleId, (string) $existing]);
+            return ['id' => (string) $existing, 'updated' => true, 'name' => $login];
+        }
+        if ((int) Db::val('SELECT COUNT(*) FROM bot_creators WHERE org_id = ?', [$orgId]) >= self::MAX) {
+            throw new OrgError('Höchstens ' . self::MAX . ' Creator je Orga.');
+        }
+        $id = new_id();
+        Db::run(
+            "INSERT INTO bot_creators (id, org_id, platform, channel_id, name, discord_channel_id, mention_role_id, skip_shorts, resolved) VALUES (?, ?, 'twitch', ?, ?, ?, ?, 0, 0)",
+            [$id, $orgId, $login, $login, $discordChannelId, $roleId],
+        );
+        return ['id' => $id, 'updated' => false, 'name' => $login];
     }
 
     /** Ändert nur Kanal, Rolle und Shorts eines Creators (ohne YouTube zu fragen). @throws OrgError */

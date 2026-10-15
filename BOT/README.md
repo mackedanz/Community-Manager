@@ -69,7 +69,21 @@ Ersatz für die YouTube-Benachrichtigungen von MEE6: Alle 10 Minuten liest der B
 `/creator hinzufuegen` eingetragenen YouTube-Kanals (ohne API-Schlüssel) und postet neue Videos in den gewählten Kanal,
 auf Wunsch mit Erwähnung einer Rolle. Beim Hinzufügen gelten alle vorhandenen Videos als bekannt, gepostet wird erst das
 nächste. Jedes Video erscheint nur einmal, auch nach einem Neustart. Braucht Migration `021_bot_creators.sql`.
-Twitch-Livestreams sind noch nicht dabei (bräuchten einen Twitch-API-Zugang).
+
+### Twitch: Live-Meldungen
+
+Der Bot meldet im gewählten Discord-Kanal (auf Wunsch mit Erwähnung einer Rolle), wenn ein eingetragener Twitch-Kanal live geht:
+„**Name** ist live auf Twitch: Titel (Spiel)“ mit Link. Eingetragen wird in der Web-App (Bot, Creator, Plattform „Twitch“; Link,
+@Name oder Anmeldename). Alle 2 Minuten fragt der Bot Twitch mit einer Abfrage für alle Kanäle ab. Jeder Stream wird nur einmal
+gemeldet, auch nach einem Neustart; ein Kanal, der beim Eintragen schon live ist, meldet sich erst mit dem nächsten Stream; nach
+einem Verbindungsabbruch gibt es innerhalb von 30 Minuten keine zweite Meldung. Braucht Migration `025_creator_twitch.sql`.
+
+Einrichten: auf https://dev.twitch.tv/console eine Anwendung registrieren (Kategorie z. B. „Chat Bot“, Weiterleitungs-Adresse
+`http://localhost`), Client-ID und -Geheimnis als `TWITCH_CLIENT_ID` und `TWITCH_CLIENT_SECRET` in die `.env` eintragen und den Bot
+neu anlegen (`docker compose up -d bot`). Beide Variablen müssen im Dienst `bot` der `docker-compose.yml` durchgereicht werden
+(`TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}`, `TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}`). Ohne beide Werte meldet der Bot
+kein Twitch; die Web-App zeigt dann einen Hinweis. Der Slash-Befehl `/creator` trägt weiter nur YouTube-Kanäle ein, zeigt aber
+alle in `liste` an.
 
 ## Moderation
 

@@ -6,7 +6,8 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
-import { createPool, one, run, val } from '../src/db.js';
+import { DiscordAPIError } from 'discord.js';
+import { all, createPool, one, run, val } from '../src/db.js';
 import { ensureOrg, setRoles, syncAllowlist } from '../src/lib/onboarding.js';
 import { connect, sync } from '../src/lib/rsi.js';
 import { current, reset, setImage, setOpacity } from '../src/lib/branding.js';
@@ -17,7 +18,7 @@ import { ANNOUNCE_CHANNEL, setSetting } from '../src/lib/settings.js';
 import { confirm, participants, qualifications } from '../src/lib/training.js';
 import { nowDb } from '../src/db.js';
 import { createEvent, deleteEvent, setCancelled } from '../src/lib/eventadmin.js';
-import { addCreator, checkCreator, listCreators, removeCreator } from '../src/lib/creators.js';
+import { addCreator, checkCreator, checkTwitch, listCreators, removeCreator } from '../src/lib/creators.js';
 import { banGuild, deleteOrg, listAllOrgs, listBans, orgCounts, renameOrg, setDiscordEventsMode, unbanGuild } from '../src/lib/orgadmin.js';
 import { activeWarnings, addCase, listCases, modRoleIds, MOD_ROLES, removeWarning } from '../src/lib/moderation.js';
 import { AUTOMOD_SETTING, DEFAULTS, guildContext, loadConfig, saveConfig } from '../src/lib/automod.js';
@@ -390,6 +391,55 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.match((await creator()).last_error, /gibt es nicht/);
     assert.equal(await removeCreator(pool, org.id, a.id), 1);
     assert.deepEqual(await listCreators(pool, org.id), []);
+  });
+
+  test('Twitch: neue Kanäle werden geprüft, nur neue Streams gemeldet, nicht doppelt und nicht beim Eintragen', async () => {
+    const guildId = freshGuild();
+    const org = await ensureOrg(pool, config, { guildId, invokerId: '300000000000000001', invokerName: 'Micha', guild: { name: 'Twitch-Test' }, iconUrl: null });
+    // So legt die Web-App den Kanal an: ungeprüft, Name = Anmeldename
+    const id = newId();
+    await run(pool, "INSERT INTO bot_creators (id, org_id, platform, channel_id, name, discord_channel_id, mention_role_id, resolved) VALUES (?,?, 'twitch', 'knusper', 'knusper', '901', '42', 0)", [id, org.id]);
+    const bad = newId();
+    await run(pool, "INSERT INTO bot_creators (id, org_id, platform, channel_id, name, discord_channel_id, resolved) VALUES (?,?, 'twitch', 'gibtsnicht', 'gibtsnicht', '901', 0)", [bad, org.id]);
+
+    let live = new Map([['knusper', { id: '500', title: 'Abend', game: 'Star Citizen', name: 'Knusper' }]]);
+    const twitch = {
+      users: async (logins) => new Map(logins.filter((l) => l === 'knusper').map((l) => [l, { id: '1', login: l, name: 'Knusper' }])),
+      streams: async () => live,
+    };
+    const sent = [];
+    const client = { channels: { fetch: async () => ({ send: async (m) => sent.push(m) }) } };
+    const rows = async () => (await all(pool, "SELECT * FROM bot_creators WHERE org_id = ? AND platform = 'twitch' ORDER BY channel_id", [org.id]));
+    const t0 = Date.now();
+
+    // Schon beim Eintragen live: gilt als bekannt, keine Meldung. Unbekannter Kanal: Fehler.
+    assert.equal(await checkTwitch(pool, client, await rows(), twitch, { now: t0 }), 0);
+    let [unknown, knusper] = await rows();
+    assert.deepEqual([knusper.name, Number(knusper.resolved), knusper.last_stream_id], ['Knusper', 1, '500']);
+    assert.match(unknown.last_error, /gibt es nicht/);
+    assert.equal(Number(unknown.resolved), 0);
+    assert.equal(sent.length, 0);
+
+    // Derselbe Stream läuft weiter: nichts. Neuer Stream: eine Meldung mit Rolle.
+    assert.equal(await checkTwitch(pool, client, await rows(), twitch, { now: t0 + 1 }), 0);
+    live = new Map([['knusper', { id: '501', title: 'Neuer Stream', game: '', name: 'Knusper' }]]);
+    assert.equal(await checkTwitch(pool, client, await rows(), twitch, { now: t0 + 2 }), 1);
+    assert.match(sent[0].content, /^<@&42> \*\*Knusper\*\* ist live auf Twitch: \*\*Neuer Stream\*\*/);
+    assert.equal(await checkTwitch(pool, client, await rows(), twitch, { now: t0 + 3 }), 0, 'kein zweites Mal');
+
+    // Verbindungsabbruch mit neuer Stream-ID innerhalb von 30 Minuten: keine zweite Meldung; danach wieder
+    live = new Map([['knusper', { id: '502', title: 'Zurück', game: '', name: 'Knusper' }]]);
+    assert.equal(await checkTwitch(pool, client, await rows(), twitch, { now: t0 + 5 * 60_000 }), 0);
+    assert.equal((await rows())[1].last_stream_id, '502');
+    live = new Map([['knusper', { id: '503', title: 'Später', game: '', name: 'Knusper' }]]);
+    assert.equal(await checkTwitch(pool, client, await rows(), twitch, { now: t0 + 3 * 3600_000 }), 1);
+    assert.equal(sent.length, 2);
+
+    // Discord-Kanal nicht erreichbar: Fehler wird gemerkt
+    live = new Map([['knusper', { id: '504', title: 'x', game: '', name: 'Knusper' }]]);
+    const broken = { channels: { fetch: async () => { throw new DiscordAPIError({ message: 'weg' }, 10003, 404, 'GET', 'x', {}); } } };
+    assert.equal(await checkTwitch(pool, broken, await rows(), twitch, { now: t0 + 9 * 3600_000 }), 0);
+    assert.match((await rows())[1].last_error, /nicht erreichbar/);
   });
 
   test('Moderation: Fälle speichern, Verwarnungen zählen und zurücknehmen, Moderatoren-Rollen', async () => {

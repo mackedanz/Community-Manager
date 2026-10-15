@@ -2,7 +2,9 @@
 import { Client, Events, GatewayIntentBits, MessageFlags, Options, Partials } from 'discord.js';
 import { readConfig, ConfigError } from './config.js';
 import { createPool, checkDatabase, orgForGuild } from './db.js';
-import { MESSAGE_CONTENT_STATUS, setSetting } from './lib/settings.js';
+import { MESSAGE_CONTENT_STATUS, setSetting, TWITCH_STATUS } from './lib/settings.js';
+import { createTwitch } from './lib/twitch.js';
+import { startTwitchWatch } from './workers/twitch.js';
 import { byName, componentOwners } from './commands/index.js';
 import { registerAutomod } from './events/automod.js';
 import { registerMemberEvents } from './events/members.js';
@@ -57,6 +59,8 @@ if (config.messageContent) {
 const announcer = startAnnouncer(client, { pool, config, log });
 // Neue Videos der Creator (alle 10 Minuten)
 const creatorWatch = startCreatorWatch(client, { pool, log });
+// Twitch-Live-Meldungen (alle 2 Minuten, nur mit TWITCH_CLIENT_ID und TWITCH_CLIENT_SECRET)
+const twitchWatch = startTwitchWatch(client, { pool, log, twitch: config.twitch ? createTwitch(config.twitch) : null });
 
 client.once(Events.ClientReady, async (c) => {
   log.info(`Angemeldet als ${c.user.tag} auf ${c.guilds.cache.size} Server(n)`);
@@ -64,7 +68,10 @@ client.once(Events.ClientReady, async (c) => {
   for (const guild of c.guilds.cache.values()) {
     try {
       const org = await orgForGuild(pool, guild.id);
-      if (org) await setSetting(pool, org.id, MESSAGE_CONTENT_STATUS, config.messageContent ? '1' : '0');
+      if (org) {
+        await setSetting(pool, org.id, MESSAGE_CONTENT_STATUS, config.messageContent ? '1' : '0');
+        await setSetting(pool, org.id, TWITCH_STATUS, config.twitch ? '1' : '0');
+      }
     } catch (err) {
       log.warn(`Status für ${guild.id} konnte nicht gespeichert werden: ${err.code ?? err.message}`);
     }
@@ -118,6 +125,7 @@ async function shutdown(signal) {
   memberSync.stop();
   announcer.stop();
   creatorWatch.stop();
+  twitchWatch.stop();
   await client.destroy();
   await pool.end();
 }
@@ -138,6 +146,7 @@ try {
   memberSync.stop();
   announcer.stop();
   creatorWatch.stop();
+  twitchWatch.stop();
   await client.destroy();
   await pool.end();
   process.exitCode = 1;

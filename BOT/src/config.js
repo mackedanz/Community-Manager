@@ -52,6 +52,10 @@ export function readConfig(env = process.env) {
     // Automod und Nachrichten-Protokoll brauchen den Intent "Message Content" (Developer Portal -> Bot); ohne diesen Schalter bleiben sie aus
     messageContent: ['1', 'true', 'yes', 'on'].includes((value(env, 'BOT_MESSAGE_CONTENT') ?? '').toLowerCase()),
     applicationId: value(env, 'AUTH_DISCORD_ID'),
+    // Twitch-Live-Meldungen: Anwendung auf dev.twitch.tv (Client-ID und -Geheimnis); ohne beide meldet der Bot kein Twitch
+    twitch: value(env, 'TWITCH_CLIENT_ID') !== null && value(env, 'TWITCH_CLIENT_SECRET') !== null
+      ? { clientId: value(env, 'TWITCH_CLIENT_ID'), clientSecret: value(env, 'TWITCH_CLIENT_SECRET') }
+      : null,
     // Nur für die Entwicklung: Befehle sofort auf diesem einen Server statt global registrieren
     devGuildId: value(env, 'BOT_DEV_GUILD_ID'),
     db: {

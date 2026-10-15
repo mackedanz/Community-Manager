@@ -6,6 +6,7 @@ namespace Hangar\Tests;
 
 use Hangar\App;
 use Hangar\Auth;
+use Hangar\BotSettings;
 use Hangar\Creators;
 use Hangar\Db;
 use Hangar\Env;
@@ -23,6 +24,8 @@ final class CreatorsTest extends DbTestCase
     /** @var array<string,array{token:string,csrf:string}> */
     private array $u = [];
     private int $feedStatus = 200;
+    /** @var list<string> */
+    private array $httpLog = [];
 
     protected function setUp(): void
     {
@@ -37,6 +40,7 @@ final class CreatorsTest extends DbTestCase
         }
         Env::set('DISCORD_BOT_TOKEN', 'bot-token');
         Client::fake(function (string $method, string $url): array {
+            $this->httpLog[] = $url;
             $json = static fn (mixed $b): array => ['status' => 200, 'body' => json_encode($b), 'headers' => []];
             if (str_contains($url, 'youtube.com/feeds/videos.xml')) {
                 return ['status' => $this->feedStatus, 'headers' => [], 'body' => '<feed><author><name>Space &amp; Co</name></author>'
@@ -79,17 +83,64 @@ final class CreatorsTest extends DbTestCase
         $this->assertTrue($feed['videos'][0]['short']);
     }
 
+    public function testParsesTwitchInputs(): void
+    {
+        $this->assertSame('star_citizen', Creators::parseTwitchLogin('https://www.twitch.tv/Star_Citizen'));
+        $this->assertSame('knusper', Creators::parseTwitchLogin('twitch.tv/Knusper/'));
+        $this->assertSame('fhexy', Creators::parseTwitchLogin('@Fhexy'));
+        $this->assertSame('dieloge', Creators::parseTwitchLogin(' DieLoge '));
+        foreach (['ab', 'mit leerzeichen', 'https://example.com/abc', ''] as $bad) {
+            $this->assertNull(Creators::parseTwitchLogin($bad), $bad);
+        }
+    }
+
+    public function testTwitchChannelIsStoredUncheckedWithoutAskingTwitch(): void
+    {
+        $this->post('add', ['platform' => 'twitch', 'source' => 'https://www.twitch.tv/Knusper', 'channel' => '11', 'role' => '20', 'skipShorts' => '1']);
+        $row = Creators::list($this->orgId)[0];
+        $this->assertSame(['twitch', 'knusper', 'knusper', '11', '20', '0', '0'], [
+            $row['platform'], $row['channel_id'], $row['name'], $row['discord_channel_id'], $row['mention_role_id'], (string) $row['skip_shorts'], (string) $row['resolved'],
+        ]);
+        $this->assertNull($row['checked_at']);
+        $this->assertSame([], array_filter($this->httpLog, static fn ($u) => str_contains($u, 'twitch')));
+
+        // Seite: Plattform, Prüfhinweis, Twitch-Hinweis ohne Zugangsdaten
+        $html = $this->page()->body;
+        $this->assertStringContainsString('https://www.twitch.tv/knusper', $html);
+        $this->assertStringContainsString('wird vom Bot bei Twitch geprüft', $html);
+        $this->assertStringContainsString('meldet Live-Streams', $html);
+        $this->assertStringContainsString('TWITCH_CLIENT_ID', $html);
+
+        // Derselbe Kanal noch einmal ändert nur Discord-Kanal und Rolle; YouTube mit gleichem Namen ist ein anderer Eintrag.
+        $this->post('add', ['platform' => 'twitch', 'source' => '@knusper', 'channel' => '12']);
+        $rows = Creators::list($this->orgId);
+        $this->assertCount(1, $rows);
+        $this->assertSame(['12', null], [$rows[0]['discord_channel_id'], $rows[0]['mention_role_id']]);
+
+        // Meldet der Bot Twitch als eingerichtet, verschwindet der Hinweis.
+        BotSettings::set($this->orgId, BotSettings::TWITCH_STATUS, '1');
+        $this->assertStringNotContainsString('TWITCH_CLIENT_ID', $this->page()->body);
+    }
+
+    public function testRejectsBadTwitchInputAndUnknownPlatforms(): void
+    {
+        $this->post('add', ['platform' => 'twitch', 'source' => 'zu kurz!', 'channel' => '11']);
+        $this->post('add', ['platform' => 'twitch', 'source' => 'knusper', 'channel' => '999']);
+        $this->post('add', ['platform' => 'tiktok', 'source' => 'knusper', 'channel' => '11']);
+        $this->assertSame([], Creators::list($this->orgId));
+    }
+
     public function testOnlyAdminsCanUseIt(): void
     {
         $this->assertSame(404, $this->page('member')->status);
-        $this->assertSame(404, $this->post('add', ['youtube' => '@SpaceCo', 'channel' => '11'], 'member')->status);
+        $this->assertSame(404, $this->post('add', ['source' => '@SpaceCo', 'channel' => '11'], 'member')->status);
         $this->assertSame([], Creators::list($this->orgId));
         $this->assertSame(200, $this->page()->status);
     }
 
     public function testAddResolvesTheChannelAndMarksExistingVideosAsKnown(): void
     {
-        $res = $this->post('add', ['youtube' => '@SpaceCo', 'channel' => '11', 'role' => '20', 'skipShorts' => '1']);
+        $res = $this->post('add', ['source' => '@SpaceCo', 'channel' => '11', 'role' => '20', 'skipShorts' => '1']);
         $this->assertSame(303, $res->status);
         $row = Creators::list($this->orgId)[0];
         $this->assertSame(self::YT, $row['channel_id']);
@@ -104,7 +155,7 @@ final class CreatorsTest extends DbTestCase
         $this->assertStringContainsString('ohne Shorts', $html);
 
         // Derselbe Kanal noch einmal ändert nur, er legt nichts doppelt an.
-        $this->post('add', ['youtube' => self::YT, 'channel' => '12']);
+        $this->post('add', ['source' => self::YT, 'channel' => '12']);
         $rows = Creators::list($this->orgId);
         $this->assertCount(1, $rows);
         $this->assertSame(['12', null, '0'], [$rows[0]['discord_channel_id'], $rows[0]['mention_role_id'], (string) $rows[0]['skip_shorts']]);
@@ -112,17 +163,17 @@ final class CreatorsTest extends DbTestCase
 
     public function testRejectsBadInputAndUnknownChannelsAndYoutubeErrors(): void
     {
-        $this->post('add', ['youtube' => 'quatsch', 'channel' => '11']);
-        $this->post('add', ['youtube' => self::YT, 'channel' => '999']);
-        $this->post('add', ['youtube' => self::YT, 'channel' => '11', 'role' => '777']);
+        $this->post('add', ['source' => 'quatsch', 'channel' => '11']);
+        $this->post('add', ['source' => self::YT, 'channel' => '999']);
+        $this->post('add', ['source' => self::YT, 'channel' => '11', 'role' => '777']);
         $this->feedStatus = 404;
-        $this->post('add', ['youtube' => self::YT, 'channel' => '11']);
+        $this->post('add', ['source' => self::YT, 'channel' => '11']);
         $this->assertSame([], Creators::list($this->orgId));
     }
 
     public function testUpdateAndDeleteStayInsideTheOrga(): void
     {
-        $this->post('add', ['youtube' => self::YT, 'channel' => '11']);
+        $this->post('add', ['source' => self::YT, 'channel' => '11']);
         $id = (string) Creators::list($this->orgId)[0]['id'];
 
         $this->post('update', ['id' => $id, 'channel' => '12', 'role' => '20', 'skipShorts' => '1']);

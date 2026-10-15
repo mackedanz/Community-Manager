@@ -17,7 +17,7 @@ export function startCreatorWatch(client, { pool, log, intervalMs = INTERVAL_MS,
     try {
       const creators = await all(
         pool,
-        'SELECT c.*, o.discord_guild_id FROM bot_creators c JOIN organizations o ON o.id = c.org_id ORDER BY c.checked_at IS NULL DESC, c.checked_at ASC',
+        "SELECT c.*, o.discord_guild_id FROM bot_creators c JOIN organizations o ON o.id = c.org_id WHERE c.platform = 'youtube' ORDER BY c.checked_at IS NULL DESC, c.checked_at ASC",
       );
       for (const c of creators) {
         if (!client.guilds.cache.has(String(c.discord_guild_id))) continue;

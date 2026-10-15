@@ -4,6 +4,8 @@ import { run, val } from '../db.js';
 export const ANNOUNCE_CHANNEL = 'announce_channel_id';
 /** '1' = der Bot läuft mit Message Content (Automod und Nachrichten-Protokoll aktiv), '0' = nicht; schreibt der Bot beim Start, die Web-App zeigt es an. */
 export const MESSAGE_CONTENT_STATUS = 'message_content_active';
+/** Vom Bot beim Start geschrieben: '1' = Twitch-Zugangsdaten sind da, Live-Meldungen laufen. */
+export const TWITCH_STATUS = 'twitch_active';
 
 export async function getSetting(db, orgId, name) {
   const v = await val(db, 'SELECT value FROM bot_settings WHERE org_id = ? AND name = ?', [orgId, name]);

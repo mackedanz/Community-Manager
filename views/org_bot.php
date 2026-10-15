@@ -16,6 +16,7 @@
 /** @var list<array<string,mixed>> $cases */
 /** @var list<array<string,mixed>> $creators */
 /** @var string $guildId */
+/** @var bool $twitchActive */
 /** @var array{rows:list<array<string,mixed>>,total:int} $modCases */
 /** @var string $modQuery */
 /** @var string $modAction */
@@ -90,7 +91,7 @@ $descriptions = [
     'moderation' => 'Wer mit /mod verwarnen, stummschalten, kicken und bannen darf und wohin der Bot das protokolliert.',
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
     'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen, vorhandene ändern, verschieben oder löschen.',
-    'creator' => 'YouTube-Kanäle, deren neue Videos der Bot automatisch in einen Discord-Kanal postet. Der Bot schaut alle 10 Minuten nach; schon vorhandene Videos werden nicht nachträglich gepostet.',
+    'creator' => 'YouTube-Kanäle, deren neue Videos der Bot in einen Discord-Kanal postet (Prüfung alle 10 Minuten, ältere Videos nicht), und Twitch-Kanäle, bei denen er meldet, wenn sie live gehen (Prüfung alle 2 Minuten).',
     'regeln' => 'Veröffentlicht einen Regeltext in einem Kanal, darunter der Knopf „Bestätigen“. Wer ihn drückt, bekommt die gewählte Rolle (meist die Besucher-Rolle).',
     'faelle' => 'Verwarnen, Timeout, Kick und Bann direkt im Manager und die Liste aller Fälle.',
     'zuordnung' => 'Legt fest, welchen Kanal und welche Rolle der Bot wofür nutzt. Nach dem Aufbau des Servers kannst du hier alles auf einmal eintragen; die Vorschläge kommen aus den Namen.',
@@ -726,14 +727,16 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
             ?>
             <li class="px-5 py-4">
               <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <a href="https://www.youtube.com/channel/<?= e($c['channel_id']) ?>" target="_blank" rel="noopener" class="font-medium text-cyan-300 hover:underline"><?= e($c['name']) ?></a>
+                <span><a href="<?= $c['platform'] === 'twitch' ? 'https://www.twitch.tv/' . e($c['channel_id']) : 'https://www.youtube.com/channel/' . e($c['channel_id']) ?>" target="_blank" rel="noopener" class="font-medium text-cyan-300 hover:underline"><?= e($c['name']) ?></a>
+                  <span class="ml-1 rounded-full border border-cyan-700/50 px-2 text-xs text-cyan-300"><?= e(\Hangar\Creators::PLATFORMS[$c['platform']] ?? $c['platform']) ?></span></span>
                 <span class="text-xs <?= !empty($c['last_error']) ? 'text-amber-300' : 'text-zinc-500' ?>"><?php
                   if (!empty($c['last_error'])) { echo '⚠ ' . e($c['last_error']); }
+                  elseif ($c['platform'] === 'twitch' && !(int) $c['resolved']) { echo 'wird vom Bot bei Twitch geprüft'; }
                   elseif (!empty($c['checked_at'])) { echo 'zuletzt geprüft ' . e(dt(\Hangar\Time::parse((string) $c['checked_at']))); }
                   else { echo 'noch nicht geprüft'; }
                 ?></span>
               </div>
-              <p class="mt-1 text-sm text-zinc-400">→ <?= $chName ? '#' . e($chName) : 'Kanal nicht mehr verfügbar' ?><?= $c['mention_role_id'] ? ', erwähnt @' . e($roleName ?: 'Rolle nicht mehr verfügbar') : '' ?><?= (int) $c['skip_shorts'] === 1 ? ', ohne Shorts' : '' ?></p>
+              <p class="mt-1 text-sm text-zinc-400">→ <?= $chName ? '#' . e($chName) : 'Kanal nicht mehr verfügbar' ?><?= $c['mention_role_id'] ? ', erwähnt @' . e($roleName ?: 'Rolle nicht mehr verfügbar') : '' ?><?= (int) $c['skip_shorts'] === 1 ? ', ohne Shorts' : '' ?><?= $c['platform'] === 'twitch' ? ', meldet Live-Streams' : '' ?></p>
               <details class="mt-2 rounded-md border border-cyan-900/50">
                 <summary class="cursor-pointer px-3 py-1.5 text-sm text-cyan-300">Bearbeiten</summary>
                 <form method="post" action="<?= e($base . '/creator/update') ?>" class="space-y-3 border-t border-cyan-900/50 p-3">
@@ -743,7 +746,9 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
                     <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Discord-Kanal</span><?= $channelSelect('channel', (string) $c['discord_channel_id']) ?></label>
                     <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Rolle erwähnen (freiwillig)</span><?= $roleSelect('role', (string) ($c['mention_role_id'] ?? '')) ?></label>
                   </div>
-                  <label class="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" name="skipShorts" value="1" class="accent-cyan-400"<?= (int) $c['skip_shorts'] === 1 ? ' checked' : '' ?>> Shorts nicht posten</label>
+                  <?php if ($c['platform'] !== 'twitch'): ?>
+                    <label class="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" name="skipShorts" value="1" class="accent-cyan-400"<?= (int) $c['skip_shorts'] === 1 ? ' checked' : '' ?>> Shorts nicht posten</label>
+                  <?php endif; ?>
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-4 py-1.5 text-sm hover:bg-cyan-500/30">Speichern</button>
                     <button type="submit" form="del-creator-<?= e($c['id']) ?>" class="text-sm text-red-400 hover:text-red-300">Creator entfernen</button>
@@ -764,22 +769,29 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
       <section class="<?= $card ?>">
         <header class="border-b border-cyan-900/50 px-5 py-4">
           <h2 class="text-lg font-semibold">Creator hinzufügen</h2>
-          <p class="text-sm text-zinc-400">Gibt es den YouTube-Kanal schon in der Liste, werden Kanal, Rolle und Shorts geändert.</p>
+          <p class="text-sm text-zinc-400">Gibt es den Kanal schon in der Liste, werden Discord-Kanal, Rolle und Shorts geändert.</p>
+          <?php if (!$twitchActive): ?>
+            <p class="mt-2 rounded-md border border-amber-500/40 bg-amber-950/40 px-3 py-2 text-sm text-amber-200">Twitch ist im Bot noch nicht eingerichtet: Ohne TWITCH_CLIENT_ID und TWITCH_CLIENT_SECRET in der .env (und einen Neustart des Bots) meldet er keinen Stream. Eintragen kannst du Kanäle schon jetzt.</p>
+          <?php endif; ?>
         </header>
         <?php if ($channels === []): ?>
           <p class="p-5 text-sm text-zinc-400">Die Discord-Kanäle konnten nicht geladen werden, deshalb ist das Hinzufügen gesperrt.</p>
         <?php else: ?>
         <form method="post" action="<?= e($base . '/creator/add') ?>" class="space-y-4 p-5">
           <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-          <label class="block space-y-1.5"><span class="text-sm text-zinc-300">YouTube-Kanal</span>
-            <input type="text" name="youtube" required maxlength="200" class="<?= $field ?>" placeholder="youtube.com/@Name, @Name oder Kanal-ID (UC…)">
-            <span class="block <?= $hint ?>">Link zum Kanal oder @Name. Der Kanal wird bei YouTube geprüft, das dauert einen Moment.</span></label>
+          <div class="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Plattform</span>
+              <select name="platform" class="<?= $field ?>"><?php foreach (\Hangar\Creators::PLATFORMS as $k => $label): ?><option value="<?= e($k) ?>"><?= e($label) ?></option><?php endforeach; ?></select></label>
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Kanal</span>
+              <input type="text" name="source" required maxlength="200" class="<?= $field ?>" placeholder="YouTube: @Name, Link oder Kanal-ID · Twitch: Kanalname oder Link">
+              <span class="block <?= $hint ?>">YouTube wird sofort geprüft, das dauert einen Moment. Twitch prüft der Bot gleich danach.</span></label>
+          </div>
           <div class="grid gap-4 sm:grid-cols-2">
-            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Discord-Kanal für neue Videos</span><?= $channelSelect('channel', '', '– Kanal wählen –') ?>
+            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Discord-Kanal für neue Videos und Live-Meldungen</span><?= $channelSelect('channel', '', '– Kanal wählen –') ?>
               <span class="block <?= $hint ?>">Der Bot braucht dort „Kanal ansehen“, „Nachrichten senden“ und „Links einbetten“.</span></label>
             <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Rolle erwähnen (freiwillig)</span><?= $roleSelect('role', '') ?></label>
           </div>
-          <label class="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" name="skipShorts" value="1" class="accent-cyan-400"> Shorts nicht posten</label>
+          <label class="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" name="skipShorts" value="1" class="accent-cyan-400"> Shorts nicht posten (nur YouTube)</label>
           <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Hinzufügen</button>
         </form>
         <?php endif; ?>

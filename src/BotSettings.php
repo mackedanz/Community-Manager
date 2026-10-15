@@ -22,6 +22,8 @@ final class BotSettings
     public const AUTOMOD = 'automod';
     /** Vom Bot beim Start geschrieben: '1' = läuft mit Message Content (Automod und Nachrichten-Protokoll aktiv). */
     public const MESSAGE_CONTENT_STATUS = 'message_content_active';
+    /** Vom Bot beim Start geschrieben: '1' = Twitch-Zugangsdaten sind eingetragen, Live-Meldungen laufen. */
+    public const TWITCH_STATUS = 'twitch_active';
 
     public const MAX_WELCOME_TEXT = 500;
     public const MAX_MOD_ROLES = 10;
@@ -113,6 +115,11 @@ final class BotSettings
     }
 
     /** Hat der Bot beim letzten Start gemeldet, dass er Nachrichten lesen darf? Ohne Meldung (alter Bot, noch nicht gestartet) gilt: nein. @param array<string,string> $all */
+    public static function twitchActive(array $all): bool
+    {
+        return ($all[self::TWITCH_STATUS] ?? '') === '1';
+    }
+
     public static function messageContentActive(array $all): bool
     {
         return ($all[self::MESSAGE_CONTENT_STATUS] ?? '') === '1';

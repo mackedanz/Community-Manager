@@ -87,6 +87,9 @@ services:
       ONBOARDING_GUILD_IDS: ${ONBOARDING_GUILD_IDS:-}
       # 1 = Automod und Nachrichten-Protokoll (braucht den "Message Content Intent" im Developer Portal)
       BOT_MESSAGE_CONTENT: ${BOT_MESSAGE_CONTENT:-}
+      # Twitch-Live-Meldungen (Anwendung auf dev.twitch.tv, optional)
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
       IMAGE_DIR: /data/images
     volumes:
       # Logo und Hintergrund aus /design landen dort, wo die App sie ausliefert
