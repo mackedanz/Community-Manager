@@ -885,7 +885,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
             // Aktueller Wert, sonst der Vorschlag nach dem Namen; $from sagt, woher der Wert kommt.
             $pick = static fn (string $name): array => $set($name) !== '' ? [$set($name), 'gesetzt'] : (isset($suggest[$name]) ? [$suggest[$name], 'Vorschlag'] : ['', '']);
             $rows = [
-                ['adminChannel', BotSettings::ADMIN_CHANNEL, 'Admin-Kanal', 'c', 'Bot-Einstellungen, nur für Admins sichtbar.'],
+                ['adminChannel', BotSettings::ADMIN_CHANNEL, 'Kanal für Bot-Einstellungen', 'c', 'Nur für Admins sichtbar. Hier legt /discord-setup die Hinweise zu den Bot-Einstellungen ab.'],
                 ['announceChannel', BotSettings::ANNOUNCE_CHANNEL, 'Ankündigungskanal', 'c', 'Neue Termine mit Schiffen und Plätzen.'],
                 ['welcomeChannel', BotSettings::WELCOME_CHANNEL, 'Willkommenskanal', 'c', 'Hier begrüßt der Bot neue Mitglieder.'],
                 ['rulesChannel', BotSettings::RULES_CHANNEL, 'Regelkanal', 'c', 'Für {regeln} im Begrüßungstext.'],
