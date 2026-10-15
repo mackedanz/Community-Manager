@@ -15,6 +15,7 @@
 /** @var ?array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure */
 /** @var list<array<string,mixed>> $cases */
 /** @var list<array<string,mixed>> $creators */
+/** @var string $guildId */
 /** @var array{rows:list<array<string,mixed>>,total:int} $modCases */
 /** @var string $modQuery */
 /** @var string $modAction */
@@ -422,8 +423,9 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
           <?php else: ?>
             <?php
               // Ein Eintrag des Servers (Kategorie oder Kanal) zum Aufklappen: Name, Thema, Kategorie, Rechte ändern oder löschen.
-              $editor = static function (array $item, bool $isCategory) use ($csrf, $base, $field, $hint, $typeIcon, $structure, $usedChannels, $roleBoxes): string {
+              $editor = static function (array $item, bool $isCategory, ?array $category = null) use ($csrf, $base, $field, $hint, $typeIcon, $structure, $usedChannels, $chips, $roles, $guildId): string {
                   $id = (string) $item['id'];
+                  $cur = \Hangar\DiscordSetup::currentAccess($item, $isCategory, $category, $guildId);
                   $type = $isCategory ? 4 : (int) $item['type'];
                   $used = $usedChannels[$id] ?? null;
                   $confirm = $isCategory
@@ -449,29 +451,26 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
                         <?php if (!$isCategory): ?>
                           <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Kategorie</span>
                             <select name="parent" class="<?= $field ?>">
-                              <option value="">unverändert</option>
-                              <option value="-">Ohne Kategorie</option>
-                              <?php foreach ($structure['categories'] as $cat): ?><option value="<?= e($cat['id']) ?>"><?= e($cat['name']) ?></option><?php endforeach; ?>
+                              <option value="-"<?= ($item['parent'] ?? null) === null ? ' selected' : '' ?>>Ohne Kategorie</option>
+                              <?php foreach ($structure['categories'] as $cat): ?><option value="<?= e($cat['id']) ?>"<?= (string) ($item['parent'] ?? '') === (string) $cat['id'] ? ' selected' : '' ?>><?= e($cat['name']) ?></option><?php endforeach; ?>
                             </select></label>
                         <?php endif; ?>
                         <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Sichtbar für</span>
                           <select name="access" class="<?= $field ?>" data-edit-access>
-                            <option value="keep">unverändert</option>
-                            <?php if (!$isCategory): ?><option value="inherit">wie die Kategorie</option><?php endif; ?>
-                            <option value="all">alle</option>
-                            <option value="roles">nur bestimmte Rollen</option>
+                            <?php if (!$isCategory): ?><option value="inherit"<?= $cur['access'] === 'inherit' ? ' selected' : '' ?>>wie die Kategorie</option><?php endif; ?>
+                            <option value="all"<?= $cur['access'] === 'all' ? ' selected' : '' ?>>alle</option>
+                            <option value="roles"<?= $cur['access'] === 'roles' ? ' selected' : '' ?>>nur bestimmte Rollen</option>
                           </select></label>
                         <?php if (!$isCategory && $type !== 2): ?>
                           <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Nur lesen</span>
                             <select name="readonly" class="<?= $field ?>">
-                              <option value="">unverändert</option>
-                              <option value="1">ja (nur Bot und Admins schreiben)</option>
-                              <option value="0">nein</option>
+                              <option value="1"<?= $cur['readonly'] ? ' selected' : '' ?>>ja (nur Bot und Admins schreiben)</option>
+                              <option value="0"<?= $cur['readonly'] ? '' : ' selected' ?>>nein</option>
                             </select></label>
                         <?php endif; ?>
                       </div>
-                      <div hidden data-edit-roles><?= $roleBoxes('roles') ?></div>
-                      <p class="<?= $hint ?>">Wer „Sichtbar für“ oder „Nur lesen“ ändert, ersetzt die bisherigen Rechte <?= $isCategory ? 'dieser Kategorie' : 'dieses Kanals' ?>. „Unverändert“ lässt sie, wie sie sind.</p>
+                      <div<?= $cur['access'] === 'roles' ? '' : ' hidden' ?> data-edit-roles><?= $roles === [] ? '<p class="' . $hint . '">Keine Rollen geladen.</p>' : $chips('roles', $roles, array_values(array_intersect($cur['roles'], array_column($roles, 'id'))), '@') ?></div>
+                      <p class="<?= $hint ?>">Die Felder zeigen den aktuellen Stand. Wer „Sichtbar für“ oder „Nur lesen“ ändert, ersetzt die bisherigen Rechte <?= $isCategory ? 'dieser Kategorie' : 'dieses Kanals' ?>; bleiben beide, wie sie sind, ändern sich die Rechte nicht.</p>
                       <div class="flex flex-wrap items-center justify-between gap-3">
                         <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-4 py-1.5 text-sm hover:bg-cyan-500/30">Speichern</button>
                         <button type="submit" form="del-<?= e($id) ?>" class="text-sm text-red-400 hover:text-red-300"><?= $isCategory ? 'Kategorie' : 'Kanal' ?> löschen</button>
@@ -491,14 +490,14 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
               <?php if ($structure['loose'] !== []): ?>
                 <section class="rounded-md border border-cyan-900/50 p-2">
                   <div class="px-2 py-1 text-sm font-medium text-zinc-400">Ohne Kategorie</div>
-                  <div class="space-y-0.5 pl-3"><?php foreach ($structure['loose'] as $c): ?><?= $editor($c, false) ?><?php endforeach; ?></div>
+                  <div class="space-y-0.5 pl-3"><?php foreach ($structure['loose'] as $c): ?><?= $editor($c, false, null) ?><?php endforeach; ?></div>
                 </section>
               <?php endif; ?>
               <?php foreach ($structure['categories'] as $cat): ?>
                 <section class="rounded-md border border-cyan-900/50 p-2">
                   <?= $editor($cat, true) ?>
                   <div class="space-y-0.5 pl-6">
-                    <?php foreach ($cat['channels'] as $c): ?><?= $editor($c, false) ?><?php endforeach; ?>
+                    <?php foreach ($cat['channels'] as $c): ?><?= $editor($c, false, $cat) ?><?php endforeach; ?>
                     <?php if ($cat['channels'] === []): ?><div class="px-2 py-1 text-sm text-zinc-600">leer</div><?php endif; ?>
                   </div>
                 </section>

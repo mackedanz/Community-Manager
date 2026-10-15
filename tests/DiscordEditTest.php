@@ -182,17 +182,39 @@ final class DiscordEditTest extends DbTestCase
 
     public function testReadOnlyCanBeSwitchedOnAndOffWithoutLosingOtherRights(): void
     {
-        $this->post('channel/update', ['id' => '12', 'name' => '┋news', 'readonly' => '1']);
-        $on = array_column($this->calls[0][2]['permission_overwrites'], null, 'id');
-        $this->assertSame(DiscordSetup::SEND, (int) $on['900']['deny'] & DiscordSetup::SEND);
-        $this->assertSame(0, (int) $on['21']['allow'] & DiscordSetup::SEND);
-        $this->assertNotSame(0, (int) $on['555']['allow'] & DiscordSetup::SEND);
-
-        $this->calls = [];
+        // „news“ ist im Aufbau schon nur zum Lesen; das Ausschalten ändert, das erneute Einschalten kommt vom Server nicht neu an
         $this->post('channel/update', ['id' => '12', 'name' => '┋news', 'readonly' => '0']);
         $off = array_column($this->calls[0][2]['permission_overwrites'], null, 'id');
         $this->assertSame(0, (int) ($off['900']['deny'] ?? 0) & DiscordSetup::SEND);
         $this->assertSame(DiscordSetup::SEND, (int) $off['21']['allow']);
+
+        $on = array_column(DiscordSetup::readonlyOverwrites($this->calls[0][2]['permission_overwrites'], true, '900', '555'), null, 'id');
+        $this->assertSame(DiscordSetup::SEND, (int) $on['900']['deny'] & DiscordSetup::SEND);
+        $this->assertSame(0, (int) $on['21']['allow'] & DiscordSetup::SEND);
+    }
+
+    public function testFormShowsTheCurrentStateAndSendingItChangesNoRights(): void
+    {
+        $page = $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'setup'])->body;
+        // Kategorie „Info“: nur bestimmte Rollen; Kanal „news“: für alle, nur lesen; Kanal „regeln“: in Kategorie Info
+        $this->assertStringContainsString('<option value="roles" selected>nur bestimmte Rollen</option>', $page);
+        $this->assertStringContainsString('<option value="1" selected>ja (nur Bot und Admins schreiben)</option>', $page);
+        $this->assertStringContainsString('<option value="10" selected>Info</option>', $page);
+        $this->assertStringContainsString('<option value="-" selected>Ohne Kategorie</option>', $page);
+
+        // Das Formular schickt den Stand mit; nur der neue Name ändert etwas, die Rechte bleiben unberührt.
+        $this->post('channel/update', ['id' => '12', 'name' => '┋neuigkeiten', 'parent' => '10', 'access' => 'all', 'readonly' => '1']);
+        $this->assertSame([['PATCH', '/channels/12', ['name' => '┋neuigkeiten']]], $this->calls);
+
+        // Kategorie, deren Rollen nur die Rolle des Bots sind: Umbenennen darf nicht an „keine Rolle angekreuzt“ scheitern.
+        $this->calls = [];
+        $this->post('channel/update', ['id' => '10', 'name' => 'Information', 'access' => 'roles']);
+        $this->assertSame([['PATCH', '/channels/10', ['name' => 'Information']]], $this->calls);
+
+        // Eine echte Änderung ersetzt die Rechte weiterhin.
+        $this->calls = [];
+        $this->post('channel/update', ['id' => '12', 'name' => '┋news', 'parent' => '10', 'access' => 'roles', 'roles' => ['21'], 'readonly' => '1']);
+        $this->assertArrayHasKey('permission_overwrites', $this->calls[0][2]);
     }
 
     public function testCategoryRenameVisibilityAndDuplicates(): void

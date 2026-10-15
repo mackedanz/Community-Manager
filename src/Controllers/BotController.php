@@ -124,6 +124,7 @@ final class BotController extends Controller
             'cases' => $cases,
             'suggest' => $suggest,
             'creators' => $creators,
+            'guildId' => (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]),
             'modCases' => $modCases,
             'modQuery' => $modQuery,
             'modAction' => $modAction,

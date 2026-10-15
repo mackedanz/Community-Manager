@@ -309,6 +309,49 @@ final class DiscordSetup
      * @param array{categories:list<array<string,mixed>>,loose:list<array<string,mixed>>} $structure
      * @return ?array{category:bool,row:array<string,mixed>}
      */
+    /**
+     * Aktueller Stand der Sichtbarkeit und von „nur lesen“ eines Eintrags, damit das Formular ihn anzeigt und unveränderte Werte nichts überschreiben.
+     * access: all, roles oder (nur bei Kanälen, deren Sichtbarkeit der der Kategorie entspricht) inherit; roles = Rollen-IDs, die sehen dürfen.
+     * @param array<string,mixed> $row Kanal oder Kategorie (mit overwrites und type) @param ?array<string,mixed> $category Kategorie des Kanals
+     * @return array{access:string,roles:list<string>,readonly:bool}
+     */
+    public static function currentAccess(array $row, bool $isCategory, ?array $category, string $guildId): array
+    {
+        $view = static function (array $overwrites) use ($guildId): array {
+            $denied = false;
+            foreach ($overwrites as $o) {
+                if ((string) $o['id'] === $guildId && (int) $o['type'] === 0) {
+                    $denied = ((int) $o['deny'] & self::VIEW) !== 0;
+                }
+            }
+            if (!$denied) {
+                return ['all', []];
+            }
+            $ids = [];
+            foreach ($overwrites as $o) {
+                if ((int) $o['type'] === 0 && (string) $o['id'] !== $guildId && ((int) $o['allow'] & self::VIEW) !== 0) {
+                    $ids[] = (string) $o['id'];
+                }
+            }
+            sort($ids);
+            return ['roles', $ids];
+        };
+        $own = $view($row['overwrites'] ?? []);
+        $access = $own[0];
+        if (!$isCategory && $category !== null && $view($category['overwrites'] ?? []) === $own) {
+            $access = 'inherit';
+        }
+        $readonly = false;
+        if (!$isCategory && (int) ($row['type'] ?? 0) !== 2) {
+            foreach ($row['overwrites'] ?? [] as $o) {
+                if ((string) $o['id'] === $guildId && (int) $o['type'] === 0) {
+                    $readonly = ((int) $o['deny'] & self::SEND) !== 0;
+                }
+            }
+        }
+        return ['access' => $access, 'roles' => $own[1], 'readonly' => $readonly];
+    }
+
     private static function locate(string $id, array $structure): ?array
     {
         foreach ($structure['categories'] as $cat) {
@@ -445,10 +488,32 @@ final class DiscordSetup
             $access = 'keep';
         }
         $roles = self::roles($post['roles'] ?? null, $roleIds);
+        $readonly = $isCategory || $type === 2 ? '' : (is_string($post['readonly'] ?? null) ? $post['readonly'] : '');
+        // Das Formular zeigt den aktuellen Stand. Was dem entspricht, ist keine Änderung und lässt die Rechte, wie sie sind.
+        $catRow = null;
+        foreach ($isCategory ? [] : $structure['categories'] as $c) {
+            if ((string) $c['id'] === (string) $row['parent']) {
+                $catRow = $c;
+            }
+        }
+        $cur = self::currentAccess($row, $isCategory, $catRow, $guildId);
+        // Rollen, die das Formular nicht zur Auswahl anbietet (z. B. die des Bots), zählen beim Vergleich nicht mit
+        $curRoles = array_values(array_intersect($cur['roles'], $roleIds));
+        $moved = !$isCategory && $parent !== $row['parent'];
+        if ($access === $cur['access'] && !($moved && $access === 'inherit')) {
+            $mine = $roles;
+            sort($mine);
+            sort($curRoles);
+            if ($access !== 'roles' || $mine === $curRoles) {
+                $access = 'keep';
+            }
+        }
         if ($access === 'roles' && $roles === []) {
             throw new OrgError('„Nur bestimmte Rollen“ ist gewählt, aber keine Rolle angekreuzt.');
         }
-        $readonly = $isCategory || $type === 2 ? '' : (is_string($post['readonly'] ?? null) ? $post['readonly'] : '');
+        if ($access === 'keep' && ($readonly === '1' || $readonly === '0') && ($readonly === '1') === $cur['readonly']) {
+            $readonly = '';
+        }
         if ($isCategory && $access !== 'keep') {
             $payload['permission_overwrites'] = self::categoryOverwrites(['mode' => $access, 'roles' => $access === 'roles' ? $roles : []], $guildId, $botId);
         } elseif (!$isCategory && $access !== 'keep') {
