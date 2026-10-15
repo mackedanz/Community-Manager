@@ -83,7 +83,7 @@ $switch = static fn (string $name, bool $on, string $label): string => '<label c
 $dot = static fn (bool $on): string => '<span class="h-2 w-2 shrink-0 rounded-full ' . ($on ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.9)]' : 'bg-zinc-600') . '"></span>';
 $caseLabels = ['WARN' => 'Verwarnung', 'TIMEOUT' => 'Timeout', 'UNTIMEOUT' => 'Timeout aufgehoben', 'KICK' => 'Kick', 'BAN' => 'Bann', 'UNBAN' => 'Bann aufgehoben', 'PURGE' => 'Nachrichten gelöscht', 'AUTOMOD' => 'Automod'];
 $descriptions = [
-    'allgemein' => 'Grundeinstellungen, die mehrere Bereiche nutzen.',
+    'allgemein' => 'Wichtige Hinweise zu den Einstellungen des Bots.',
     'termine' => 'Der Bot kündigt Termine an, erinnert 24 und 1 Stunde vorher und lässt Plätze per Knopf wählen.',
     'willkommen' => 'Begrüßt neue Mitglieder. „Bestätigen“ unter den Regeln vergibt die Besucher-Rolle.',
     'moderation' => 'Wer mit /mod verwarnen, stummschalten, kicken und bannen darf und wohin der Bot das protokolliert.',
@@ -786,6 +786,30 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
         <?php endif; ?>
       </section>
     </div>
+    <?php elseif ($section === 'allgemein'): ?>
+    <div class="space-y-4">
+      <section class="rounded-lg border border-red-500/50 bg-red-950/30">
+        <header class="flex items-start gap-3 px-5 py-4">
+          <span class="text-2xl leading-none" aria-hidden="true">⚠</span>
+          <div class="space-y-2">
+            <h2 class="text-lg font-semibold text-red-200">Achtung: Änderungen auf eigene Gefahr</h2>
+            <p class="text-sm text-red-100/90">Änderungen werden nach dem Speichern sofort umgesetzt, auf deinem Discord-Server und für alle Mitglieder. Einiges davon lässt sich nicht rückgängig machen.</p>
+            <ul class="list-disc space-y-1 pl-5 text-sm text-red-100/80">
+              <li>Gelöschte Rollen, Kategorien und Kanäle sind weg, mit allen Nachrichten in den Kanälen.</li>
+              <li>Kick, Bann und Timeout wirken sofort; die Person bekommt eine Direktnachricht.</li>
+              <li>Veröffentlichte Regeln und angewendete Vorlagen ändern den Server auf einen Schlag.</li>
+            </ul>
+          </div>
+        </header>
+      </section>
+      <section class="<?= $card ?>">
+        <div class="space-y-2 p-5 text-sm text-zinc-300">
+          <p>Hier gibt es nichts einzustellen. Welcher Kanal und welche Rolle für den Bot gelten, legst du unter
+            <a href="<?= e($base . '?m=zuordnung') ?>" class="text-cyan-300 hover:underline">Discord-Setup, Zuordnung</a> fest.
+            Die Funktionen (Termine, Willkommen und Regeln, Moderation, Automod) schaltest du in ihren eigenen Bereichen ein und aus.</p>
+        </div>
+      </section>
+    </div>
     <?php else: ?>
     <form method="post" action="<?= e($base . '/save') ?>" class="space-y-4">
       <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
@@ -803,17 +827,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
         </header>
 
         <div class="space-y-5 p-5">
-        <?php if ($section === 'allgemein'): ?>
-          <div class="grid gap-5 sm:grid-cols-2">
-            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Admin-Kanal</span>
-              <?= $channelSelect('adminChannel', $set(BotSettings::ADMIN_CHANNEL)) ?>
-              <span class="block <?= $hint ?>">Kanal für Bot-Einstellungen, nur für Admins sichtbar. Legt /discord-setup an.</span></label>
-            <label class="block space-y-1.5"><span class="text-sm text-zinc-300">Besucher-Rolle</span>
-              <?= $roleSelect('visitorRole', $set(BotSettings::VISITOR_ROLE)) ?>
-              <span class="block <?= $hint ?>">Bekommt man mit „Bestätigen“ unter den Regeln. Sie macht die öffentlichen Kategorien sichtbar.</span></label>
-          </div>
-
-        <?php elseif ($section === 'termine'): ?>
+        <?php if ($section === 'termine'): ?>
           <label class="block max-w-md space-y-1.5"><span class="text-sm text-zinc-300">Ankündigungskanal</span>
             <?= $channelSelect('announceChannel', $set(BotSettings::ANNOUNCE_CHANNEL), '– keiner (Ankündigungen aus) –') ?>
             <span class="block <?= $hint ?>">Hier erscheinen neue Termine mit Schiffen und Plätzen. Ohne Kanal kündigt der Bot nichts an.</span></label>

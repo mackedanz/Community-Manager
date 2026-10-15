@@ -91,6 +91,19 @@ final class BotSettingsTest extends DbTestCase
         }
     }
 
+    public function testGeneralPageOnlyWarnsAndHasNothingToChoose(): void
+    {
+        $body = $this->call('GET', '/o/alpha/bot', 'admin')->body;
+        $this->assertStringContainsString('Änderungen auf eigene Gefahr', $body);
+        $this->assertStringContainsString('sofort umgesetzt', $body);
+        $this->assertStringNotContainsString('<select name="adminChannel"', $body);
+        $this->assertStringNotContainsString('<select name="visitorRole"', $body);
+        $this->assertStringContainsString('m=zuordnung', $body);
+        // Das Formular gibt es nicht mehr; ein alter Aufruf ändert nichts.
+        $this->save('allgemein', ['adminChannel' => '11', 'visitorRole' => '21']);
+        $this->assertSame([], BotSettings::all($this->orgId));
+    }
+
     public function testSuggestionsComeFromNamesAndOnlyForEmptySettings(): void
     {
         $channels = \Hangar\DiscordBot::textChannels('900');
@@ -143,7 +156,7 @@ final class BotSettingsTest extends DbTestCase
     public function testSavingWritesTheKeysTheBotReads(): void
     {
         $this->save('termine', ['announceChannel' => '14']);
-        $this->save('allgemein', ['adminChannel' => '11', 'visitorRole' => '21']);
+        $this->save('zuordnung', ['adminChannel' => '11', 'visitorRole' => '21']);
         $this->save('willkommen', ['welcomeChannel' => '12', 'rulesChannel' => '11', 'welcomeText' => BotSettings::DEFAULT_WELCOME]);
         $this->save('moderation', ['modRoles' => ['20', '20', '21'], 'modLogChannel' => '']);
         $this->assertSame([
@@ -181,7 +194,7 @@ final class BotSettingsTest extends DbTestCase
         $this->discordStatus = 503;
         $this->assertStringContainsString('Discord antwortet mit Status 503', $this->call('GET', '/o/alpha/bot', 'admin')->body);
         $this->save('termine', ['announceChannel' => '123456']);
-        $this->save('allgemein', ['adminChannel' => 'kein-kanal']);
+        $this->save('zuordnung', ['adminChannel' => 'kein-kanal']);
         $this->assertSame(['announce_channel_id' => '123456'], BotSettings::all($this->orgId));
     }
 

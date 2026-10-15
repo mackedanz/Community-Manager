@@ -155,9 +155,6 @@ final class BotSettings
         $channel = static fn (string $k): ?string => self::checkId($str($k), $channelIds, 'Kanal');
         $role = static fn (string $k): ?string => self::checkId($str($k), $roleIds, 'Rolle');
         switch ($section) {
-            case 'allgemein':
-                $values = [self::ADMIN_CHANNEL => $channel('adminChannel'), self::VISITOR_ROLE => $role('visitorRole')];
-                break;
             case 'termine':
                 $values = [self::ANNOUNCE_CHANNEL => $channel('announceChannel')];
                 break;
