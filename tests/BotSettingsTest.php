@@ -163,7 +163,7 @@ final class BotSettingsTest extends DbTestCase
             'admin_channel_id' => '11', 'announce_channel_id' => '14', 'mod_role_ids' => '20,21', 'rules_channel_id' => '11',
             'visitor_role_id' => '21', 'welcome_channel_id' => '12',
         ], $this->sorted());
-        $this->assertSame(['termine' => true, 'willkommen' => true, 'moderation' => true, 'automod' => false, 'recruiting' => false], BotSettings::status(BotSettings::all($this->orgId)));
+        $this->assertSame(['termine' => true, 'willkommen' => true, 'moderation' => true, 'automod' => false, 'creator' => false, 'recruiting' => false], BotSettings::status(BotSettings::all($this->orgId), $this->orgId));
 
         // Leeren entfernt die Einstellung, ein eigener Text wird gespeichert.
         $this->save('termine', ['announceChannel' => '']);

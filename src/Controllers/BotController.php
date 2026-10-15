@@ -130,7 +130,7 @@ final class BotController extends Controller
             'section' => $section,
             'settings' => $all,
             'automod' => BotSettings::automod($all),
-            'status' => BotSettings::status($all),
+            'status' => BotSettings::status($all, $org['id']),
             'channels' => $lists['channels'] ?? [],
             'roles' => $lists['roles'] ?? [],
             'problem' => $lists['problem'],

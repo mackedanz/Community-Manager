@@ -130,6 +130,26 @@ final class CreatorsTest extends DbTestCase
         $this->assertSame([], Creators::list($this->orgId));
     }
 
+    public function testCreatorLightIsOnAsSoonAsOneCreatorExistsAndOffWhenNoneIsLeft(): void
+    {
+        $light = fn (): bool => BotSettings::status(BotSettings::all($this->orgId), $this->orgId)['creator'];
+        $this->assertFalse($light());
+        $this->assertStringContainsString('0 von 6 Bereichen eingerichtet', $this->page()->body);
+
+        $this->post('add', ['source' => '@SpaceCo', 'channel' => '11']);
+        $this->post('add', ['platform' => 'twitch', 'source' => 'knusper', 'channel' => '11']);
+        $this->assertTrue($light());
+        $this->assertStringContainsString('1 von 6 Bereichen eingerichtet', $this->page()->body);
+
+        // Ein Creator weniger: das Licht bleibt an; erst wenn der letzte weg ist, geht es aus
+        $ids = array_column(Creators::list($this->orgId), 'id');
+        $this->post('delete', ['id' => (string) $ids[0]]);
+        $this->assertTrue($light());
+        $this->post('delete', ['id' => (string) $ids[1]]);
+        $this->assertFalse($light());
+        $this->assertStringContainsString('0 von 6 Bereichen eingerichtet', $this->page()->body);
+    }
+
     public function testOnlyAdminsCanUseIt(): void
     {
         $this->assertSame(404, $this->page('member')->status);

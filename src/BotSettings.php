@@ -109,13 +109,15 @@ final class BotSettings
      * Welche Bereiche sind eingerichtet (für die Punkte in der Navigation und die Kachel)? „allgemein“ zählt nicht mit.
      * @param array<string,string> $all @return array<string,bool>
      */
-    public static function status(array $all): array
+    public static function status(array $all, ?string $orgId = null): array
     {
         return [
             'termine' => isset($all[self::ANNOUNCE_CHANNEL]),
             'willkommen' => isset($all[self::WELCOME_CHANNEL]),
             'moderation' => isset($all[self::MOD_ROLES]) || isset($all[self::MOD_LOG_CHANNEL]),
             'automod' => self::automodActive(self::automod($all)),
+            // Creator laufen, sobald mindestens einer eingetragen ist; ohne Orga (null) lässt sich das nicht wissen
+            'creator' => $orgId !== null && (int) Db::val('SELECT COUNT(*) FROM bot_creators WHERE org_id = ?', [$orgId]) > 0,
             'recruiting' => isset($all[self::RECRUIT_CHANNEL]),
         ];
     }
