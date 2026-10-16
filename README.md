@@ -7,7 +7,8 @@ Technik: PHP 8.3 ohne Framework, MariaDB, Docker.
 
 **Installation Schritt für Schritt, mit Bildern:** [docs/Community-Hangar-Installation.pdf](docs/Community-Hangar-Installation.pdf)
 (dieselbe Anleitung als Webseite: [docs/anleitung/installation.html](docs/anleitung/installation.html)).
-Sie führt vom Discord Developer Portal über den Server und den Reverse-Proxy bis zum ersten RSI-Sync, in etwa 45 Minuten.
+Sie führt vom Discord Developer Portal über den Server und den Reverse-Proxy, den Discord-Bot (Einladung, Web-App-Einrichtung, Automod, Twitch)
+bis zum ersten RSI-Sync, in etwa 60 bis 90 Minuten. Enthalten sind auch Sicherung, Updates, Absicherung und Fehlersuche.
 
 ## Was die App kann
 
