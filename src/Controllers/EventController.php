@@ -151,6 +151,45 @@ final class EventController extends Controller
         ], $e['id']);
     }
 
+    /**
+     * Formularwerte aus der abgeschickten Eingabe (nach einem Fehler beim Speichern).
+     * @param array<string,mixed> $in @param array<string,mixed> $org @return array<string,mixed>
+     */
+    private static function initialFromInput(array $in, array $org, \Hangar\Viewer $viewer, ?string $eventId): array
+    {
+        $str = static fn ($k, $d = ''): string => is_scalar($in[$k] ?? null) ? (string) $in[$k] : $d;
+        $names = [];
+        foreach (Community::getOrgFleet($org['id'], $viewer)['entries'] as $f) {
+            $names[$f['catalogItemId']] = $f['name'];
+        }
+        $ships = [];
+        foreach (is_array($in['ships'] ?? null) ? $in['ships'] : [] as $s) {
+            if (!is_array($s)) {
+                continue;
+            }
+            $cat = isset($s['catalogItemId']) && $s['catalogItemId'] !== '' ? (string) $s['catalogItemId'] : null;
+            $custom = isset($s['customName']) && is_scalar($s['customName']) ? (string) $s['customName'] : '';
+            $slots = [];
+            foreach (is_array($s['slots'] ?? null) ? $s['slots'] : [] as $x) {
+                if (is_array($x)) {
+                    $slots[] = ['label' => (string) ($x['label'] ?? ''), 'userId' => (string) ($x['userId'] ?? '')];
+                }
+            }
+            $ships[] = [
+                'catalogItemId' => $cat, 'customName' => $cat === null ? $custom : null,
+                'name' => $cat !== null ? ($names[$cat] ?? $custom) : $custom,
+                'task' => is_scalar($s['task'] ?? null) ? (string) $s['task'] : '', 'slots' => $slots,
+            ];
+        }
+        return [
+            'title' => $str('title'), 'description' => $str('description'), 'location' => $str('location'),
+            'voiceChannelId' => $str('voiceChannelId'), 'courseId' => $str('courseId'), 'departmentId' => $str('departmentId'),
+            'departmentKind' => $str('departmentKind', 'TRAINING'), 'draft' => !empty($in['draft']), 'discord' => !empty($in['discord']),
+            'discordImported' => $eventId !== null && \Hangar\Db::val('SELECT discord_origin FROM events WHERE id = ? AND org_id = ?', [$eventId, $org['id']]) === 'IMPORT',
+            'startsAt' => $str('startsAt'), 'endsAt' => $str('endsAt'), 'ships' => $ships,
+        ];
+    }
+
     /** Anlegen oder Ändern; die Eingabe kommt als JSON aus dem Formular (Schiffe und Plätze). */
     public static function save(Request $req, array $p): Response
     {
@@ -166,7 +205,10 @@ final class EventController extends Controller
         try {
             $event = Events::save($viewer->id, $org['id'], $input, $eventId);
         } catch (EventError $e) {
-            return Flash::error($back, $e->getMessage());
+            // Das Formular mit den eingegebenen Werten wieder zeigen, damit nichts neu getippt werden muss.
+            \Hangar\Http\View::share(['flash' => ['t' => 'error', 'm' => $e->getMessage()]]);
+            $title = $eventId ? 'Event bearbeiten' : 'Neues Event';
+            return self::formPage($req, $org, $viewer, $title, self::initialFromInput($input, $org, $viewer, $eventId), $eventId);
         }
         return Response::redirect('/o/' . $org['slug'] . '/events/' . $event['id']);
     }
