@@ -3,6 +3,7 @@ import { Client, Events, GatewayIntentBits, MessageFlags, Options, Partials } fr
 import { readConfig, ConfigError } from './config.js';
 import { createPool, checkDatabase, orgForGuild } from './db.js';
 import { MESSAGE_CONTENT_STATUS, setSetting, TWITCH_STATUS } from './lib/settings.js';
+import { createAutoDelete } from './lib/autodelete.js';
 import { createTwitch } from './lib/twitch.js';
 import { startTwitchWatch } from './workers/twitch.js';
 import { byName, componentOwners } from './commands/index.js';
@@ -99,11 +100,15 @@ function handlerFor(interaction) {
   return null;
 }
 
+// Private Antworten (nur für die Person sichtbar) nach 10 Minuten ohne Aktion löschen
+const autoDelete = createAutoDelete();
+
 client.on(Events.InteractionCreate, async (interaction) => {
   const handler = handlerFor(interaction);
   if (handler === null) return;
   try {
     await handler.run(interaction, { pool, config, log });
+    await autoDelete.track(interaction);
   } catch (err) {
     log.error(`${handler.name} fehlgeschlagen`, err);
     // Auf Vorschläge beim Tippen kann man nicht mit einer Nachricht antworten
@@ -126,6 +131,7 @@ async function shutdown(signal) {
   announcer.stop();
   creatorWatch.stop();
   twitchWatch.stop();
+  autoDelete.stop();
   await client.destroy();
   await pool.end();
 }
