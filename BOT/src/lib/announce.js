@@ -36,10 +36,10 @@ export function eventEmbed(org, e, appUrl, { myStatus, past = false } = {}) {
     value: `<t:${unix(e.startsAt)}:F> (<t:${unix(e.startsAt)}:R>)${e.endsAt ? `\nbis <t:${unix(e.endsAt)}:F>` : ''}`,
   }];
   if (e.location) fields.push({ name: 'Wo', value: cut(e.location, 1024) });
+  if (e.voiceChannelId) fields.push({ name: 'Treffpunkt im Voice', value: `<#${e.voiceChannelId}>` });
   if (e.course) fields.push({ name: 'Ausbildung', value: `${e.course.areaName} · ${e.course.topic} · Stufe ${e.course.level} („${e.course.title}“)` });
   if (e.department) fields.push({ name: 'Abteilung', value: e.department });
-  const ships = shipsField(e.ships ?? []);
-  if (ships) fields.push(ships);
+  fields.push(...shipsFields(e.ships ?? []));
   fields.push(field(RSVP_LABELS.YES, names('YES')), field(RSVP_LABELS.MAYBE, names('MAYBE')), field(RSVP_LABELS.NO, names('NO')));
   if (myStatus !== undefined) fields.push({ name: 'Deine Antwort', value: myStatus ? RSVP_LABELS[myStatus] : 'noch keine' });
   const cancelled = e.status === 'CANCELLED';
@@ -53,17 +53,24 @@ export function eventEmbed(org, e, appUrl, { myStatus, past = false } = {}) {
   };
 }
 
-/** Schiffe mit besetzten und offenen Plätzen; einen Platz wählt man nur im Community-Manager (Hinweis im Feld). */
-export function shipsField(ships) {
-  if (ships.length === 0) return null;
-  const lines = ships.slice(0, 8).map((s) => {
-    const taken = s.slots.filter((x) => x.holder).length;
-    const places = s.slots.length === 0 ? '' : ' – ' + s.slots.map((x) => `${x.label}: ${x.holder ?? 'offen'}`).join(', ');
-    return `**${s.name}**${s.task ? ` (${s.task})` : ''}${s.slots.length ? ` ${taken}/${s.slots.length} belegt` : ''}${places}`;
-  });
-  if (ships.length > 8) lines.push(`… und ${ships.length - 8} weitere`);
+/**
+ * Ein Feld je Schiff (Name, Aufgabe, belegte Plätze) mit den Plätzen untereinander; einen Platz wählt man nur im
+ * Community-Manager (Hinweis im letzten Feld).
+ * @returns {{name:string,value:string}[]}
+ */
+export function shipsFields(ships) {
+  if (ships.length === 0) return [];
   const hint = '_Einen Platz wählst du mit dem Knopf „Platz wählen“ oder im Community-Manager._';
-  return { name: `Schiffe (${ships.length})`, value: cut(lines.join('\n'), 1024 - hint.length - 2) + '\n' + hint };
+  const fields = ships.slice(0, 8).map((s) => {
+    const taken = s.slots.filter((x) => x.holder).length;
+    const title = `🚀 ${s.name}${s.slots.length ? ` · ${taken}/${s.slots.length}` : ''}${s.task ? ` · ${s.task}` : ''}`;
+    const lines = s.slots.map((x) => (x.holder ? `✅ ${x.label}: ${x.holder}` : `⬜ ${x.label}: offen`));
+    return { name: cut(title, 256), value: lines.length === 0 ? 'Keine Plätze' : lines.join('\n') };
+  });
+  const last = fields[fields.length - 1];
+  const more = ships.length > 8 ? `\n… und ${ships.length - 8} weitere Schiffe` : '';
+  last.value = cut(last.value, 1024 - hint.length - more.length - 2) + more + '\n' + hint;
+  return fields;
 }
 
 export function eventUrl(org, e, appUrl) {

@@ -81,6 +81,7 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
     title: e.title,
     description: e.description,
     location: e.location,
+    voiceChannelId: e.voice_channel_id ?? null,
     startsAt: e.starts_at,
     endsAt: e.ends_at,
     status: e.status,
