@@ -115,6 +115,23 @@ final class WebTest extends DbTestCase
         $this->assertSame(['alpha', 'bravo', 'charlie'], $order('unsinn'));
         $this->assertStringContainsString('<option value="name-desc" selected>', $this->call('GET', '/catalog', 'loner', ['query' => ['sort' => 'name-desc']])->body);
     }
+    public function testLastVisitedOrgStaysOnPagesWithoutOrgInTheAddress(): void
+    {
+        Db::insert('org_memberships', ['user_id' => $this->u['member']['id'], 'org_id' => $this->orgB, 'role' => 'MEMBER', 'can_plan' => 0]);
+        // Wer eine Orga besucht, bekommt sie als Cookie gemerkt; eine fremde (kein Mitglied) wird nicht gemerkt
+        $visit = $this->call('GET', '/o/beta/hangar', 'member');
+        $this->assertContains(Auth::ORG_COOKIE, array_column($visit->cookies, 0));
+        $this->assertNotContains(Auth::ORG_COOKIE, array_column($this->call('GET', '/o/beta', 'admin')->cookies, 0));
+        // Mein Hangar zeigt dann Kopf und Reiter dieser Orga, nicht die erste
+        $page = $this->call('GET', '/hangar', 'member', ['cookies' => [Auth::ORG_COOKIE => 'beta']])->body;
+        $this->assertStringContainsString('href="/o/beta/hangar"', $page);
+        $this->assertStringContainsString('title="Zur Startseite von Beta"', $page);
+        // Ein Cookie für eine Orga, in der man nicht Mitglied ist, wird ignoriert
+        $other = $this->call('GET', '/hangar', 'admin', ['cookies' => [Auth::ORG_COOKIE => 'beta']])->body;
+        $this->assertStringContainsString('title="Zur Startseite von Alpha"', $other);
+        $this->assertStringNotContainsString('/o/beta/hangar', $other);
+    }
+
     public function testSecurityHeadersAndNoStoreForLoggedInPages(): void
     {
         $guest = $this->call('GET', '/login');

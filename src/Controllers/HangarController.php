@@ -41,7 +41,7 @@ final class HangarController extends Controller
             'term' => $term,
             'results' => $term !== '' ? Hangar::searchCatalog($term) : [],
             'wide' => true,
-            'fleetSlug' => $viewer->orgs[0]['slug'] ?? null,
+            'fleetSlug' => Auth::preferredOrg($viewer, is_string($req->cookies[Auth::ORG_COOKIE] ?? null) ? $req->cookies[Auth::ORG_COOKIE] : null)['slug'] ?? null,
         ], 'Mein Hangar');
     }
 

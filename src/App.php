@@ -182,8 +182,14 @@ final class App
             'csrf' => $viewer?->csrf ?? '',
             'flash' => $flash,
             'bare' => $bare,
+            'prefOrg' => is_string($req->cookies[Auth::ORG_COOKIE] ?? null) ? $req->cookies[Auth::ORG_COOKIE] : null,
         ]);
         $res = self::routes()->dispatch($req);
+        // Zuletzt besuchte Orga merken (nur wenn der Nutzer dort Mitglied ist)
+        if ($viewer !== null && preg_match('#^/o/([^/]+)#', $req->path, $m) === 1 && $m[1] !== ($req->cookies[Auth::ORG_COOKIE] ?? null)
+            && in_array($m[1], array_column($viewer->orgs, 'slug'), true)) {
+            $res->withCookie(Auth::ORG_COOKIE, $m[1], Auth::cookieOptions(time() + 365 * 86400));
+        }
         if ($bare) {
             $res = self::keepBare($res);
         }

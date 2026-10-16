@@ -13,6 +13,8 @@ final class Auth
 {
     public const COOKIE = 'ch_session';
     public const STATE_COOKIE = 'ch_oauth_state';
+    /** Merkt die zuletzt besuchte Orga, damit Seiten ohne Orga in der Adresse (Mein Hangar, Katalog, …) sie beibehalten. */
+    public const ORG_COOKIE = 'ch_org';
     private const LIFETIME = 30 * 86400;
 
     private static ?Viewer $viewer = null;
@@ -70,6 +72,17 @@ final class Auth
     public static function cookieOptions(int $expires): array
     {
         return ['expires' => $expires, 'path' => '/', 'secure' => Config::isHttps(), 'httponly' => true, 'samesite' => 'Lax'];
+    }
+
+    /** Orga für Seiten ohne Orga in der Adresse: die gemerkte, wenn der Nutzer dort Mitglied ist, sonst seine erste. */
+    public static function preferredOrg(Viewer $viewer, ?string $slug): ?array
+    {
+        foreach ($viewer->orgs as $o) {
+            if ($slug !== null && $o['slug'] === $slug) {
+                return $o;
+            }
+        }
+        return $viewer->orgs[0] ?? null;
     }
 
     // --- Viewer ------------------------------------------------------------------------------

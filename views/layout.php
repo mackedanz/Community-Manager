@@ -40,7 +40,7 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
 // Aktuelle Orga: die aus der Adresse (/o/<Kürzel>/…), sonst die erste des Nutzers.
 $curOrg = null;
 if ($viewer && $viewer->orgs) {
-    $curOrg = $viewer->orgs[0];
+    $curOrg = \Hangar\Auth::preferredOrg($viewer, $prefOrg ?? null);
     foreach ($viewer->orgs as $o) {
         if ($here('/o/' . $o['slug'])) {
             $curOrg = $o;
