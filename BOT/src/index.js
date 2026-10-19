@@ -11,6 +11,7 @@ import { registerAutomod } from './events/automod.js';
 import { registerMemberEvents } from './events/members.js';
 import { registerMessageLog } from './events/messagelog.js';
 import { registerModLog } from './events/modlog.js';
+import { registerTempVoice } from './events/tempvoice.js';
 import { registerWelcome } from './events/welcome.js';
 import { startAnnouncer } from './workers/announcer.js';
 import { startCreatorWatch } from './workers/creators.js';
@@ -36,7 +37,7 @@ try {
 
 // GuildMembers ist ein privilegierter Intent: im Developer Portal unter Bot -> "Server Members Intent" einschalten
 // Nachrichten lesen (Automod, Nachrichten-Protokoll) nur mit BOT_MESSAGE_CONTENT=1: "Message Content" ist ebenfalls privilegiert
-const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers];
+const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildVoiceStates];
 if (config.messageContent) intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent);
 const client = new Client({
   intents,
@@ -50,6 +51,8 @@ const memberSync = registerMemberEvents(client, { pool, config, log });
 registerModLog(client, { pool, log });
 // Willkommensnachricht für neue Mitglieder
 registerWelcome(client, { pool, log });
+// Temporäre Sprachkanäle (Auslöser-Kanal per /sprachkanal festlegen)
+const tempVoice = registerTempVoice(client, { pool, log });
 if (config.messageContent) {
   registerAutomod(client, { pool, log });
   registerMessageLog(client, { pool, log });
@@ -132,6 +135,7 @@ async function shutdown(signal) {
   creatorWatch.stop();
   twitchWatch.stop();
   autoDelete.stop();
+  tempVoice.stop();
   await client.destroy();
   await pool.end();
 }
