@@ -1,6 +1,6 @@
 // Temporäre Sprachkanäle: Wer den Auslöser-Kanal betritt, bekommt einen eigenen Sprachkanal mit seinem Namen und wird hineinverschoben.
 // Ist der Kanal leer, wird er nach drei Minuten gelöscht. Wer in der Zeit zurückkommt, rettet ihn.
-import { ChannelType } from 'discord.js';
+import { ChannelType, OverwriteType, PermissionFlagsBits } from 'discord.js';
 import { orgForGuild } from '../db.js';
 import { getSetting, setSetting } from './settings.js';
 
@@ -83,7 +83,11 @@ export function createTempVoice({ pool, log, delayMs = DELETE_DELAY_MS, setTimer
       type: ChannelType.GuildVoice,
       parent: trigger.parentId,
       bitrate: trigger.bitrate,
-      permissionOverwrites: trigger.permissionOverwrites.cache.map((o) => ({ id: o.id, type: o.type, allow: o.allow, deny: o.deny })),
+      // Rechte des Auslösers übernehmen; wer den Kanal angelegt hat, darf ihn verwalten (umbenennen, Limit setzen)
+      permissionOverwrites: [
+        ...trigger.permissionOverwrites.cache.filter((o) => o.id !== member.id).map((o) => ({ id: o.id, type: o.type, allow: o.allow, deny: o.deny })),
+        { id: member.id, type: OverwriteType.Member, allow: [PermissionFlagsBits.ManageChannels] },
+      ],
       reason: `Temporärer Sprachkanal für ${member.user.username}`,
     });
     tracked.set(channel.id, orgId);

@@ -38,7 +38,8 @@ function setup() {
     },
   };
   const trigger = { id: 'T', guild, parentId: 'K', bitrate: 64000, members: new Map(), permissionOverwrites: { cache: new Map([['r', { id: 'r', type: 0, allow: 1n, deny: 2n }]]) } };
-  trigger.permissionOverwrites.cache.map = (fn) => [...trigger.permissionOverwrites.cache.values()].map(fn);
+  const overwrites = trigger.permissionOverwrites.cache;
+  overwrites.filter = (fn) => ({ map: (m) => [...overwrites.values()].filter(fn).map(m) });
   channels.set('T', trigger);
   const timers = fakeTimers();
   const tv = createTempVoice({ log, store, ...timers });
@@ -62,7 +63,9 @@ test('Betreten des Auslösers legt einen Kanal mit dem Namen an, verschiebt und 
   const created = channels.get('c1');
   assert.equal(created.created.name, 'Mike');
   assert.equal(created.created.parent, 'K');
-  assert.equal(created.created.permissionOverwrites.length, 1);
+  // Rechte des Auslösers plus Verwalten-Recht für den Ersteller
+  assert.equal(created.created.permissionOverwrites.length, 2);
+  assert.equal(created.created.permissionOverwrites.at(-1).id, 'u1');
   assert.ok(created.members.has('u1'));
   assert.deepEqual(JSON.parse(settings.get(`o1:${TEMPVOICE_CHANNELS}`)), ['c1']);
 });
