@@ -43,7 +43,7 @@ final class BotSettings
         'allgemein' => 'Allgemein',
         'termine' => 'Termine',
         'willkommen' => 'Willkommen und Regeln',
-        'sprache' => 'Sprachkanäle',
+        'sprache' => 'Temp Sprachkanal',
         'moderation' => 'Moderation',
         'automod' => 'Automod',
         'creator' => 'Creator',
