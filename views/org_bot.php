@@ -5,6 +5,7 @@
 /** @var array{spam:bool,invites:bool,links:bool,mentions:int,words:list<string>,domains:list<string>,exemptChannels:list<string>} $automod */
 /** @var array<string,bool> $status */
 /** @var list<array{id:string,name:string,category:?string}> $channels */
+/** @var list<array{id:string,name:string,category:?string}> $voiceChannels */
 /** @var list<array{id:string,name:string,color:int}> $roles */
 /** @var ?string $problem */
 /** @var bool $messageContent */
@@ -34,7 +35,8 @@ $hint = 'text-xs text-zinc-500';
 $set = static fn (string $k): string => $settings[$k] ?? '';
 
 // Auswahl eines Textkanals, nach Kategorien gruppiert; ein gespeicherter Kanal, den es nicht mehr gibt, bleibt sichtbar.
-$channelSelect = static function (string $name, string $current, string $empty = '– keiner –') use ($channels, $field): string {
+$channelSelect = static function (string $name, string $current, string $empty = '– keiner –', ?array $list = null, string $icon = '#') use ($channels, $field): string {
+    $channels = $list ?? $channels;
     $html = '<select name="' . e($name) . '" class="' . $field . '"><option value="">' . e($empty) . '</option>';
     if ($current !== '' && !in_array($current, array_column($channels, 'id'), true)) {
         $html .= '<option value="' . e($current) . '" selected>Kanal nicht mehr verfügbar (' . e($current) . ')</option>';
@@ -45,7 +47,7 @@ $channelSelect = static function (string $name, string $current, string $empty =
             $html .= ($group !== false ? '</optgroup>' : '') . '<optgroup label="' . e($c['category'] ?? 'Ohne Kategorie') . '">';
             $group = $c['category'];
         }
-        $html .= '<option value="' . e($c['id']) . '"' . ($c['id'] === $current ? ' selected' : '') . '># ' . e($c['name']) . '</option>';
+        $html .= '<option value="' . e($c['id']) . '"' . ($c['id'] === $current ? ' selected' : '') . '>' . $icon . ' ' . e($c['name']) . '</option>';
     }
     return $html . ($group !== false ? '</optgroup>' : '') . '</select>';
 };
@@ -90,6 +92,7 @@ $descriptions = [
     'allgemein' => 'Wichtige Hinweise zu den Einstellungen des Bots.',
     'termine' => 'Der Bot kündigt Termine an, erinnert 24 und 1 Stunde vorher und lässt Plätze per Knopf wählen.',
     'willkommen' => 'Begrüßt neue Mitglieder. „Bestätigen“ unter den Regeln vergibt die Besucher-Rolle.',
+    'sprache' => 'Temporäre Sprachkanäle: Wer den Auslöser-Kanal betritt, bekommt einen eigenen Sprachkanal mit seinem Namen. Er wird gelöscht, sobald er drei Minuten leer ist.',
     'moderation' => 'Wer mit /mod verwarnen, stummschalten, kicken und bannen darf und wohin der Bot das protokolliert.',
     'automod' => 'Prüft Nachrichten automatisch. Drei Verstöße in einer Stunde führen zu 10 Minuten Timeout. Admins, Moderatoren und Bots sind ausgenommen.',
     'setup' => 'Kategorien und Kanäle (Text, Sprache, Ankündigung) mit Rechten auf dem Server anlegen, vorhandene ändern, verschieben oder löschen.',
@@ -940,6 +943,12 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
           <label class="block max-w-md space-y-1.5"><span class="text-sm text-zinc-300">Ankündigungskanal</span>
             <?= $channelSelect('announceChannel', $set(BotSettings::ANNOUNCE_CHANNEL), '– keiner (Ankündigungen aus) –') ?>
             <span class="block <?= $hint ?>">Hier erscheinen neue Termine mit Schiffen und Plätzen. Ohne Kanal kündigt der Bot nichts an.</span></label>
+
+        <?php elseif ($section === 'sprache'): ?>
+          <label class="block max-w-md space-y-1.5"><span class="text-sm text-zinc-300">Kanal „Sprachkanal erstellen“</span>
+            <?= $channelSelect('tempvoiceChannel', $set(BotSettings::TEMPVOICE_TRIGGER), '– keiner (aus) –', $voiceChannels, '🔊') ?>
+            <span class="block <?= $hint ?>">Lege den Sprachkanal vorher auf dem Server an, zum Beispiel unter „Discord-Setup“. Wer ihn betritt, bekommt einen neuen Kanal in derselben Kategorie, mit denselben Rechten, und wird hineinverschoben. Wer ihn angelegt hat, darf ihn umbenennen. Drei Minuten nach dem Verlassen des Letzten wird er gelöscht.</span>
+            <span class="block <?= $hint ?>">Der Bot braucht auf dem Kanal oder seiner Kategorie die Rechte „Kanäle verwalten“ und „Mitglieder verschieben“.</span></label>
 
         <?php elseif ($section === 'willkommen'): ?>
           <?php $text = $set(BotSettings::WELCOME_TEXT) !== '' ? $set(BotSettings::WELCOME_TEXT) : BotSettings::DEFAULT_WELCOME; ?>

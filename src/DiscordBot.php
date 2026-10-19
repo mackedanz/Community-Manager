@@ -135,14 +135,33 @@ final class DiscordBot
      */
     public static function textChannels(string $guildId): array
     {
+        return self::channelsOfTypes(self::channels($guildId), [0, 5]);
+    }
+
+    /**
+     * Text- und Sprachkanäle (ohne Stage-Kanäle) mit einem einzigen Aufruf bei Discord.
+     * @return array{text:list<array{id:string,name:string,category:?string}>,voice:list<array{id:string,name:string,category:?string}>}
+     */
+    public static function textAndVoiceChannels(string $guildId): array
+    {
         $all = self::channels($guildId);
+        return ['text' => self::channelsOfTypes($all, [0, 5]), 'voice' => self::channelsOfTypes($all, [2])];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $all
+     * @param list<int> $types
+     * @return list<array{id:string,name:string,category:?string}>
+     */
+    private static function channelsOfTypes(array $all, array $types): array
+    {
         $cats = [];
         foreach ($all as $c) {
             if (($c['type'] ?? null) === 4) {
                 $cats[(string) $c['id']] = ['name' => (string) ($c['name'] ?? ''), 'position' => (int) ($c['position'] ?? 0)];
             }
         }
-        $rows = array_values(array_filter($all, static fn ($c) => in_array($c['type'] ?? null, [0, 5], true)));
+        $rows = array_values(array_filter($all, static fn ($c) => in_array($c['type'] ?? null, $types, true)));
         $key = static function (array $c) use ($cats): array {
             $cat = $cats[(string) ($c['parent_id'] ?? '')] ?? null;
             return [$cat === null ? -1 : $cat['position'], (int) ($c['position'] ?? 0)];

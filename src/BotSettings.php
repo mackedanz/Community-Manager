@@ -27,6 +27,8 @@ final class BotSettings
     /** Kanal für die Übersichten von /recruit und die Rollen (kommagetrennt), die den Befehl nutzen dürfen. */
     public const RECRUIT_CHANNEL = 'recruit_channel_id';
     public const RECRUIT_ROLES = 'recruit_role_ids';
+    /** Auslöser-Kanal für temporäre Sprachkanäle ("Sprachkanal erstellen"); die vom Bot angelegten Kanäle (tempvoice_channels) pflegt nur der Bot. */
+    public const TEMPVOICE_TRIGGER = 'tempvoice_trigger';
 
     public const MAX_WELCOME_TEXT = 500;
     public const MAX_MOD_ROLES = 10;
@@ -41,6 +43,7 @@ final class BotSettings
         'allgemein' => 'Allgemein',
         'termine' => 'Termine',
         'willkommen' => 'Willkommen und Regeln',
+        'sprache' => 'Sprachkanäle',
         'moderation' => 'Moderation',
         'automod' => 'Automod',
         'creator' => 'Creator',
@@ -114,6 +117,7 @@ final class BotSettings
         return [
             'termine' => isset($all[self::ANNOUNCE_CHANNEL]),
             'willkommen' => isset($all[self::WELCOME_CHANNEL]),
+            'sprache' => isset($all[self::TEMPVOICE_TRIGGER]),
             'moderation' => isset($all[self::MOD_ROLES]) || isset($all[self::MOD_LOG_CHANNEL]),
             'automod' => self::automodActive(self::automod($all)),
             // Creator laufen, sobald mindestens einer eingetragen ist; ohne Orga (null) lässt sich das nicht wissen
@@ -172,6 +176,10 @@ final class BotSettings
         switch ($section) {
             case 'termine':
                 $values = [self::ANNOUNCE_CHANNEL => $channel('announceChannel')];
+                break;
+            case 'sprache':
+                // $channelIds sind hier die Sprachkanäle des Servers
+                $values = [self::TEMPVOICE_TRIGGER => $channel('tempvoiceChannel')];
                 break;
             case 'willkommen':
                 $text = str_replace("\r\n", "\n", $str('welcomeText'));

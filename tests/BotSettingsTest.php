@@ -163,7 +163,7 @@ final class BotSettingsTest extends DbTestCase
             'admin_channel_id' => '11', 'announce_channel_id' => '14', 'mod_role_ids' => '20,21', 'rules_channel_id' => '11',
             'visitor_role_id' => '21', 'welcome_channel_id' => '12',
         ], $this->sorted());
-        $this->assertSame(['termine' => true, 'willkommen' => true, 'moderation' => true, 'automod' => false, 'creator' => false, 'recruiting' => false], BotSettings::status(BotSettings::all($this->orgId), $this->orgId));
+        $this->assertSame(['termine' => true, 'willkommen' => true, 'sprache' => false, 'moderation' => true, 'automod' => false, 'creator' => false, 'recruiting' => false], BotSettings::status(BotSettings::all($this->orgId), $this->orgId));
 
         // Leeren entfernt die Einstellung, ein eigener Text wird gespeichert.
         $this->save('termine', ['announceChannel' => '']);
@@ -187,6 +187,20 @@ final class BotSettingsTest extends DbTestCase
         $this->save('moderation', ['modRoles' => ['20'], 'modLogChannel' => '777']);
         $this->assertSame('20', BotSettings::all($this->orgId)['mod_role_ids']);
         $this->assertStringContainsString('Kanal nicht mehr verfügbar', $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'moderation'])->body);
+    }
+
+    public function testTempVoiceTriggerMustBeAVoiceChannelAndUsesTheBotsKey(): void
+    {
+        $this->save('sprache', ['tempvoiceChannel' => '11']); // Textkanal
+        $this->assertSame([], BotSettings::all($this->orgId));
+        $this->save('sprache', ['tempvoiceChannel' => '13']);
+        $this->assertSame(['tempvoice_trigger' => '13'], BotSettings::all($this->orgId));
+        $this->assertTrue(BotSettings::status(BotSettings::all($this->orgId), $this->orgId)['sprache']);
+        $body = $this->call('GET', '/o/alpha/bot', 'admin', [], ['m' => 'sprache'])->body;
+        $this->assertStringContainsString('Lounge', $body);
+        $this->assertStringNotContainsString('>#  regeln', $body);
+        $this->save('sprache', ['tempvoiceChannel' => '']);
+        $this->assertSame([], BotSettings::all($this->orgId));
     }
 
     public function testWithoutDiscordOnlyTheIdFormatIsChecked(): void

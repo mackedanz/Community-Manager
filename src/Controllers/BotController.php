@@ -39,7 +39,7 @@ final class BotController extends Controller
 
     /**
      * Kanäle und Rollen des Servers; null, wenn sie nicht zu holen sind (kein Bot, Discord-Fehler), dazu der Grund.
-     * @return array{channels:?list<array{id:string,name:string,category:?string}>,roles:?list<array{id:string,name:string,color:int}>,problem:?string}
+     * @return array{channels:?list<array{id:string,name:string,category:?string}>,voice:?list<array{id:string,name:string,category:?string}>,roles:?list<array{id:string,name:string,color:int}>,problem:?string}
      */
     private static function discordLists(string $orgId): array
     {
@@ -48,9 +48,10 @@ final class BotController extends Controller
             return ['channels' => null, 'roles' => null, 'problem' => 'Kein Bot-Token eingerichtet (DISCORD_BOT_TOKEN). Kanäle und Rollen können nicht geladen werden.'];
         }
         try {
-            return ['channels' => DiscordBot::textChannels($guild), 'roles' => DiscordBot::roles($guild), 'problem' => null];
+            $found = DiscordBot::textAndVoiceChannels($guild);
+            return ['channels' => $found['text'], 'voice' => $found['voice'], 'roles' => DiscordBot::roles($guild), 'problem' => null];
         } catch (DiscordAuthError | DiscordUnavailableError $e) {
-            return ['channels' => null, 'roles' => null, 'problem' => $e->getMessage()];
+            return ['channels' => null, 'voice' => null, 'roles' => null, 'problem' => $e->getMessage()];
         }
     }
 
@@ -132,6 +133,7 @@ final class BotController extends Controller
             'automod' => BotSettings::automod($all),
             'status' => BotSettings::status($all, $org['id']),
             'channels' => $lists['channels'] ?? [],
+            'voiceChannels' => $lists['voice'] ?? [],
             'roles' => $lists['roles'] ?? [],
             'problem' => $lists['problem'],
             'messageContent' => BotSettings::messageContentActive($all),
@@ -161,6 +163,7 @@ final class BotController extends Controller
         BotSettings::RULES_CHANNEL => 'Regeln',
         BotSettings::MOD_LOG_CHANNEL => 'Moderations-Protokoll',
         BotSettings::ADMIN_CHANNEL => 'Bot-Einstellungen',
+        BotSettings::TEMPVOICE_TRIGGER => 'Sprachkanal erstellen',
     ];
 
     /** Kanal-ID => Bezeichnung für die Kanäle, die der Bot nutzt. @param array<string,string> $all @return array<string,string> */
@@ -579,7 +582,7 @@ final class BotController extends Controller
         try {
             // Beim Recruiting gehört der Fragenkatalog dazu: erst alles prüfen, dann speichern
             $questions = $section === 'recruiting' ? Recruiting::parse($req->post) : null;
-            BotSettings::save($org['id'], $section, $req->post, $known($lists['channels']), $known($lists['roles']));
+            BotSettings::save($org['id'], $section, $req->post, $known($section === 'sprache' ? $lists['voice'] : $lists['channels']), $known($lists['roles']));
             if ($questions !== null) {
                 Recruiting::save($org['id'], $questions);
             }
