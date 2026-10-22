@@ -16,6 +16,12 @@ final class Matcher
     private const NAME_ALIASES = [
         'ursarover' => 'ursa',
         'ursaroverfortuna' => 'ursafortuna',
+        // Die Ship Matrix kennt diese Pledge-Namen nicht: "Mercury", "600i Explorer" und "Carrack Expedition w/C8X" (mit der Pisces)
+        'mercurystarrunner' => 'mercury',
+        '600iexplorationmodule' => '600iexplorer',
+        'carrackexpeditionwithpiscesedition' => 'carrackexpeditionwc8x',
+        'carrackexpeditionwithpiscesexpedition' => 'carrackexpeditionwc8x',
+        'carrackexpeditionwpiscesexpedition' => 'carrackexpeditionwc8x',
     ];
 
     /**

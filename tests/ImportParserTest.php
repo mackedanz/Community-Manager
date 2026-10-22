@@ -193,6 +193,24 @@ final class ImportParserTest extends TestCase
         $this->assertSame('Constellation Phoenix', $plan['matched'][0]['name']);
     }
 
+    public function testPledgeNamesTheShipMatrixDoesNotKnowUseAliases(): void
+    {
+        $index = Matcher::buildIndex([
+            self::row('SHIP', 'mercury', 'Mercury'),
+            self::row('SHIP', '600i-explorer', '600i Explorer'),
+            self::row('SHIP', 'carrack-expedition', 'Carrack Expedition'),
+            self::row('SHIP', 'carrack-expedition-w-c8x', 'Carrack Expedition w/C8X'),
+        ]);
+        foreach ([
+            'Mercury Star Runner' => 'mercury',
+            '600i Exploration Module' => '600i-explorer',
+            'Carrack Expedition with Pisces Edition' => 'carrack-expedition-w-c8x',
+            'Carrack Expedition w/ Pisces Expedition' => 'carrack-expedition-w-c8x',
+        ] as $title => $slug) {
+            $this->assertSame($slug, Matcher::find($index, 'SHIP', ['title' => $title])['slug'] ?? null, $title);
+        }
+    }
+
     public function testDoesNotShortenTwoWordNames(): void
     {
         $cat = Matcher::buildIndex([self::row('SHIP', 'cutlass', 'Cutlass')]);
