@@ -37,6 +37,28 @@ final class BotController extends Controller
         return [$viewer, $org];
     }
 
+    /**
+     * Bereiche nur für Server-Admins: Rollen und Rechte, Discord-Setup (mit Vorlagen, Zuordnung und Kanalrechten) und Temp Sprachkanal.
+     * Wer nur über die Orga-Leitungs-Rolle Admin ist, hat darauf keinen Zugriff; das bleibt beim Server-Eigner und den Server-Admins.
+     */
+    private const OWNER_SECTIONS = ['sprache', 'setup', 'rollen', 'vorlagen', 'zuordnung', 'rechte'];
+
+    /** Admin der Orga und zugleich Server-Admin (nicht nur über die Leitungs-Rolle). @param array<string,mixed> $org */
+    private static function isOwner(array $org): bool
+    {
+        return $org['role'] === 'ADMIN' && empty($org['viaRole']);
+    }
+
+    /** Wie requireAdmin, aber nur für Server-Admins. @return array{0:HangarViewer,1:array<string,mixed>} */
+    private static function requireOwner(Request $req, string $slug): array
+    {
+        [$viewer, $org] = self::requireAdmin($req, $slug);
+        if (!self::isOwner($org)) {
+            throw HttpException::notFound();
+        }
+        return [$viewer, $org];
+    }
+
     /** Bereiche, die Moderatoren (ohne Admin-Recht) auf der Bot-Seite sehen: Moderation, Fälle und Automod. */
     private const MOD_SECTIONS = ['moderation', 'faelle', 'automod'];
 
@@ -75,15 +97,22 @@ final class BotController extends Controller
     {
         [, $org] = self::requireStaff($req, (string) $p['slug']);
         $fullAccess = $org['role'] === 'ADMIN';
+        $owner = self::isOwner($org);
         $section = (string) $req->query('m', $fullAccess ? 'allgemein' : 'moderation');
         if (!isset(BotSettings::SECTIONS[$section]) && !isset(BotSettings::SUBSECTIONS[$section])) {
             $section = $fullAccess ? 'allgemein' : 'moderation';
         }
-        // Moderatoren sehen nur ihre Bereiche
+        // Moderatoren sehen nur ihre Bereiche, die Orga-Leitung (ohne Server-Admin) nicht die Server-Admin-Bereiche
         if (!$fullAccess && !in_array($section, self::MOD_SECTIONS, true)) {
             $section = 'moderation';
         }
+        if (!$owner && in_array($section, self::OWNER_SECTIONS, true)) {
+            $section = $fullAccess ? 'allgemein' : 'moderation';
+        }
         $navSections = $fullAccess ? BotSettings::SECTIONS : array_intersect_key(BotSettings::SECTIONS, array_flip(self::MOD_SECTIONS));
+        if (!$owner) {
+            $navSections = array_diff_key($navSections, array_flip(self::OWNER_SECTIONS));
+        }
         $all = BotSettings::all($org['id']);
         $lists = self::discordLists($org['id']);
         $structure = null;
@@ -152,10 +181,11 @@ final class BotController extends Controller
         return OrgController::orgPage($org, 'org_bot', [
             'section' => $section,
             'fullAccess' => $fullAccess,
+            'ownerAccess' => $owner,
             'navSections' => $navSections,
             'settings' => $all,
             'automod' => BotSettings::automod($all),
-            'status' => BotSettings::status($all, $org['id']),
+            'status' => $owner ? BotSettings::status($all, $org['id']) : array_diff_key(BotSettings::status($all, $org['id']), array_flip(self::OWNER_SECTIONS)),
             'channels' => $lists['channels'] ?? [],
             'voiceChannels' => $lists['voice'] ?? [],
             'roles' => $lists['roles'] ?? [],
@@ -208,7 +238,7 @@ final class BotController extends Controller
      */
     private static function change(Request $req, array $p, string $section, callable $work, string $extra = ''): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [, $org] = in_array($section, self::OWNER_SECTIONS, true) ? self::requireOwner($req, (string) $p['slug']) : self::requireAdmin($req, (string) $p['slug']);
         $to = '/o/' . $org['slug'] . '/bot?m=' . $section . $extra;
         $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
         if ($guild === '' || !DiscordBot::configured()) {
@@ -479,7 +509,7 @@ final class BotController extends Controller
     /** Legt eine Vorlage aus eingefügtem JSON an (z. B. von einem anderen Server heruntergeladen). */
     public static function templateImport(Request $req, array $p): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [, $org] = self::requireOwner($req, (string) $p['slug']);
         $to = '/o/' . $org['slug'] . '/bot?m=vorlagen';
         try {
             $text = trim((string) $req->input('json', ''));
@@ -501,7 +531,7 @@ final class BotController extends Controller
     /** Lädt eine Vorlage als JSON-Datei herunter. */
     public static function templateExport(Request $req, array $p): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [, $org] = self::requireOwner($req, (string) $p['slug']);
         $t = self::loadTemplate($org['id'], (string) $req->query('id', ''));
         if ($t === null) {
             throw HttpException::notFound();
@@ -517,7 +547,7 @@ final class BotController extends Controller
     /** Löscht eine eigene Vorlage (die mitgelieferten bleiben). */
     public static function templateDelete(Request $req, array $p): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [, $org] = self::requireOwner($req, (string) $p['slug']);
         $to = '/o/' . $org['slug'] . '/bot?m=vorlagen';
         $t = self::loadTemplate($org['id'], (string) $req->input('id', ''));
         if ($t === null || $t['builtin']) {
@@ -551,7 +581,7 @@ final class BotController extends Controller
     /** Legt Rollen mit Rechten an (erst alles prüfen, dann anlegen). */
     public static function roles(Request $req, array $p): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [, $org] = self::requireOwner($req, (string) $p['slug']);
         $to = '/o/' . $org['slug'] . '/bot?m=rollen';
         $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
         if ($guild === '' || !DiscordBot::configured()) {
@@ -570,7 +600,7 @@ final class BotController extends Controller
     /** Legt Kategorien und Kanäle aus dem Discord-Setup an (erst alles prüfen, dann anlegen). */
     public static function setup(Request $req, array $p): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [, $org] = self::requireOwner($req, (string) $p['slug']);
         $to = '/o/' . $org['slug'] . '/bot?m=setup';
         $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
         if ($guild === '' || !DiscordBot::configured()) {
@@ -591,6 +621,10 @@ final class BotController extends Controller
     {
         [$viewer, $org] = self::requireAdmin($req, (string) $p['slug']);
         $section = (string) $req->input('section', '');
+        // Sprachkanal-Auslöser und Zuordnung (Kanäle, Besucher-Rolle) gehören zu den Server-Admin-Bereichen
+        if (in_array($section, self::OWNER_SECTIONS, true) && !self::isOwner($org)) {
+            throw HttpException::notFound();
+        }
         $to = '/o/' . $org['slug'] . '/bot' . (isset(BotSettings::SECTIONS[$section]) || isset(BotSettings::SUBSECTIONS[$section]) ? '?m=' . $section : '');
         $lists = self::discordLists($org['id']);
         // Bereits gespeicherte IDs bleiben gültig, auch wenn Discord sie gerade nicht liefert (sonst ließe sich nichts mehr speichern).

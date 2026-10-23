@@ -3,6 +3,7 @@
 /** @var string $section */
 /** @var bool $fullAccess true = Orga-Admin; false = Moderator mit Zugang zu Moderation und Automod (nur ansehen, Maßnahmen ausführen) */
 /** @var array<string,string> $navSections Bereiche im Menü */
+/** @var bool $ownerAccess true = Server-Admin; false = Admin nur über die Orga-Leitungs-Rolle oder Moderator (ohne Rollen und Rechte, Discord-Setup, Temp Sprachkanal) */
 /** @var array<string,string> $settings */
 /** @var array{spam:bool,invites:bool,links:bool,mentions:int,words:list<string>,domains:list<string>,exemptChannels:list<string>} $automod */
 /** @var array<string,bool> $status */
@@ -918,8 +919,10 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
       </section>
       <section class="<?= $card ?>">
         <div class="space-y-2 p-5 text-sm text-zinc-300">
-          <p>Hier gibt es nichts einzustellen. Welcher Kanal und welche Rolle für den Bot gelten, legst du unter
-            <a href="<?= e($base . '?m=zuordnung') ?>" class="text-cyan-300 hover:underline">Discord-Setup, Zuordnung</a> fest.
+          <p>Hier gibt es nichts einzustellen.
+            <?php if ($ownerAccess): ?>Welcher Kanal und welche Rolle für den Bot gelten, legst du unter
+              <a href="<?= e($base . '?m=zuordnung') ?>" class="text-cyan-300 hover:underline">Discord-Setup, Zuordnung</a> fest.
+            <?php else: ?>Rollen und Rechte, Discord-Setup und die temporären Sprachkanäle sind Sache der Server-Admins.<?php endif; ?>
             Die Funktionen (Termine, Willkommen und Regeln, Moderation, Automod) schaltest du in ihren eigenen Bereichen ein und aus.</p>
         </div>
       </section>

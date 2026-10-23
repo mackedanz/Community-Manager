@@ -384,10 +384,19 @@ final class OrgsTest extends DbTestCase
         Orgs::syncMemberships($stranger['id']);
 
         $this->assertSame('ADMIN', $mine($boss['id'])['role']);
+        $this->assertTrue($mine($boss['id'])['viaRole'], 'Admin nur über die Leitungsrolle');
         $this->assertTrue($mine($boss['id'])['canPlan'] && $mine($boss['id'])['canRecruit'] && $mine($boss['id'])['canModerate']);
         $this->assertSame('MEMBER', $mine($normal['id'])['role']);
         $this->assertFalse($mine($normal['id'])['canModerate']);
         $this->assertNull($mine($stranger['id']), 'Ohne Mitglieds- oder Leitungsrolle kein Zugang');
+
+        // Wer Server-Admin ist und zusätzlich die Leitungsrolle hat, behält vollen Zugriff
+        $both = $this->mkDiscordUser();
+        $this->discord->guilds = [FakeDiscord::guild('g-lead', ['permissions' => '8'])];
+        $this->discord->roles = ['g-lead' => ['role-boss']];
+        Orgs::syncMemberships($both['id']);
+        $this->assertSame('ADMIN', $mine($both['id'])['role']);
+        $this->assertFalse($mine($both['id'])['viaRole']);
     }
 
     public function testModeratorRoleFromBotSettingsGrantsCanModerate(): void

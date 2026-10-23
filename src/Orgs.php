@@ -86,7 +86,7 @@ final class Orgs
                     $canLead = $has($leaders);
                     $canModerate = $has($modRoles);
                 }
-                $valid[] = ['orgId' => $org['id'], 'role' => $admin ? 'ADMIN' : 'MEMBER', 'canPlan' => $canPlan, 'canRecruit' => $canRecruit, 'canInstruct' => $canInstruct, 'canLead' => $canLead, 'canModerate' => $canModerate, 'nick' => $nick];
+                $valid[] = ['orgId' => $org['id'], 'role' => $admin ? 'ADMIN' : 'MEMBER', 'canPlan' => $canPlan, 'canRecruit' => $canRecruit, 'canInstruct' => $canInstruct, 'canLead' => $canLead, 'canModerate' => $canModerate, 'viaRole' => $admin && !$guildAdmin, 'nick' => $nick];
             }
 
             Db::transaction(function () use ($userId, $valid, $nowDb): void {
@@ -98,9 +98,9 @@ final class Orgs
                 }
                 foreach ($valid as $v) {
                     Db::run(
-                        'INSERT INTO org_memberships (user_id, org_id, role, can_plan, can_recruit, can_instruct, can_lead, can_moderate, nick, verified_at) VALUES (?,?,?,?,?,?,?,?,?,?)
-                         ON DUPLICATE KEY UPDATE role = VALUES(role), can_plan = VALUES(can_plan), can_recruit = VALUES(can_recruit), can_instruct = VALUES(can_instruct), can_lead = VALUES(can_lead), can_moderate = VALUES(can_moderate), nick = VALUES(nick), verified_at = VALUES(verified_at)',
-                        [$userId, $v['orgId'], $v['role'], $v['canPlan'], $v['canRecruit'], $v['canInstruct'], $v['canLead'], $v['canModerate'], $v['nick'], $nowDb],
+                        'INSERT INTO org_memberships (user_id, org_id, role, can_plan, can_recruit, can_instruct, can_lead, can_moderate, admin_via_role, nick, verified_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                         ON DUPLICATE KEY UPDATE role = VALUES(role), can_plan = VALUES(can_plan), can_recruit = VALUES(can_recruit), can_instruct = VALUES(can_instruct), can_lead = VALUES(can_lead), can_moderate = VALUES(can_moderate), admin_via_role = VALUES(admin_via_role), nick = VALUES(nick), verified_at = VALUES(verified_at)',
+                        [$userId, $v['orgId'], $v['role'], $v['canPlan'], $v['canRecruit'], $v['canInstruct'], $v['canLead'], $v['canModerate'], $v['viaRole'], $v['nick'], $nowDb],
                     );
                 }
                 Db::run("UPDATE users SET membership_checked_at = ?, membership_status = 'OK' WHERE id = ?", [$nowDb, $userId]);
@@ -128,7 +128,7 @@ final class Orgs
     public static function listMyOrgs(string $userId): array
     {
         $rows = Db::all(
-            'SELECT o.id, o.slug, o.name, o.icon_url, m.role, m.can_plan, m.can_recruit, m.can_instruct, m.can_lead, m.can_moderate
+            'SELECT o.id, o.slug, o.name, o.icon_url, m.role, m.can_plan, m.can_recruit, m.can_instruct, m.can_lead, m.can_moderate, m.admin_via_role
                FROM org_memberships m JOIN organizations o ON o.id = m.org_id
               WHERE m.user_id = ? ORDER BY o.name ASC',
             [$userId],
@@ -144,6 +144,8 @@ final class Orgs
             'canInstruct' => $r['role'] === 'ADMIN' || (bool) $r['can_instruct'],
             'canLead' => $r['role'] === 'ADMIN' || (bool) $r['can_lead'],
             'canModerate' => $r['role'] === 'ADMIN' || (bool) $r['can_moderate'],
+            // Admin nur über die Orga-Leitungs-Rolle: kein Zugriff auf Rollen und Rechte, Discord-Setup und Temp Sprachkanal
+            'viaRole' => $r['role'] === 'ADMIN' && (bool) $r['admin_via_role'],
         ], $rows);
     }
 

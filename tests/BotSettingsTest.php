@@ -121,6 +121,41 @@ final class BotSettingsTest extends DbTestCase
         $this->assertSame(404, $this->call('GET', '/o/alpha/bot', 'member')->status);
     }
 
+    public function testAdminViaLeadershipRoleCannotReachServerAdminAreas(): void
+    {
+        // Das Mitglied ist Admin der Orga, aber nur über die Orga-Leitungs-Rolle (kein Server-Admin)
+        Db::run("UPDATE org_memberships SET role = 'ADMIN', admin_via_role = 1 WHERE org_id = ? AND role = 'MEMBER'", [$this->orgId]);
+        $page = $this->call('GET', '/o/alpha/bot', 'member');
+        $this->assertSame(200, $page->status);
+        foreach (['termine', 'willkommen', 'moderation', 'automod', 'creator', 'recruiting'] as $m) {
+            $this->assertStringContainsString('m=' . $m, $page->body, "$m im Menü");
+            $this->assertSame(200, $this->call('GET', '/o/alpha/bot', 'member', [], ['m' => $m])->status, $m);
+        }
+        foreach (['sprache', 'setup', 'rollen', 'vorlagen', 'zuordnung', 'rechte'] as $m) {
+            $this->assertStringNotContainsString('?m=' . $m, $page->body, "$m nicht im Menü");
+            // Direkter Aufruf zeigt stattdessen die Allgemein-Seite
+            $this->assertStringNotContainsString('name="tempvoiceChannel"', $this->call('GET', '/o/alpha/bot', 'member', [], ['m' => $m])->body);
+            $this->assertStringContainsString('Sache der Server-Admins', $this->call('GET', '/o/alpha/bot', 'member', [], ['m' => $m])->body, $m);
+        }
+        // Speichern und Aktionen in den gesperrten Bereichen: 404, nichts wird geändert
+        $this->assertSame(404, $this->call('POST', '/o/alpha/bot/save', 'member', ['section' => 'sprache', 'tempvoiceChannel' => '13'])->status);
+        $this->assertSame(404, $this->call('POST', '/o/alpha/bot/save', 'member', ['section' => 'zuordnung', 'adminChannel' => '11'])->status);
+        foreach (['roles', 'role/update', 'role/delete', 'setup', 'channel/update', 'channel/delete', 'channel/rights', 'template/save', 'template/import', 'template/delete', 'template/apply'] as $action) {
+            $this->assertSame(404, $this->call('POST', '/o/alpha/bot/' . $action, 'member', [])->status, $action);
+        }
+        $this->assertSame(404, $this->call('GET', '/o/alpha/bot/template/export', 'member', [], ['t' => 'x'])->status);
+        $this->assertSame([], BotSettings::all($this->orgId));
+        // Erlaubte Bereiche lassen sich speichern
+        $this->assertSame(303, $this->call('POST', '/o/alpha/bot/save', 'member', ['section' => 'termine', 'announceChannel' => '14'])->status);
+        $this->assertSame(['announce_channel_id' => '14'], BotSettings::all($this->orgId));
+        // Die Kachel zählt „Temp Sprachkanal“ nicht mit
+        $status = (array) array_diff_key(BotSettings::status(BotSettings::all($this->orgId), $this->orgId), ['sprache' => true]);
+        $this->assertArrayNotHasKey('sprache', $status);
+        // Server-Admins sehen alles
+        $this->assertStringContainsString('?m=rollen', $this->call('GET', '/o/alpha/bot', 'admin')->body);
+        $this->assertStringContainsString('?m=sprache', $this->call('GET', '/o/alpha/bot', 'admin')->body);
+    }
+
     public function testModeratorsRankMattersForMeasures(): void
     {
         $c = ['actorId' => '1', 'targetId' => '2', 'botId' => '9', 'ownerId' => '8', 'botTop' => 10, 'targetTop' => 3];

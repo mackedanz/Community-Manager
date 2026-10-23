@@ -295,7 +295,11 @@ final class OrgController extends Controller
             return null;
         }
         $status = \Hangar\BotSettings::status(\Hangar\BotSettings::all($org['id']), $org['id']);
-        return $isAdmin ? $status : array_intersect_key($status, array_flip(['moderation', 'automod']));
+        if (!$isAdmin) {
+            return array_intersect_key($status, array_flip(['moderation', 'automod']));
+        }
+        // Wer nur über die Leitungsrolle Admin ist, sieht „Temp Sprachkanal“ nicht (Server-Admin-Bereich)
+        return empty($org['viaRole']) ? $status : array_diff_key($status, ['sprache' => true]);
     }
 
     public static function members(Request $req, array $p): Response
