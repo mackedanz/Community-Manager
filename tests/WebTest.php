@@ -475,4 +475,16 @@ final class WebTest extends DbTestCase
         Env::set('APP_ENV', 'production');
         $this->assertSame(404, $this->call('GET', '/dev/login')->status);
     }
+
+    public function testDevLoginStaysOffOnHttpsEvenWithLocalEnvironment(): void
+    {
+        Env::set('APP_ENV', 'local');
+        Env::set('AUTH_URL', 'https://hangar.example.test');
+        $this->assertFalse(\Hangar\Controllers\DevController::enabled());
+        $this->assertSame(404, $this->call('GET', '/dev/login')->status);
+        // Lokal über http bleibt er verfügbar
+        Env::set('AUTH_URL', 'http://localhost:8080');
+        $this->assertTrue(\Hangar\Controllers\DevController::enabled());
+        Env::set('APP_ENV', 'production');
+    }
 }

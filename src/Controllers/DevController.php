@@ -18,9 +18,14 @@ use Hangar\Http\Response;
  */
 final class DevController extends Controller
 {
+    /**
+     * Nur mit APP_ENV=local und nur, wenn die App nicht über HTTPS erreichbar sein soll. Ein öffentlicher Server hat immer eine
+     * https-Adresse (APP_URL, AUTH_URL oder DOMAIN); steht APP_ENV=local dort versehentlich, bleibt der Dev-Login trotzdem aus,
+     * denn er legt Sitzungen für beliebige Nutzer an.
+     */
     public static function enabled(): bool
     {
-        return Env::get('APP_ENV') === 'local';
+        return Env::get('APP_ENV') === 'local' && !Config::isHttps();
     }
 
     private static function guard(Request $req): void
