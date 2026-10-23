@@ -78,6 +78,7 @@ final class OrgController extends Controller
             'recruiterRoleIds' => Orgs::parseRoleIds($full['recruiter_role_ids'] ?? null),
             'instructorRoleIds' => Orgs::parseRoleIds($full['instructor_role_ids'] ?? null),
             'leadRoleIds' => Orgs::parseRoleIds($full['lead_role_ids'] ?? null),
+            'adminRoleIds' => Orgs::parseRoleIds($full['admin_role_ids'] ?? null),
             'roleLabels' => Orgs::parseRoleLabels($full['role_labels']),
             'maxRoles' => Orgs::MAX_ROLES,
             'allowed' => Db::all('SELECT discord_id, name, avatar_url, fixed FROM org_allowed_members WHERE org_id = ? ORDER BY name ASC', [$org['id']]),
@@ -101,11 +102,13 @@ final class OrgController extends Controller
                 'recruiterRoleIds' => $req->post['recruiterRoleIds'] ?? [],
                 'instructorRoleIds' => $req->post['instructorRoleIds'] ?? [],
                 'leadRoleIds' => $req->post['leadRoleIds'] ?? [],
+                'adminRoleIds' => $req->post['adminRoleIds'] ?? [],
                 'roleNames' => self::roleNames($req->post['memberRoleIds'] ?? [], $req->post['memberRoleNames'] ?? [])
                     + self::roleNames($req->post['plannerRoleIds'] ?? [], $req->post['plannerRoleNames'] ?? [])
                     + self::roleNames($req->post['recruiterRoleIds'] ?? [], $req->post['recruiterRoleNames'] ?? [])
                     + self::roleNames($req->post['instructorRoleIds'] ?? [], $req->post['instructorRoleNames'] ?? [])
-                    + self::roleNames($req->post['leadRoleIds'] ?? [], $req->post['leadRoleNames'] ?? []),
+                    + self::roleNames($req->post['leadRoleIds'] ?? [], $req->post['leadRoleNames'] ?? [])
+                    + self::roleNames($req->post['adminRoleIds'] ?? [], $req->post['adminRoleNames'] ?? []),
             ]);
         } catch (\Throwable $e) {
             return Flash::error("/o/$slug/settings", self::errorMessage($e));
@@ -274,9 +277,25 @@ final class OrgController extends Controller
             'departmentCount' => \Hangar\Departments::count($org['id']),
             'departmentsEnabled' => \Hangar\Departments::enabled($org['id']),
             'upcomingCount' => count(Events::listUpcoming($org['id'], $viewer, $now, 100)),
-            'botStatus' => $org['role'] === 'ADMIN' ? \Hangar\BotSettings::status(\Hangar\BotSettings::all($org['id']), $org['id']) : null,
+            'botStatus' => self::botStatusFor($org),
             'now' => $now,
         ], 'Übersicht', 'home');
+    }
+
+    /**
+     * Bereiche des Discord-Bots für die Kachel der Startseite: Admins sehen alle, Moderatoren nur Moderation und Automod,
+     * alle anderen kein Feld (null).
+     * @param array<string,mixed> $org
+     * @return ?array<string,bool>
+     */
+    private static function botStatusFor(array $org): ?array
+    {
+        $isAdmin = $org['role'] === 'ADMIN';
+        if (!$isAdmin && empty($org['canModerate'])) {
+            return null;
+        }
+        $status = \Hangar\BotSettings::status(\Hangar\BotSettings::all($org['id']), $org['id']);
+        return $isAdmin ? $status : array_intersect_key($status, array_flip(['moderation', 'automod']));
     }
 
     public static function members(Request $req, array $p): Response

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { panelData, handles } from '../src/commands/panel.js';
+import { leadershipPanelData, panelData, handles } from '../src/commands/panel.js';
 import { refusal } from '../src/commands/abgleichen.js';
 import { commands } from '../src/commands/index.js';
 import { audienceOf, helpText, usage } from '../src/commands/help.js';
@@ -25,7 +25,17 @@ test('Panel zeigt Rollen, RSI-Orga und fünf Auswahlen', () => {
   assert.equal(p.components.length, 5);
   assert.deepEqual(p.components[0].components[0].default_values, [{ id: R1, type: 'role' }]);
   assert.equal(p.components[2].components[0].default_values, undefined);
-  assert.ok(handles('onb:use') && handles('onb:sync') && !handles('andere'));
+  assert.ok(handles('onb:use') && handles('onb:sync') && handles('onb:admin') && !handles('andere'));
+  // Die Orga-Leitung steht in einer zweiten Nachricht (das erste Panel hat schon fünf Zeilen)
+  assert.ok(p.content.includes('Orga-Leitung (Admins im Manager): –'));
+  assert.match(p.content, /Orga-Leitung wählst du in der Nachricht darunter/);
+  const lead = leadershipPanelData({ ...org, admin_role_ids: R2, role_labels: JSON.stringify({ [R2]: 'Bosse' }) }, 'Hinweis');
+  assert.match(lead.content, /Orga-Leitung:\*\* Bosse/);
+  assert.match(lead.content, /Admin der Orga/);
+  assert.ok(lead.content.endsWith('\n\nHinweis'));
+  assert.equal(lead.components.length, 1);
+  assert.equal(lead.components[0].components[0].custom_id, 'onb:admin');
+  assert.deepEqual(lead.components[0].components[0].default_values, [{ id: R2, type: 'role' }]);
 });
 
 test('/abgleichen: Gründe für eine Ablehnung', () => {

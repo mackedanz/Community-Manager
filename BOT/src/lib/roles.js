@@ -4,13 +4,14 @@ import { cut } from './text.js';
 
 export const MAX_ROLES = 10;
 
-/** Die fünf Rollenarten, ihre Spalte in "organizations" und der Schlüssel der Rollenauswahl im Panel. */
+/** Die sechs Rollenarten, ihre Spalte in "organizations" und der Schlüssel der Rollenauswahl im Panel. */
 export const ROLE_KINDS = {
   use: 'member_role_ids',
   plan: 'planner_role_ids',
   recruit: 'recruiter_role_ids',
   instruct: 'instructor_role_ids',
   lead: 'lead_role_ids',
+  admin: 'admin_role_ids',
 };
 
 /** Gespeicherte Rollen-IDs als Liste. */
@@ -58,7 +59,7 @@ export function cleanRoleIds(ids) {
   return out.size === 0 ? null : [...out].join(',');
 }
 
-/** Alle Rollen-IDs einer Orga, mit denen man das Tool nutzen darf (Nutzung, Planung, Recruiter, Ausbilder, Leitung). */
+/** Alle Rollen-IDs einer Orga, mit denen man das Tool nutzen darf (Nutzung, Planung, Recruiter, Ausbilder, Abteilungsleiter, Orga-Leitung). */
 export function allAccessRoleIds(org) {
   return [...new Set(Object.values(ROLE_KINDS).flatMap((col) => parseRoleIds(org[col])))];
 }

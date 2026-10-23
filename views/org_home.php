@@ -9,7 +9,7 @@
 /** @var bool $trainingEnabled */
 /** @var int $departmentCount */
 /** @var bool $departmentsEnabled */
-/** @var ?array<string,bool> $botStatus null = kein Orga-Admin */
+/** @var ?array<string,bool> $botStatus null = weder Orga-Admin noch Moderator */
 /** @var DateTimeImmutable $now */
 use Hangar\EventTime;
 
@@ -51,7 +51,7 @@ $tiles = [
         'href' => $departmentsEnabled ? $base . '/departments' : null, 'disabled' => !$departmentsEnabled, 'label' => 'Abteilungen', 'value' => $nf($departmentCount), 'note' => 'Trainings und Übungen',
         'icon' => '<rect x="9" y="2.5" width="6" height="5" rx="1"/><rect x="2.5" y="16.5" width="6" height="5" rx="1"/><rect x="15.5" y="16.5" width="6" height="5" rx="1"/><path d="M12 7.5V12M5.5 16.5V12h13v4.5"/>',
     ],
-    // Einstellungen des Discord-Bots: nur für Orga-Admins, alle anderen sehen ein leeres Feld.
+    // Einstellungen des Discord-Bots: für Orga-Admins (alle Bereiche) und Moderatoren (Moderation, Automod), alle anderen sehen ein leeres Feld.
     $botStatus === null ? ['empty' => true] : [
         'href' => $base . '/bot', 'label' => 'Discord-Bot', 'value' => count(array_filter($botStatus)) . ' / ' . count($botStatus), 'note' => 'Bereiche eingerichtet',
         'icon' => '<rect x="4" y="7.5" width="16" height="12" rx="3"/><path d="M12 3.5v4M9 12.5h.01M15 12.5h.01M9.5 16h5M2 12v3M22 12v3"/>',

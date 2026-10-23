@@ -2,6 +2,7 @@
 /** @var array<string,mixed> $full */
 /** @var list<string> $memberRoleIds */
 /** @var list<string> $plannerRoleIds */
+/** @var list<string> $adminRoleIds */
 /** @var array<string,string> $roleLabels */
 /** @var string $csrf */
 use Hangar\Http\View;
@@ -18,6 +19,11 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
         <span class="text-sm text-zinc-400">Name der Orga</span>
         <input name="name" required minlength="2" maxlength="60" value="<?= e($full['name']) ?>" class="<?= $input ?>">
       </label>
+      <?= View::partial('partials/role_fields', ['values' => $adminRoleIds, 'name' => 'adminRoleIds', 'nameField' => 'adminRoleNames', 'labels' => $roleLabels, 'legend' => 'Rollen-IDs der Orga-Leitung (Admins der Orga)']) ?>
+      <p class="text-xs text-zinc-500">
+        Wer eine dieser Rollen hat, ist Admin der Orga im Manager (Orga verwalten, Discord-Bot, alle Bereiche), auch ohne das
+        Discord-Recht „Administrator“ oder „Server verwalten“ und ohne Mitgliedsrolle. Server-Admins sind es immer. Nur an Vertrauenspersonen vergeben.
+      </p>
       <?= View::partial('partials/role_fields', ['values' => $memberRoleIds, 'name' => 'memberRoleIds', 'nameField' => 'memberRoleNames', 'labels' => $roleLabels, 'legend' => 'Rollen-IDs der Mitgliedsrollen']) ?>
       <?= View::partial('partials/role_fields', ['values' => $plannerRoleIds, 'name' => 'plannerRoleIds', 'nameField' => 'plannerRoleNames', 'labels' => $roleLabels, 'legend' => 'Rollen-IDs der Planer (dürfen Events anlegen)']) ?>
       <p class="text-xs text-zinc-500">

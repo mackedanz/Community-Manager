@@ -1,6 +1,8 @@
 <?php
 /** @var array{slug:string,name:string} $org */
 /** @var string $section */
+/** @var bool $fullAccess true = Orga-Admin; false = Moderator mit Zugang zu Moderation und Automod (nur ansehen, Maßnahmen ausführen) */
+/** @var array<string,string> $navSections Bereiche im Menü */
 /** @var array<string,string> $settings */
 /** @var array{spam:bool,invites:bool,links:bool,mentions:int,words:list<string>,domains:list<string>,exemptChannels:list<string>} $automod */
 /** @var array<string,bool> $status */
@@ -136,7 +138,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
   <!-- Schmale Bildschirme: Bereich per Auswahlliste -->
   <form method="get" action="<?= e($base) ?>" class="md:hidden">
     <select name="m" class="<?= $field ?>" onchange="this.form.submit()" aria-label="Bereich">
-      <?php foreach (BotSettings::SECTIONS as $k => $label): ?>
+      <?php foreach ($navSections as $k => $label): ?>
         <option value="<?= e($k) ?>"<?= $k === $navKey ? ' selected' : '' ?>><?= e($label) ?><?= isset($status[$k]) ? ($status[$k] ? ' · eingerichtet' : ' · aus') : '' ?></option>
       <?php endforeach; ?>
     </select>
@@ -145,7 +147,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
 
   <div class="grid gap-6 md:grid-cols-[230px_minmax(0,1fr)]">
     <nav class="hidden self-start rounded-lg border border-cyan-800/50 bg-teal-950/30 p-2 md:block" aria-label="Bereiche">
-      <?php foreach (BotSettings::SECTIONS as $k => $label): ?>
+      <?php foreach ($navSections as $k => $label): ?>
         <a href="<?= e($base . '?m=' . $k) ?>"<?= $k === $navKey ? ' aria-current="page"' : '' ?>
            class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition <?= $k === $navKey ? 'border-cyan-400/50 bg-teal-900/50 text-cyan-300' : 'border-transparent text-zinc-300 hover:bg-teal-900/30' ?>">
           <span><?= e($label) ?></span><?= isset($status[$k]) ? $dot($status[$k]) : '' ?>
@@ -926,6 +928,9 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
     <form method="post" action="<?= e($base . '/save') ?>" class="space-y-4">
       <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="section" value="<?= e($section) ?>">
+      <?php if (!$fullAccess): ?>
+        <p class="rounded-md border border-cyan-800/50 bg-teal-950/40 px-4 py-3 text-sm text-zinc-300">Du siehst diese Einstellungen als Moderator. Ändern dürfen sie nur Admins der Orga.</p>
+      <?php endif; ?>
       <?= $section === 'zuordnung' ? $setupTabs('zuordnung') : ($section === 'moderation' ? $modTabs('moderation') : ($section === 'willkommen' ? $welcomeTabs('willkommen') : '')) ?>
       <section class="<?= $card ?>">
         <header class="flex items-start justify-between gap-4 border-b border-cyan-900/50 px-5 py-4">
@@ -938,6 +943,7 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
           <?php endif; ?>
         </header>
 
+        <fieldset class="min-w-0"<?= $fullAccess ? '' : ' disabled' ?>>
         <div class="space-y-5 p-5">
         <?php if ($section === 'termine'): ?>
           <label class="block max-w-md space-y-1.5"><span class="text-sm text-zinc-300">Ankündigungskanal</span>
@@ -1123,11 +1129,14 @@ $roleBoxes = static fn (string $name): string => $roles === [] ? '<p class="' . 
           </div>
         <?php endif; ?>
         </div>
+        </fieldset>
       </section>
 
+      <?php if ($fullAccess): ?>
       <div class="flex justify-end">
         <button class="rounded-md border border-cyan-400/60 bg-cyan-500/20 px-5 py-2 text-sm font-medium hover:bg-cyan-500/30">Speichern</button>
       </div>
+      <?php endif; ?>
     </form>
     <?php endif; ?>
   </div>

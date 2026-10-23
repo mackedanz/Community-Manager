@@ -37,6 +37,22 @@ final class BotController extends Controller
         return [$viewer, $org];
     }
 
+    /** Bereiche, die Moderatoren (ohne Admin-Recht) auf der Bot-Seite sehen: Moderation, Fälle und Automod. */
+    private const MOD_SECTIONS = ['moderation', 'faelle', 'automod'];
+
+    /**
+     * Orga-Admins und Moderatoren (Rolle aus den Moderations-Einstellungen). Alle anderen sehen die Seite nicht (404).
+     * @return array{0:HangarViewer,1:array<string,mixed>}
+     */
+    private static function requireStaff(Request $req, string $slug): array
+    {
+        [$viewer, $org] = Auth::requireOrgMember($req, $slug);
+        if ($org['role'] !== 'ADMIN' && empty($org['canModerate'])) {
+            throw HttpException::notFound();
+        }
+        return [$viewer, $org];
+    }
+
     /**
      * Kanäle und Rollen des Servers; null, wenn sie nicht zu holen sind (kein Bot, Discord-Fehler), dazu der Grund.
      * @return array{channels:?list<array{id:string,name:string,category:?string}>,voice:?list<array{id:string,name:string,category:?string}>,roles:?list<array{id:string,name:string,color:int}>,problem:?string}
@@ -57,11 +73,17 @@ final class BotController extends Controller
 
     public static function show(Request $req, array $p): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
-        $section = (string) $req->query('m', 'allgemein');
+        [, $org] = self::requireStaff($req, (string) $p['slug']);
+        $fullAccess = $org['role'] === 'ADMIN';
+        $section = (string) $req->query('m', $fullAccess ? 'allgemein' : 'moderation');
         if (!isset(BotSettings::SECTIONS[$section]) && !isset(BotSettings::SUBSECTIONS[$section])) {
-            $section = 'allgemein';
+            $section = $fullAccess ? 'allgemein' : 'moderation';
         }
+        // Moderatoren sehen nur ihre Bereiche
+        if (!$fullAccess && !in_array($section, self::MOD_SECTIONS, true)) {
+            $section = 'moderation';
+        }
+        $navSections = $fullAccess ? BotSettings::SECTIONS : array_intersect_key(BotSettings::SECTIONS, array_flip(self::MOD_SECTIONS));
         $all = BotSettings::all($org['id']);
         $lists = self::discordLists($org['id']);
         $structure = null;
@@ -129,6 +151,8 @@ final class BotController extends Controller
         }
         return OrgController::orgPage($org, 'org_bot', [
             'section' => $section,
+            'fullAccess' => $fullAccess,
+            'navSections' => $navSections,
             'settings' => $all,
             'automod' => BotSettings::automod($all),
             'status' => BotSettings::status($all, $org['id']),
@@ -200,14 +224,14 @@ final class BotController extends Controller
     /** Maßnahme gegen eine Person (verwarnen, Timeout, Kick, Bann, aufheben). */
     public static function modAction(Request $req, array $p): Response
     {
-        [$viewer, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [$viewer, $org] = self::requireStaff($req, (string) $p['slug']);
         $to = '/o/' . $org['slug'] . '/bot?m=faelle';
         $guild = (string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$org['id']]);
         if ($guild === '' || !DiscordBot::configured()) {
             return Flash::error($to, 'Kein Bot-Token eingerichtet (DISCORD_BOT_TOKEN).');
         }
         try {
-            $msg = Moderation::perform($org['id'], $guild, ['id' => $viewer->id, 'name' => $viewer->name, 'discord_id' => $viewer->discordId], [
+            $msg = Moderation::perform($org['id'], $guild, ['id' => $viewer->id, 'name' => $viewer->name, 'discord_id' => $viewer->discordId, 'admin' => $org['role'] === 'ADMIN'], [
                 'do' => (string) $req->input('do', ''), 'person' => (string) $req->input('person', ''), 'reason' => (string) $req->input('reason', ''),
                 'duration' => (string) $req->input('duration', ''), 'days' => (int) $req->input('days', '0'),
             ]);
@@ -240,7 +264,7 @@ final class BotController extends Controller
     /** Nimmt eine Verwarnung zurück. */
     public static function modUnwarn(Request $req, array $p): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [, $org] = self::requireStaff($req, (string) $p['slug']);
         $to = '/o/' . $org['slug'] . '/bot?m=faelle';
         $id = (int) $req->input('id', '0');
         try {
@@ -565,7 +589,7 @@ final class BotController extends Controller
 
     public static function save(Request $req, array $p): Response
     {
-        [, $org] = self::requireAdmin($req, (string) $p['slug']);
+        [$viewer, $org] = self::requireAdmin($req, (string) $p['slug']);
         $section = (string) $req->input('section', '');
         $to = '/o/' . $org['slug'] . '/bot' . (isset(BotSettings::SECTIONS[$section]) || isset(BotSettings::SUBSECTIONS[$section]) ? '?m=' . $section : '');
         $lists = self::discordLists($org['id']);
@@ -582,7 +606,7 @@ final class BotController extends Controller
         try {
             // Beim Recruiting gehört der Fragenkatalog dazu: erst alles prüfen, dann speichern
             $questions = $section === 'recruiting' ? Recruiting::parse($req->post) : null;
-            BotSettings::save($org['id'], $section, $req->post, $known($section === 'sprache' ? $lists['voice'] : $lists['channels']), $known($lists['roles']));
+            BotSettings::save($org['id'], $section, $req->post, $known($section === 'sprache' ? $lists['voice'] : $lists['channels']), $known($lists['roles']), $viewer->id);
             if ($questions !== null) {
                 Recruiting::save($org['id'], $questions);
             }

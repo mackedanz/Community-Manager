@@ -91,6 +91,45 @@ final class BotSettingsTest extends DbTestCase
         }
     }
 
+    public function testModeratorsSeeModerationAndAutomodReadOnly(): void
+    {
+        Db::run("UPDATE org_memberships SET can_moderate = 1 WHERE org_id = ? AND role = 'MEMBER'", [$this->orgId]);
+        // Die Bot-Seite öffnet sich auf der Moderation; Menü und Kachel zeigen nur diese Bereiche
+        $page = $this->call('GET', '/o/alpha/bot', 'member');
+        $this->assertSame(200, $page->status);
+        $this->assertStringContainsString('als Moderator', $page->body);
+        $this->assertStringContainsString('m=automod', $page->body);
+        $this->assertStringNotContainsString('m=termine', $page->body);
+        $this->assertStringNotContainsString('m=setup', $page->body);
+        $this->assertStringContainsString('<fieldset class="min-w-0" disabled>', $page->body);
+        $this->assertStringNotContainsString('>Speichern</button>', $page->body);
+        $this->assertStringContainsString('href="/o/alpha/bot"', $this->call('GET', '/o/alpha', 'member')->body);
+        // Andere Bereiche: es erscheint wieder die Moderation
+        $other = $this->call('GET', '/o/alpha/bot', 'member', [], ['m' => 'termine'])->body;
+        $this->assertStringContainsString('als Moderator', $other);
+        $this->assertStringNotContainsString('name="announceChannel"', $other);
+        foreach (['moderation', 'faelle', 'automod'] as $m) {
+            $this->assertSame(200, $this->call('GET', '/o/alpha/bot', 'member', [], ['m' => $m])->status, $m);
+        }
+        // Ändern dürfen sie nichts: Speichern und alle anderen Aktionen bleiben bei den Admins
+        $this->assertSame(404, $this->call('POST', '/o/alpha/bot/save', 'member', ['section' => 'automod', 'spam' => '1'])->status);
+        $this->assertSame(404, $this->call('POST', '/o/alpha/bot/save', 'member', ['section' => 'moderation', 'modRoles' => ['20']])->status);
+        $this->assertSame(404, $this->call('POST', '/o/alpha/bot/setup', 'member', [])->status);
+        $this->assertSame([], BotSettings::all($this->orgId));
+        // Ohne Moderator-Recht bleibt es bei 404
+        Db::run("UPDATE org_memberships SET can_moderate = 0 WHERE org_id = ? AND role = 'MEMBER'", [$this->orgId]);
+        $this->assertSame(404, $this->call('GET', '/o/alpha/bot', 'member')->status);
+    }
+
+    public function testModeratorsRankMattersForMeasures(): void
+    {
+        $c = ['actorId' => '1', 'targetId' => '2', 'botId' => '9', 'ownerId' => '8', 'botTop' => 10, 'targetTop' => 3];
+        $this->assertNull(\Hangar\Moderation::targetProblem($c), 'Admins: keine Rangprüfung');
+        $this->assertNull(\Hangar\Moderation::targetProblem($c + ['actorTop' => 5]));
+        $this->assertStringContainsString('Rangfolge', (string) \Hangar\Moderation::targetProblem($c + ['actorTop' => 3]));
+        $this->assertStringContainsString('Rangfolge', (string) \Hangar\Moderation::targetProblem($c + ['actorTop' => 2]));
+    }
+
     public function testGeneralPageOnlyWarnsAndHasNothingToChoose(): void
     {
         $body = $this->call('GET', '/o/alpha/bot', 'admin')->body;

@@ -365,6 +365,77 @@ final class OrgsTest extends DbTestCase
         $this->assertTrue($byId($admin['id'])['canRecruit']);
     }
 
+    public function testOrgLeadershipRoleMakesAdminWithoutMemberRoleOrDiscordRight(): void
+    {
+        $org = $this->mkOrg('g-lead', 'role-member');
+        Db::run('UPDATE organizations SET admin_role_ids = ? WHERE id = ?', ['role-boss,role-boss2', $org['id']]);
+        $boss = $this->mkDiscordUser();
+        $normal = $this->mkDiscordUser();
+        $stranger = $this->mkDiscordUser();
+        $mine = fn (string $uid): ?array => array_column(Orgs::listMyOrgs($uid), null, 'id')[$org['id']] ?? null;
+
+        $this->discord->guilds = [FakeDiscord::guild('g-lead')];
+        // Nur die Leitungsrolle, keine Mitgliedsrolle: trotzdem Admin mit allen Fach-Rechten
+        $this->discord->roles = ['g-lead' => ['role-boss2']];
+        Orgs::syncMemberships($boss['id']);
+        $this->discord->roles = ['g-lead' => ['role-member']];
+        Orgs::syncMemberships($normal['id']);
+        $this->discord->roles = ['g-lead' => ['role-andere']];
+        Orgs::syncMemberships($stranger['id']);
+
+        $this->assertSame('ADMIN', $mine($boss['id'])['role']);
+        $this->assertTrue($mine($boss['id'])['canPlan'] && $mine($boss['id'])['canRecruit'] && $mine($boss['id'])['canModerate']);
+        $this->assertSame('MEMBER', $mine($normal['id'])['role']);
+        $this->assertFalse($mine($normal['id'])['canModerate']);
+        $this->assertNull($mine($stranger['id']), 'Ohne Mitglieds- oder Leitungsrolle kein Zugang');
+    }
+
+    public function testModeratorRoleFromBotSettingsGrantsCanModerate(): void
+    {
+        $org = $this->mkOrg('g-mod', 'role-member');
+        Db::insert('bot_settings', ['org_id' => $org['id'], 'name' => 'mod_role_ids', 'value' => 'role-mod,role-mod2']);
+        $mod = $this->mkDiscordUser();
+        $normal = $this->mkDiscordUser();
+        $notMember = $this->mkDiscordUser();
+        $mine = fn (string $uid): ?array => array_column(Orgs::listMyOrgs($uid), null, 'id')[$org['id']] ?? null;
+
+        $this->discord->guilds = [FakeDiscord::guild('g-mod')];
+        $this->discord->roles = ['g-mod' => ['role-member', 'role-mod2']];
+        Orgs::syncMemberships($mod['id']);
+        $this->discord->roles = ['g-mod' => ['role-member']];
+        Orgs::syncMemberships($normal['id']);
+        // Moderator-Rolle, aber nicht in der Orga: bleibt draußen
+        $this->discord->roles = ['g-mod' => ['role-mod']];
+        Orgs::syncMemberships($notMember['id']);
+
+        $this->assertTrue($mine($mod['id'])['canModerate']);
+        $this->assertSame('MEMBER', $mine($mod['id'])['role']);
+        $this->assertFalse($mine($mod['id'])['canPlan'], 'Moderatoren planen deshalb nicht');
+        $this->assertFalse($mine($normal['id'])['canModerate']);
+        $this->assertNull($mine($notMember['id']));
+    }
+
+    public function testAdminRolesAreStoredKeptWithoutInputAndForceRecheck(): void
+    {
+        $org = $this->mkOrg('g-admr', 'role-member');
+        $admin = $this->mkDiscordUser();
+        $other = $this->mkDiscordUser();
+        $this->discord->guilds = [FakeDiscord::guild('g-admr', ['permissions' => '8'])];
+        $this->discord->roles = ['g-admr' => []];
+        Orgs::syncMemberships($admin['id']);
+        $this->discord->guilds = [FakeDiscord::guild('g-admr')];
+        $this->discord->roles = ['g-admr' => ['role-member']];
+        Orgs::syncMemberships($other['id']);
+        Db::run('UPDATE users SET membership_checked_at = ? WHERE id = ?', [Time::nowDb(), $other['id']]);
+
+        Orgs::update($admin['id'], $org['id'], ['name' => 'Orga', 'memberRoleIds' => ['111111111111111111'], 'adminRoleIds' => ['222222222222222222']]);
+        $this->assertSame('222222222222222222', Db::val('SELECT admin_role_ids FROM organizations WHERE id = ?', [$org['id']]));
+        $this->assertNull(Db::val('SELECT membership_checked_at FROM users WHERE id = ?', [$other['id']]), 'neue Leitungsrolle: Mitglieder neu prüfen');
+        // Ohne Angabe bleibt die Einstellung
+        Orgs::update($admin['id'], $org['id'], ['name' => 'Orga', 'memberRoleIds' => ['111111111111111111']]);
+        $this->assertSame('222222222222222222', Db::val('SELECT admin_role_ids FROM organizations WHERE id = ?', [$org['id']]));
+    }
+
     public function testRecruiterRolesAreStoredKeptWithoutInputAndForceRecheck(): void
     {
         $admin = $this->mkDiscordUser();

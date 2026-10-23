@@ -10,6 +10,8 @@ import { parseRoleIds } from './roles.js';
 export function accessIn(org, { admin, roles }) {
   if (admin) return { member: true, admin: true, canPlan: true, canInstruct: true };
   const has = (col) => parseRoleIds(org[col]).some((r) => roles.includes(r));
+  // Die Orga-Leitung ist wie im Manager Admin der Orga, auch ohne das Discord-Recht
+  if (has('admin_role_ids')) return { member: true, admin: true, canPlan: true, canInstruct: true };
   const required = parseRoleIds(org.member_role_ids);
   return {
     member: required.length === 0 || has('member_role_ids'),

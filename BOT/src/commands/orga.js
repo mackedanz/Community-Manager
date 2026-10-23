@@ -24,7 +24,7 @@ export const data = {
   contexts: [0],
 };
 
-const ROLE_TITLES = { use: 'Nutzung', plan: 'Planer', recruit: 'Recruiter', instruct: 'Ausbilder', lead: 'Abteilungsleiter' };
+const ROLE_TITLES = { use: 'Nutzung', plan: 'Planer', recruit: 'Recruiter', instruct: 'Ausbilder', lead: 'Abteilungsleiter', admin: 'Orga-Leitung' };
 const unix = (dbTime) => Math.floor(Date.parse(`${dbTime.replace(' ', 'T')}Z`) / 1000);
 
 /** Übersicht der Einstellungen als Kasten. */

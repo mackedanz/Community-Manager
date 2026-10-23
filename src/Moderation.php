@@ -66,7 +66,8 @@ final class Moderation
     /**
      * Gründe, aus denen diese Person nicht moderiert werden darf (null = in Ordnung). Wer im Manager Admin ist, darf wie ein
      * Server-Admin jede Person moderieren, außer sich selbst, den Bot und den Eigentümer; die Rolle des Bots muss höher stehen.
-     * @param array{actorId:?string,targetId:string,botId:?string,ownerId:?string,botTop:?int,targetTop:int} $c
+     * Wer nur Moderator ist (actorTop gesetzt), darf wie im Bot nur Personen moderieren, deren höchste Rolle unter der eigenen steht.
+     * @param array{actorId:?string,targetId:string,botId:?string,ownerId:?string,botTop:?int,targetTop:int,actorTop?:?int} $c
      */
     public static function targetProblem(array $c): ?string
     {
@@ -81,6 +82,9 @@ final class Moderation
         }
         if ($c['botTop'] !== null && $c['targetTop'] >= $c['botTop']) {
             return 'Der Bot kann diese Person nicht moderieren: Seine Rolle muss im Server höher stehen als die höchste Rolle der Person.';
+        }
+        if (($c['actorTop'] ?? null) !== null && $c['targetTop'] >= $c['actorTop']) {
+            return 'Diese Person steht in der Rangfolge auf deiner Höhe oder darüber. Das dürfen nur höhere Rollen.';
         }
         return null;
     }
@@ -157,7 +161,7 @@ final class Moderation
 
     /**
      * Führt eine Maßnahme aus und gibt die Meldung für die Seite zurück.
-     * @param array{id:string,name:?string,discord_id:?string} $viewer wer im Manager handelt
+     * @param array{id:string,name:?string,discord_id:?string,admin?:bool} $viewer wer im Manager handelt (admin=false: nur Moderator, dann zählt die Rangfolge der Rollen)
      * @param array{do:string,person:string,reason:string,duration:string,days:int} $in
      * @throws OrgError|DiscordAuthError|DiscordUnavailableError
      */
@@ -195,10 +199,24 @@ final class Moderation
                     $tops[] = $r['position'];
                 }
             }
+            $actorTop = null;
+            if (($viewer['admin'] ?? true) === false) {
+                $actor = $viewer['discord_id'] !== null ? DiscordBot::member($guildId, $viewer['discord_id']) : null;
+                if ($actor === null) {
+                    throw new OrgError('Dein Discord-Konto wurde auf dem Server nicht gefunden.');
+                }
+                $actorTops = [];
+                foreach ($details as $r) {
+                    if (in_array($r['id'], $actor['roles'], true)) {
+                        $actorTops[] = $r['position'];
+                    }
+                }
+                $actorTop = $actorTops === [] ? -1 : max($actorTops);
+            }
             $problem = self::targetProblem([
                 'actorId' => $viewer['discord_id'], 'targetId' => $t['id'], 'botId' => DiscordBot::selfId(),
                 'ownerId' => DiscordBot::ownerId($guildId), 'botTop' => DiscordBot::botMember($guildId, $details)['top'] ?? null,
-                'targetTop' => $tops === [] ? -1 : max($tops),
+                'targetTop' => $tops === [] ? -1 : max($tops), 'actorTop' => $actorTop,
             ]);
             if ($problem !== null) {
                 throw new OrgError($problem);

@@ -56,7 +56,7 @@ final class Onboarding
         if ($use === []) {
             throw new OrgError('Wähle zuerst mindestens eine Rolle, die das Tool nutzen darf.');
         }
-        $wanted = array_values(array_unique([...$use, ...Orgs::parseRoleIds($org['planner_role_ids']), ...Orgs::parseRoleIds($org['recruiter_role_ids'] ?? null), ...Orgs::parseRoleIds($org['instructor_role_ids'] ?? null), ...Orgs::parseRoleIds($org['lead_role_ids'] ?? null)]));
+        $wanted = array_values(array_unique([...$use, ...Orgs::parseRoleIds($org['planner_role_ids']), ...Orgs::parseRoleIds($org['recruiter_role_ids'] ?? null), ...Orgs::parseRoleIds($org['instructor_role_ids'] ?? null), ...Orgs::parseRoleIds($org['lead_role_ids'] ?? null), ...Orgs::parseRoleIds($org['admin_role_ids'] ?? null)]));
         $guildMembers = DiscordBot::members((string) $org['discord_guild_id']);
         self::refreshNames($orgId, $guildMembers);
         $members = array_values(array_filter(

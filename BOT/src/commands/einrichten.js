@@ -5,7 +5,7 @@ import { OrgError } from '../lib/errors.js';
 import { guildIconUrl, guildInfo, invokerName, isGuildAdmin } from '../lib/guild.js';
 import { ensureOrg, findOrg, setHandleStyle } from '../lib/onboarding.js';
 import { connect, sync } from '../lib/rsi.js';
-import { panelData } from './panel.js';
+import { leadershipPanelData, panelData } from './panel.js';
 
 export const data = {
   name: 'einrichten',
@@ -63,10 +63,20 @@ export async function execute(interaction, { pool, config }) {
     return;
   }
 
+  // Die Orga-Leitung wählt man in einer zweiten Nachricht (das erste Panel hat schon fünf Zeilen)
+  const showLeadership = async (current) => {
+    try {
+      await interaction.followUp({ ...leadershipPanelData(current), flags: MessageFlags.Ephemeral });
+    } catch {
+      // Antwort nicht mehr möglich; die Rollen lassen sich auch im Manager unter „Orga verwalten“ setzen
+    }
+  };
+
   // "-" heißt: keine RSI-Orga (das Feld ist Pflicht, damit es beim Einrichten nicht übersehen wird)
   const sid = (interaction.options.getString('rsi_kuerzel') ?? '').trim();
   if (sid === '' || sid === '-') {
     await interaction.editReply(panelData(org, null, config.appUrl));
+    await showLeadership(org);
     return;
   }
   let name;
@@ -75,10 +85,12 @@ export async function execute(interaction, { pool, config }) {
   } catch (err) {
     if (!(err instanceof OrgError)) throw err;
     await interaction.editReply(panelData(org, `RSI-Orga nicht übernommen: ${err.message}`, config.appUrl));
+    await showLeadership(org);
     return;
   }
   org = (await findOrg(pool, org.id)) ?? org;
   await interaction.editReply(panelData(org, `RSI-Orga „${name}“ verbunden, die Mitgliederliste wird abgeglichen …`, config.appUrl));
+  await showLeadership(org);
 
   // Der Abgleich dauert einige Sekunden (eine Abfrage je 32 Mitglieder)
   let note;

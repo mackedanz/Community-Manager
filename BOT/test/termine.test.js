@@ -23,6 +23,10 @@ test('Rechte aus den Discord-Rollen', () => {
   // Wie in der Web-App: ohne Nutzungs-Rolle kein Mitglied, auch mit Planer-Rolle
   assert.equal(accessIn(org, { admin: false, roles: [R_PLAN] }).member, false);
   assert.equal(accessIn({ ...org, member_role_ids: null }, { admin: false, roles: [] }).member, true);
+  // Die Orga-Leitung ist Admin, auch ohne Discord-Recht und ohne Nutzungs-Rolle
+  const boss = '444444444444444444';
+  assert.deepEqual(accessIn({ ...org, admin_role_ids: boss }, { admin: false, roles: [boss] }), { member: true, admin: true, canPlan: true, canInstruct: true });
+  assert.equal(accessIn({ ...org, admin_role_ids: boss }, { admin: false, roles: [R_PLAN] }).admin, false);
 });
 
 test('Terminliste mit Auswahl', () => {

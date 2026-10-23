@@ -98,6 +98,12 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.equal(saved.planner_role_ids, R_PLAN);
     assert.deepEqual(JSON.parse(saved.role_labels), { [R_USE]: 'Mitglied', [R_PLAN]: 'Planer' });
 
+    // Orga-Leitung: eigene Spalte, zählt für die Zugangsliste mit
+    const R_BOSS = '777777777777777777';
+    await setRoles(pool, org.id, 'admin', [R_BOSS], { [R_BOSS]: 'Leitung' });
+    assert.equal(await val(pool, 'SELECT admin_role_ids FROM organizations WHERE id = ?', [org.id]), R_BOSS);
+    assert.equal(await val(pool, 'SELECT member_role_ids FROM organizations WHERE id = ?', [org.id]), R_USE, 'andere Rollen bleiben');
+
     const first = await syncAllowlist(pool, config, org.id, async () => [
       member('400000000000000001', [R_USE]),
       member('400000000000000002', [R_PLAN]),
@@ -111,6 +117,10 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     // Die Person, die /einrichten ausgeführt hat, bleibt immer (fixed)
     assert.deepEqual(ids, ['300000000000000001', '400000000000000001']);
     assert.notEqual(await val(pool, 'SELECT allowlist_synced_at FROM organizations WHERE id = ?', [org.id]), null);
+
+    // Wer nur die Leitungsrolle hat, kommt ebenfalls auf die Zugangsliste
+    const onlyBoss = await syncAllowlist(pool, config, org.id, async () => [member('400000000000000001', [R_USE]), member('400000000000000005', [R_BOSS])]);
+    assert.equal(onlyBoss.added, 1);
   });
 
   test('mit Anmeldesperre verlieren ehemalige Mitglieder ihr Konto', async () => {

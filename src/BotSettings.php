@@ -166,9 +166,10 @@ final class BotSettings
      * @param array<string,mixed> $post
      * @param ?list<string> $channelIds
      * @param ?list<string> $roleIds
+     * @param ?string $actorId wer speichert (wird bei geänderten Moderator-Rollen nicht neu geprüft)
      * @throws OrgError
      */
-    public static function save(string $orgId, string $section, array $post, ?array $channelIds, ?array $roleIds): void
+    public static function save(string $orgId, string $section, array $post, ?array $channelIds, ?array $roleIds, ?string $actorId = null): void
     {
         $str = static fn (string $k): string => is_string($post[$k] ?? null) ? trim($post[$k]) : '';
         $channel = static fn (string $k): ?string => self::checkId($str($k), $channelIds, 'Kanal');
@@ -223,11 +224,16 @@ final class BotSettings
             default:
                 throw new OrgError('Unbekannter Bereich.');
         }
+        $modBefore = (string) Db::val('SELECT value FROM bot_settings WHERE org_id = ? AND name = ?', [$orgId, self::MOD_ROLES]);
         Db::transaction(static function () use ($orgId, $values): void {
             foreach ($values as $name => $value) {
                 self::set($orgId, $name, $value);
             }
         });
+        // Neue Moderator-Rollen: die Mitglieder der Orga beim nächsten Seitenaufruf neu prüfen (Zugang zur Bot-Seite)
+        if (array_key_exists(self::MOD_ROLES, $values) && $modBefore !== (string) $values[self::MOD_ROLES]) {
+            Db::run('UPDATE users SET membership_checked_at = NULL WHERE id <> ? AND id IN (SELECT user_id FROM org_memberships WHERE org_id = ?)', [$actorId ?? '', $orgId]);
+        }
     }
 
     /**

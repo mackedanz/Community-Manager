@@ -60,7 +60,7 @@ export async function ensureOrg(pool, config, p) {
 }
 
 /**
- * Speichert die gewählten Rollen einer Art ('use', 'plan', 'recruit', 'instruct', 'lead').
+ * Speichert die gewählten Rollen einer Art ('use', 'plan', 'recruit', 'instruct', 'lead', 'admin').
  * @param {string[]} ids @param {Record<string,string>} names Rollen-ID => Name
  */
 export async function setRoles(pool, orgId, kind, ids, names) {
@@ -76,8 +76,8 @@ export async function setRoles(pool, orgId, kind, ids, names) {
   );
   await run(
     pool,
-    'UPDATE organizations SET member_role_ids = ?, planner_role_ids = ?, recruiter_role_ids = ?, instructor_role_ids = ?, lead_role_ids = ?, role_labels = ? WHERE id = ?',
-    [next.member_role_ids, next.planner_role_ids, next.recruiter_role_ids, next.instructor_role_ids, next.lead_role_ids, labels, orgId],
+    'UPDATE organizations SET member_role_ids = ?, planner_role_ids = ?, recruiter_role_ids = ?, instructor_role_ids = ?, lead_role_ids = ?, admin_role_ids = ?, role_labels = ? WHERE id = ?',
+    [next.member_role_ids, next.planner_role_ids, next.recruiter_role_ids, next.instructor_role_ids, next.lead_role_ids, next.admin_role_ids, labels, orgId],
   );
   if ((org[column] ?? null) !== next[column]) {
     // Alle bisherigen Mitglieder beim nächsten Seitenaufruf neu prüfen
