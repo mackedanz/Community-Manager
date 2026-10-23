@@ -18,10 +18,12 @@ export function channelNameFor(member) {
   return (name === '' ? 'Sprachkanal' : name).slice(0, MAX_NAME);
 }
 
-function parseIds(value) {
+/** Gemerkte Kanäle als [Kanal-ID, Ersteller-ID oder null]; liest auch die ältere Form (nur eine Liste von IDs). */
+function parseChannels(value) {
   try {
-    const list = JSON.parse(value ?? '[]');
-    return Array.isArray(list) ? list.map(String) : [];
+    const data = JSON.parse(value ?? '{}');
+    if (Array.isArray(data)) return data.map((id) => [String(id), null]);
+    return data !== null && typeof data === 'object' ? Object.entries(data).map(([id, owner]) => [String(id), owner ? String(owner) : null]) : [];
   } catch {
     return [];
   }
@@ -33,14 +35,14 @@ export function createTempVoice({ pool, log, delayMs = DELETE_DELAY_MS, setTimer
     get: (orgId, name) => getSetting(pool, orgId, name),
     set: (orgId, name, value) => setSetting(pool, orgId, name, value),
   };
-  /** Kanal-ID => Orga-ID der Kanäle, die der Bot angelegt hat */
+  /** Kanal-ID => { org, owner } der Kanäle, die der Bot angelegt hat; owner ist, wer den Auslöser betreten hat */
   const tracked = new Map();
   const timers = new Map();
   const creating = new Set();
 
   async function persist(orgId) {
-    const ids = [...tracked].filter(([, org]) => org === orgId).map(([id]) => id);
-    await db.set(orgId, TEMPVOICE_CHANNELS, ids.length === 0 ? null : JSON.stringify(ids));
+    const own = [...tracked].filter(([, t]) => t.org === orgId);
+    await db.set(orgId, TEMPVOICE_CHANNELS, own.length === 0 ? null : JSON.stringify(Object.fromEntries(own.map(([id, t]) => [id, t.owner]))));
   }
 
   function cancelDelete(channelId) {
@@ -50,10 +52,10 @@ export function createTempVoice({ pool, log, delayMs = DELETE_DELAY_MS, setTimer
 
   async function untrack(channelId) {
     cancelDelete(channelId);
-    const orgId = tracked.get(channelId);
-    if (orgId === undefined) return;
+    const entry = tracked.get(channelId);
+    if (entry === undefined) return;
     tracked.delete(channelId);
-    await persist(orgId);
+    await persist(entry.org);
   }
 
   function scheduleDelete(channel) {
@@ -90,7 +92,7 @@ export function createTempVoice({ pool, log, delayMs = DELETE_DELAY_MS, setTimer
       ],
       reason: `Temporärer Sprachkanal für ${member.user.username}`,
     });
-    tracked.set(channel.id, orgId);
+    tracked.set(channel.id, { org: orgId, owner: member.id });
     await persist(orgId);
     try {
       await member.voice.setChannel(channel);
@@ -99,6 +101,17 @@ export function createTempVoice({ pool, log, delayMs = DELETE_DELAY_MS, setTimer
       log.warn(`${member.id} konnte nicht in den neuen Sprachkanal verschoben werden: ${err.message}`);
       scheduleDelete(channel);
     }
+  }
+
+  /** Der Kanal, den diese Person schon angelegt hat und der noch existiert (sonst wird er vergessen). */
+  async function ownedChannel(guild, userId) {
+    for (const [id, t] of [...tracked]) {
+      if (t.owner !== userId) continue;
+      const channel = guild.channels.cache.get(id);
+      if (channel) return channel;
+      await untrack(id);
+    }
+    return null;
   }
 
   /** Reagiert auf Betreten und Verlassen von Sprachkanälen (Ereignis voiceStateUpdate). */
@@ -115,7 +128,13 @@ export function createTempVoice({ pool, log, delayMs = DELETE_DELAY_MS, setTimer
         if (org !== null && (await db.get(org.id, TEMPVOICE_TRIGGER)) === joinedId) {
           creating.add(member.id);
           try {
-            await create(member, newState.channel, org.id);
+            // Pro Person höchstens ein eigener Kanal: wer schon einen hat, wird dorthin verschoben statt einen weiteren anzulegen
+            const owned = await ownedChannel(newState.guild, member.id);
+            if (owned === null) await create(member, newState.channel, org.id);
+            else {
+              cancelDelete(owned.id);
+              await member.voice.setChannel(owned).catch((err) => log.warn(`${member.id} konnte nicht in den eigenen Sprachkanal verschoben werden: ${err.message}`));
+            }
           } finally {
             creating.delete(member.id);
           }
@@ -130,9 +149,9 @@ export function createTempVoice({ pool, log, delayMs = DELETE_DELAY_MS, setTimer
     for (const guild of client.guilds.cache.values()) {
       const org = await db.org(guild.id);
       if (org === null) continue;
-      for (const id of parseIds(await db.get(org.id, TEMPVOICE_CHANNELS))) {
+      for (const [id, owner] of parseChannels(await db.get(org.id, TEMPVOICE_CHANNELS))) {
         const channel = guild.channels.cache.get(id) ?? (await guild.channels.fetch(id).catch(() => null));
-        tracked.set(id, org.id);
+        tracked.set(id, { org: org.id, owner });
         if (channel === null) await untrack(id);
         else if (channel.members.size === 0) scheduleDelete(channel);
       }

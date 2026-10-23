@@ -67,7 +67,36 @@ test('Betreten des Auslösers legt einen Kanal mit dem Namen an, verschiebt und 
   assert.equal(created.created.permissionOverwrites.length, 2);
   assert.equal(created.created.permissionOverwrites.at(-1).id, 'u1');
   assert.ok(created.members.has('u1'));
-  assert.deepEqual(JSON.parse(settings.get(`o1:${TEMPVOICE_CHANNELS}`)), ['c1']);
+  assert.deepEqual(JSON.parse(settings.get(`o1:${TEMPVOICE_CHANNELS}`)), { c1: 'u1' });
+});
+
+test('Wer schon einen eigenen Kanal hat, wird dorthin verschoben statt einen weiteren anzulegen', async () => {
+  const { tv, channels, guild, trigger, timers, member } = setup();
+  const mike = member('u1', 'Mike');
+  await tv.handleVoiceState({ channelId: null }, { channelId: 'T', guild, channel: trigger, member: mike });
+  const own = channels.get('c1');
+  // Mike springt zurück in den Auslöser: der alte Kanal ist leer und zur Löschung vorgemerkt
+  own.members.clear();
+  await tv.handleVoiceState({ channelId: 'c1', channel: own, member: mike }, { channelId: 'T', guild, channel: trigger, member: mike });
+  assert.equal(channels.size, 2); // Auslöser und c1, kein zweiter Kanal
+  assert.ok(own.members.has('u1'));
+  assert.equal(tv.pending(), 0); // nichts zu löschen, weil er wieder im eigenen Kanal ist
+  assert.deepEqual(tv.trackedIds(), ['c1']);
+  await timers.fire();
+  assert.ok(channels.has('c1'));
+  // Jemand anderes bekommt weiterhin einen eigenen Kanal
+  await tv.handleVoiceState({ channelId: null }, { channelId: 'T', guild, channel: trigger, member: member('u2', 'Anna') });
+  assert.equal(channels.size, 3);
+});
+
+test('Kanal des Erstellers gelöscht: beim nächsten Beitritt wird ein neuer angelegt', async () => {
+  const { tv, channels, guild, trigger, member } = setup();
+  const mike = member('u1', 'Mike');
+  await tv.handleVoiceState({ channelId: null }, { channelId: 'T', guild, channel: trigger, member: mike });
+  channels.delete('c1'); // von Hand gelöscht
+  await tv.handleVoiceState({ channelId: null }, { channelId: 'T', guild, channel: trigger, member: mike });
+  assert.ok(channels.has('c2'));
+  assert.deepEqual(tv.trackedIds(), ['c2']);
 });
 
 test('Kanal wird nach der Frist gelöscht, wenn er leer bleibt; Zurückkehren rettet ihn', async () => {
