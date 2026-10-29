@@ -84,7 +84,6 @@ final class App
         $r->post('/orgs/rsi', [OrgController::class, 'saveRsi']);
         $r->post('/orgs/handle-style', [OrgController::class, 'saveHandleStyle']);
         $r->post('/orgs/branding', [OrgController::class, 'saveBranding']);
-        $r->post('/orgs/training-images', [OrgController::class, 'saveTrainingImages']);
         $r->post('/orgs/discord-events', [OrgController::class, 'saveDiscordEvents']);
         $r->get('/o/{slug}', [OrgController::class, 'home']);
         $r->get('/o/{slug}/members', [OrgController::class, 'members']);
@@ -118,6 +117,8 @@ final class App
         $r->get('/o/{slug}/training', [TrainingController::class, 'index']);
         $r->get('/o/{slug}/training/{area}', [TrainingController::class, 'area']);
         $r->post('/o/{slug}/training/completions/remove', [TrainingController::class, 'removeCompletion']);
+        $r->post('/o/{slug}/training/areas/save', [TrainingController::class, 'saveArea']);
+        $r->post('/o/{slug}/training/areas/delete', [TrainingController::class, 'deleteArea']);
         $r->post('/o/{slug}/training/{area}/save', [TrainingController::class, 'save']);
         $r->post('/o/{slug}/training/{area}/delete', [TrainingController::class, 'delete']);
 

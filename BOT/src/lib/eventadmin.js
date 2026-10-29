@@ -111,7 +111,7 @@ export async function searchCourses(db, orgId, term) {
   const like = `%${term.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
   return all(
     db,
-    'SELECT id, area, topic, level, title FROM training_courses WHERE org_id = ? AND (topic LIKE ? OR title LIKE ?) ORDER BY topic ASC, level ASC LIMIT 25',
+    'SELECT t.id, a.name AS area_name, t.topic, t.level, t.title FROM training_courses t JOIN training_areas a ON a.id = t.area_id WHERE t.org_id = ? AND (t.topic LIKE ? OR t.title LIKE ?) ORDER BY t.topic ASC, t.level ASC LIMIT 25',
     [orgId, like, like],
   );
 }

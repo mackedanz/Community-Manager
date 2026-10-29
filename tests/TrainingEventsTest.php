@@ -27,6 +27,9 @@ final class TrainingEventsTest extends DbTestCase
         $this->otherOrg = new_id();
         Db::insert('organizations', ['id' => $this->orgId, 'slug' => 'tr', 'name' => 'Tr', 'discord_guild_id' => 'tr-guild', 'created_by_id' => 'x']);
         Db::insert('organizations', ['id' => $this->otherOrg, 'slug' => 'zz', 'name' => 'Zz', 'discord_guild_id' => 'zz-guild', 'created_by_id' => 'x']);
+        Db::insert('training_areas', ['id' => 'mining', 'org_id' => $this->orgId, 'name' => 'Mining und Salvage']);
+        Db::insert('training_areas', ['id' => 'space', 'org_id' => $this->orgId, 'name' => 'Raumkampf']);
+        Db::insert('training_areas', ['id' => 'mining-zz', 'org_id' => $this->otherOrg, 'name' => 'Mining und Salvage']);
         $mk = function (string $name, string $role = 'MEMBER', bool $planner = false, bool $instruct = false): void {
             $user = $this->mkUser(['name' => $name]);
             Db::insert('org_memberships', ['user_id' => $user['id'], 'org_id' => $this->orgId, 'role' => $role, 'can_plan' => (int) $planner, 'can_instruct' => (int) $instruct]);
@@ -45,7 +48,7 @@ final class TrainingEventsTest extends DbTestCase
     private function done(string $user, string $courseId): void
     {
         $c = Training::find($this->orgId, $courseId);
-        Db::insert('training_completions', ['user_id' => $this->u[$user], 'course_id' => $courseId, 'org_id' => $this->orgId, 'area' => $c['area'], 'topic' => $c['topic'], 'level' => $c['level'], 'title' => $c['title']]);
+        Db::insert('training_completions', ['user_id' => $this->u[$user], 'course_id' => $courseId, 'org_id' => $this->orgId, 'area_name' => 'Mining und Salvage', 'topic' => $c['topic'], 'level' => $c['level'], 'title' => $c['title']]);
     }
 
     private function event(?string $courseId, string $title = 'Mining-Kurs'): string
@@ -91,7 +94,7 @@ final class TrainingEventsTest extends DbTestCase
         $plain = $this->event(null, 'Ohne');
         $this->assertNull(Events::getEvent($this->orgId, $this->viewer('Planer'), $plain)['course']);
 
-        $foreign = Training::save($this->otherOrg, ['area' => 'mining', 'topic' => 'Prospector', 'level' => '1', 'title' => 'Fremd']);
+        $foreign = Training::save($this->otherOrg, ['area' => 'mining-zz', 'topic' => 'Prospector', 'level' => '1', 'title' => 'Fremd']);
         $this->expectException(EventError::class);
         $this->expectExceptionMessage('gibt es in dieser Orga nicht');
         $this->event($foreign);
@@ -235,16 +238,17 @@ final class TrainingEventsTest extends DbTestCase
     public function testActiveCountsOnlyCoursesWithAnUpcomingEvent(): void
     {
         $now = new \DateTimeImmutable('2029-12-01', new \DateTimeZone('UTC'));
-        $this->assertSame(0, Training::activeCountsByArea($this->orgId, $now)['mining']);
+        $active = fn (\DateTimeImmutable $at): array => array_column(Training::areas($this->orgId, $at), 'active', 'id');
+        $this->assertSame(0, $active($now)['mining']);
         $a = $this->event($this->level1);
         $this->event($this->level1, 'Zweiter Termin');
         $this->event($this->level2, 'Stufe 2');
-        $counts = Training::activeCountsByArea($this->orgId, $now);
+        $counts = $active($now);
         $this->assertSame(2, $counts['mining'], 'zwei Ausbildungen, mehrere Termine zählen nur einmal');
         $this->assertSame(0, $counts['space']);
-        $this->assertSame(0, Training::activeCountsByArea($this->orgId, new \DateTimeImmutable('2031-01-01', new \DateTimeZone('UTC')))['mining'], 'vergangene nicht');
+        $this->assertSame(0, $active(new \DateTimeImmutable('2031-01-01', new \DateTimeZone('UTC')))['mining'], 'vergangene nicht');
         Events::setCancelled($this->u['Planer'], $this->orgId, $a, true);
-        $this->assertSame(2, Training::activeCountsByArea($this->orgId, $now)['mining'], 'der zweite Termin der Stufe 1 bleibt');
+        $this->assertSame(2, $active($now)['mining'], 'der zweite Termin der Stufe 1 bleibt');
     }
 
     public function testAreaListsUpcomingEventsOfEachCourse(): void

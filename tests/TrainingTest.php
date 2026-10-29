@@ -21,6 +21,8 @@ final class TrainingTest extends DbTestCase
         parent::setUp();
         $this->orgId = new_id();
         Db::insert('organizations', ['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'discord_guild_id' => '9', 'created_by_id' => 'x', 'instructor_role_ids' => 'role-ins']);
+        Db::insert('training_areas', ['id' => 'mining', 'org_id' => $this->orgId, 'name' => 'Mining und Salvage']);
+        Db::insert('training_areas', ['id' => 'space', 'org_id' => $this->orgId, 'name' => 'Raumkampf']);
     }
 
     /** @return array{0:string,1:string} Sitzungs-Token und CSRF-Token */
@@ -44,12 +46,53 @@ final class TrainingTest extends DbTestCase
         return $over + ['area' => 'mining', 'topic' => 'Prospector', 'level' => '1', 'title' => 'Grundlagen', 'content' => 'Erst lesen: https://example.org/mining.'];
     }
 
-    public function testAreasAreFixedAndCleaned(): void
+    public function testAreasAreCreatedPerOrgWithUniqueNames(): void
     {
-        $this->assertSame(['mining', 'engineering', 'transport', 'ground', 'space', 'science', 'exploration'], array_keys(Training::AREAS));
-        $this->assertSame('mining', Training::cleanArea('mining'));
-        $this->assertNull(Training::cleanArea('kochen'));
-        $this->assertNull(Training::cleanArea(null));
+        $id = Training::saveArea($this->orgId, ['name' => '  Handel   und Fracht ', 'description' => "Waren
+bewegen"]);
+        $a = Training::findArea($this->orgId, $id);
+        $this->assertSame('Handel und Fracht', $a['name']);
+        $this->assertSame("Waren
+bewegen", $a['description']);
+        $this->assertNull($a['image']);
+        $this->assertNull(Training::findArea($this->orgId, 'gibt-es-nicht'));
+
+        foreach ([['name' => 'x'], ['name' => ''], ['name' => 'Mining und Salvage'], ['name' => 'Gut', 'description' => str_repeat('a', 8001)]] as $bad) {
+            try {
+                Training::saveArea($this->orgId, $bad);
+                $this->fail('Eingabe hätte abgelehnt werden müssen: ' . json_encode($bad));
+            } catch (OrgError) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        // Umbenennen ist erlaubt, auch auf den eigenen Namen
+        Training::saveArea($this->orgId, ['name' => 'Handel'], $id);
+        Training::saveArea($this->orgId, ['name' => 'Handel', 'description' => 'neu'], $id);
+        $this->assertSame('neu', Training::findArea($this->orgId, $id)['description']);
+
+        // Derselbe Name in einer anderen Orga ist kein Problem; fremde Bereiche lassen sich nicht ändern
+        $other = new_id();
+        Db::insert('organizations', ['id' => $other, 'slug' => 'zz', 'name' => 'Zz', 'discord_guild_id' => '8', 'created_by_id' => 'x']);
+        $foreign = Training::saveArea($other, ['name' => 'Handel']);
+        $this->assertSame(['Handel', 'Mining und Salvage', 'Raumkampf'], array_column(Training::areas($this->orgId, new \DateTimeImmutable('now', new \DateTimeZone('UTC'))), 'name'));
+        $this->expectException(OrgError::class);
+        Training::saveArea($this->orgId, ['name' => 'Fremd'], $foreign);
+    }
+
+    public function testDeletingAnAreaRemovesItsCoursesButKeepsCompletions(): void
+    {
+        $course = Training::save($this->orgId, $this->course());
+        $user = $this->mkUser();
+        Db::insert('training_completions', ['user_id' => $user['id'], 'course_id' => $course, 'org_id' => $this->orgId, 'area_name' => 'Mining und Salvage', 'topic' => 'Prospector', 'level' => 1, 'title' => 'Grundlagen']);
+        Training::deleteArea($this->orgId, 'mining');
+        $this->assertNull(Training::findArea($this->orgId, 'mining'));
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM training_courses'));
+        $q = Training::qualifications($this->orgId, $user['id']);
+        $this->assertSame(['Mining und Salvage'], array_column($q, 'areaName'));
+        $this->assertSame([true], array_column($q, 'retired'));
+        // Ohne Bereich gibt es keine Ausbildung
+        $this->expectException(OrgError::class);
+        Training::save($this->orgId, $this->course());
     }
 
     public function testSaveValidatesAndKeepsLevelsUniquePerTopic(): void
@@ -88,10 +131,10 @@ final class TrainingTest extends DbTestCase
         $list = Training::listByArea($this->orgId, 'mining');
         $this->assertSame(['Prospector', 'Salvage'], array_keys($list));
         $this->assertSame(['Eins', 'Zwei'], array_column($list['Prospector'], 'title'));
-        $counts = Training::countsByArea($this->orgId);
+        $counts = array_column(Training::areas($this->orgId, new \DateTimeImmutable('now', new \DateTimeZone('UTC'))), 'courses', 'id');
         $this->assertSame(3, $counts['mining']);
         $this->assertSame(1, $counts['space']);
-        $this->assertSame(0, $counts['ground']);
+        $this->assertSame(4, Training::courseCount($this->orgId));
     }
 
     public function testContentLinksAreEscapedAndClickable(): void
@@ -172,7 +215,8 @@ final class TrainingTest extends DbTestCase
     {
         $other = new_id();
         Db::insert('organizations', ['id' => $other, 'slug' => 'zz', 'name' => 'Zz', 'discord_guild_id' => '8', 'created_by_id' => 'x']);
-        $foreign = Training::save($other, $this->course());
+        Db::insert('training_areas', ['id' => 'mining-zz', 'org_id' => $other, 'name' => 'Mining und Salvage']);
+        $foreign = Training::save($other, $this->course(['area' => 'mining-zz']));
         [$admin, $csrf] = $this->login('ADMIN');
         $this->call('POST', '/o/exp/training/mining/delete', $admin, $csrf, ['id' => $foreign]);
         $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM training_courses WHERE id = ?', [$foreign]));

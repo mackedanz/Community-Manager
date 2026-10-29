@@ -1,6 +1,6 @@
 <?php
 /** @var array{slug:string,name:string} $org */
-/** @var string $area Schlüssel des Bereichs */
+/** @var array{id:string,name:string,description:string,image:?string} $area */
 /** @var array<string,list<array<string,mixed>>> $topics Ausbildungen nach Thema, je Thema nach Stufe */
 /** @var bool $manage Admin oder Ausbilder */
 /** @var ?array<string,mixed> $edit Ausbildung, die gerade bearbeitet wird */
@@ -9,7 +9,6 @@
 use Hangar\Http\View;
 use Hangar\Training;
 
-[$name, $about] = Training::AREAS[$area];
 $base = '/o/' . $org['slug'] . '/training';
 $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm';
 ?>
@@ -17,10 +16,10 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm';
   <div class="space-y-2">
     <a href="<?= e($base) ?>" class="text-sm text-indigo-400 hover:underline">← Ausbildung</a>
     <div class="flex items-center gap-4">
-      <span class="text-cyan-300"><?= View::partial('partials/training_icon', ['area' => $area, 'size' => '48', 'image' => $images[$area] ?? null]) ?></span>
+      <span class="text-cyan-300"><?= View::partial('partials/training_icon', ['size' => '48', 'image' => $area['image']]) ?></span>
       <div>
-        <h1 class="text-2xl font-bold"><?= e($name) ?></h1>
-        <p class="text-sm text-zinc-400"><?= e($about) ?></p>
+        <h1 class="text-2xl font-bold"><?= e($area['name']) ?></h1>
+        <?php if ($area['description'] !== ''): ?><div class="max-w-3xl whitespace-pre-line text-sm text-zinc-400"><?= Training::renderContent($area['description']) ?></div><?php endif; ?>
       </div>
     </div>
   </div>
@@ -43,8 +42,8 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm';
               </div>
               <?php if ($manage): ?>
                 <div class="flex items-center gap-3 text-sm">
-                  <a href="<?= e($base . '/' . $area . '?edit=' . $c['id']) ?>#form" class="text-indigo-400 hover:underline">Bearbeiten</a>
-                  <form method="post" action="<?= e($base . '/' . $area . '/delete') ?>" data-confirm="Ausbildung „<?= e($c['title']) ?>“ wirklich löschen?">
+                  <a href="<?= e($base . '/' . $area['id'] . '?edit=' . $c['id']) ?>#form" class="text-indigo-400 hover:underline">Bearbeiten</a>
+                  <form method="post" action="<?= e($base . '/' . $area['id'] . '/delete') ?>" data-confirm="Ausbildung „<?= e($c['title']) ?>“ wirklich löschen?">
                     <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                     <input type="hidden" name="id" value="<?= e($c['id']) ?>">
                     <button class="text-red-400 hover:underline">Löschen</button>
@@ -71,7 +70,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm';
   <?php if ($manage): ?>
     <section id="form" class="space-y-3 border-t border-zinc-800 pt-6">
       <h2 class="text-lg font-semibold"><?= $edit ? 'Ausbildung bearbeiten' : 'Neue Ausbildung' ?></h2>
-      <form method="post" action="<?= e($base . '/' . $area . '/save') ?>" class="max-w-3xl space-y-4">
+      <form method="post" action="<?= e($base . '/' . $area['id'] . '/save') ?>" class="max-w-3xl space-y-4">
         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
         <input type="hidden" name="id" value="<?= e($edit['id'] ?? '') ?>">
         <div class="grid gap-4 sm:grid-cols-[1fr_8rem]">
@@ -95,7 +94,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm';
         </label>
         <div class="flex items-center gap-3">
           <button class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">Speichern</button>
-          <?php if ($edit): ?><a href="<?= e($base . '/' . $area) ?>" class="text-sm text-zinc-400 hover:underline">Abbrechen</a><?php endif; ?>
+          <?php if ($edit): ?><a href="<?= e($base . '/' . $area['id']) ?>" class="text-sm text-zinc-400 hover:underline">Abbrechen</a><?php endif; ?>
         </div>
       </form>
     </section>

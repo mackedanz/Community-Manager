@@ -7,6 +7,7 @@
 /** @var int $upcomingCount */
 /** @var int $trainingCount */
 /** @var bool $trainingEnabled */
+/** @var int $areaCount */
 /** @var int $departmentCount */
 /** @var bool $departmentsEnabled */
 /** @var ?array<string,bool> $botStatus null = weder Orga-Admin noch Moderator */
@@ -43,7 +44,7 @@ $tiles = [
     ],
     [
         // Ohne gewählte Ausbilder-Rolle ist die Ausbildung in dieser Orga nicht eingerichtet: Kachel ausgegraut, ohne Link.
-        'href' => $trainingEnabled ? $base . '/training' : null, 'disabled' => !$trainingEnabled, 'label' => 'Ausbildung', 'value' => $nf($trainingCount), 'note' => count(\Hangar\Training::AREAS) . ' Bereiche',
+        'href' => $trainingEnabled ? $base . '/training' : null, 'disabled' => !$trainingEnabled, 'label' => 'Ausbildung', 'value' => $nf($trainingCount), 'note' => $areaCount === 1 ? '1 Bereich' : $areaCount . ' Bereiche',
         'icon' => '<path d="M2 9.5 12 5l10 4.5-10 4.5Z"/><path d="M6 11.7V16c0 1.4 2.7 2.8 6 2.8s6-1.4 6-2.8v-4.3M22 9.5V15"/>',
     ],
     [

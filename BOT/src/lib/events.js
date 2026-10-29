@@ -5,16 +5,6 @@ import { OrgError } from './errors.js';
 export const RSVP_STATUSES = ['YES', 'MAYBE', 'NO'];
 export const RSVP_LABELS = { YES: 'Dabei', MAYBE: 'Vielleicht', NO: 'Kann nicht' };
 
-/** Bereiche der Ausbildung (Training::AREAS). */
-export const AREAS = {
-  mining: 'Mining und Salvage',
-  engineering: 'Engineering und Betankung',
-  transport: 'Cargo, Passagiere, Daten',
-  ground: 'Bodenkampf',
-  space: 'Raumkampf',
-  science: 'Medizin und Forschung',
-  exploration: 'Pathfinding und Exploration',
-};
 const DEPARTMENT_KINDS = { TRAINING: 'Training', EXERCISE: 'Übung' };
 
 /** Die nächsten geplanten Termine (laufende eingeschlossen, ohne abgesagte; Entwürfe nur mit drafts für Planer). */
@@ -47,7 +37,7 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
   const e = await one(db, 'SELECT * FROM events WHERE id = ? AND org_id = ?', [eventId, orgId]);
   if (e === null || (e.status === 'DRAFT' && !canPlan)) return null;
   const course = e.course_id === null ? null
-    : await one(db, 'SELECT id, area, topic, level, title FROM training_courses WHERE org_id = ? AND id = ?', [orgId, e.course_id]);
+    : await one(db, 'SELECT t.id, t.area_id, a.name AS area_name, t.topic, t.level, t.title FROM training_courses t JOIN training_areas a ON a.id = t.area_id WHERE t.org_id = ? AND t.id = ?', [orgId, e.course_id]);
   const department = e.department_id === null ? null
     : await val(db, 'SELECT name FROM departments WHERE org_id = ? AND id = ?', [orgId, e.department_id]);
   const rsvps = await all(
@@ -85,7 +75,7 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
     startsAt: e.starts_at,
     endsAt: e.ends_at,
     status: e.status,
-    course: course === null ? null : { ...course, level: Number(course.level), areaName: AREAS[course.area] ?? course.area },
+    course: course === null ? null : { id: course.id, area: course.area_id, areaName: course.area_name, topic: course.topic, level: Number(course.level), title: course.title },
     department: department === null ? null : `${DEPARTMENT_KINDS[e.department_kind] ?? 'Termin'}: ${department}`,
     ships: ships.map(({ name, task, slots: list }) => ({ name, task, slots: list.map((s) => ({ id: s.id, label: s.label, userId: s.userId ?? null, holder: s.holder ?? null })) })),
     rsvps: rsvps.map((r) => ({ userId: r.user_id, status: r.status, name: r.name ?? 'Unbekannt' })),
@@ -94,15 +84,15 @@ export async function eventDetail(db, orgId, eventId, { canPlan = false } = {}) 
 
 /** Stufen desselben Themas unterhalb der Ausbildung, die die Person noch nicht bestanden hat (Training::missingPrerequisites). */
 export async function missingPrerequisites(db, orgId, userId, courseId) {
-  const c = await one(db, 'SELECT area, topic, level FROM training_courses WHERE org_id = ? AND id = ?', [orgId, courseId]);
+  const c = await one(db, 'SELECT area_id, topic, level FROM training_courses WHERE org_id = ? AND id = ?', [orgId, courseId]);
   if (c === null) return [];
   const rows = await all(
     db,
     `SELECT t.level, t.title FROM training_courses t
        LEFT JOIN training_completions d ON d.course_id = t.id AND d.user_id = ?
-      WHERE t.org_id = ? AND t.area = ? AND t.topic = ? AND t.level < ? AND d.course_id IS NULL
+      WHERE t.org_id = ? AND t.area_id = ? AND t.topic = ? AND t.level < ? AND d.course_id IS NULL
       ORDER BY t.level ASC`,
-    [userId, orgId, c.area, c.topic, Number(c.level)],
+    [userId, orgId, c.area_id, c.topic, Number(c.level)],
   );
   return rows.map((r) => ({ level: Number(r.level), title: r.title }));
 }

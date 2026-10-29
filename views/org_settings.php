@@ -4,7 +4,6 @@
 /** @var list<string> $plannerRoleIds */
 /** @var list<string> $adminRoleIds */
 /** @var array<string,string> $roleLabels */
-/** @var array<string,string> $areaImages eigene Bilder der Ausbildungsbereiche: Bereich => Bildadresse */
 /** @var string $csrf */
 use Hangar\Http\View;
 
@@ -154,39 +153,6 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
           <button name="reset" value="<?= e($v) ?>" formnovalidate class="rounded border border-zinc-600 px-3 py-2 text-sm hover:bg-zinc-800"><?= e($label) ?></button>
         <?php endforeach; ?>
       </div>
-    </form>
-  </section>
-
-  <section id="ausbildung-bilder" class="space-y-3 border-t border-zinc-800 pt-6">
-    <h2 class="text-lg font-semibold">Bilder der Ausbildungsbereiche</h2>
-    <p class="text-sm text-zinc-400">
-      Statt der Standard-Symbole auf der Seite Ausbildung kannst du für jeden Bereich ein eigenes Bild setzen. Erlaubt sind PNG, JPG und WebP
-      bis 5 MB (mindestens 64 Pixel); das Bild wird auf höchstens 256 Pixel verkleinert und im Quadrat angezeigt. Am besten eignet sich ein
-      PNG mit transparentem Hintergrund. Die Bilder sehen nur Mitglieder dieser Orga.
-    </p>
-    <form method="post" action="/orgs/training-images" enctype="multipart/form-data" class="space-y-4">
-      <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-      <input type="hidden" name="orgId" value="<?= e($full['id']) ?>">
-      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <?php foreach (\Hangar\Training::AREAS as $key => [$areaName]): $custom = $areaImages[$key] ?? null; ?>
-          <div class="relative space-y-2" data-pick>
-            <span class="block text-sm text-zinc-300"><?= e($areaName) ?> <span class="text-zinc-500">(<?= $custom !== null ? 'eigenes Bild' : 'Standard' ?>)</span></span>
-            <input type="file" id="area-<?= e($key) ?>" name="img_<?= e($key) ?>" accept="image/png,image/jpeg,image/webp" class="sr-only peer">
-            <label for="area-<?= e($key) ?>" title="Klicken, um ein Bild auszuwählen" class="flex h-24 w-24 cursor-pointer items-center justify-center rounded border border-zinc-800 bg-teal-950/50 text-cyan-300 transition hover:border-cyan-500/80 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-500">
-              <span data-default class="<?= $custom !== null ? 'hidden' : '' ?>"><?= View::partial('partials/training_icon', ['area' => $key, 'size' => '48']) ?></span>
-              <img data-preview src="<?= e($custom ?? '') ?>" alt="" class="h-full w-full object-contain p-1<?= $custom === null ? ' hidden' : '' ?>">
-            </label>
-            <div class="flex flex-wrap items-center gap-3">
-              <label for="area-<?= e($key) ?>" class="inline-block cursor-pointer rounded border border-cyan-700/70 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium hover:bg-cyan-500/20">Bild auswählen …</label>
-              <span data-name class="text-xs text-zinc-500">Keine Datei gewählt</span>
-            </div>
-            <?php if ($custom !== null): ?>
-              <label class="flex items-center gap-2 text-sm text-zinc-400"><input type="checkbox" name="reset_<?= e($key) ?>" value="1" class="accent-cyan-400"> Standard-Symbol wiederherstellen</label>
-            <?php endif; ?>
-          </div>
-        <?php endforeach; ?>
-      </div>
-      <button class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">Bilder speichern</button>
     </form>
   </section>
 

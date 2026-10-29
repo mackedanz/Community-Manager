@@ -176,7 +176,9 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     await run(pool, 'INSERT INTO users (id, name, discord_id) VALUES (?,?,?)', [userId, 'Anna', `6${String(Date.now()).slice(-17)}`]);
     const c1 = newId();
     const c2 = newId();
-    await run(pool, "INSERT INTO training_courses (id, org_id, area, topic, level, title) VALUES (?,?, 'mining', 'Laser', 1, 'Grundlagen'), (?,?, 'mining', 'Laser', 2, 'Fortgeschritten')", [c1, org.id, c2, org.id]);
+    const mining = newId();
+    await run(pool, "INSERT INTO training_areas (id, org_id, name) VALUES (?,?, 'Mining und Salvage')", [mining, org.id]);
+    await run(pool, "INSERT INTO training_courses (id, org_id, area_id, topic, level, title) VALUES (?,?,?, 'Laser', 1, 'Grundlagen'), (?,?,?, 'Laser', 2, 'Fortgeschritten')", [c1, org.id, mining, c2, org.id, mining]);
     const ev = (id, title, startsAt, status = 'PLANNED', courseId = null) =>
       run(pool, 'INSERT INTO events (id, org_id, title, starts_at, status, created_by_id, course_id) VALUES (?,?,?,?,?,?,?)', [id, org.id, title, startsAt, status, userId, courseId]);
     const kurs = newId();
@@ -195,7 +197,7 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     await assert.rejects(setRsvp(pool, org.id, userId, kurs, 'YES', member), /Stufe 1 \(„Grundlagen“\)/);
     await setRsvp(pool, org.id, userId, kurs, 'NO', member); // Absagen geht immer
     await setRsvp(pool, org.id, userId, kurs, 'YES', { ...member, canInstruct: true }); // Ausbilder sind ausgenommen
-    await run(pool, "INSERT INTO training_completions (user_id, course_id, org_id, area, topic, level, title) VALUES (?,?,?, 'mining', 'Laser', 1, 'Grundlagen')", [userId, c1, org.id]);
+    await run(pool, "INSERT INTO training_completions (user_id, course_id, org_id, area_name, topic, level, title) VALUES (?,?,?, 'Mining und Salvage', 'Laser', 1, 'Grundlagen')", [userId, c1, org.id]);
     await setRsvp(pool, org.id, userId, kurs, 'YES', member);
 
     // Wer nicht mehr "Dabei" ist, gibt seinen Platz frei
@@ -260,7 +262,9 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     const opts = { appUrl: 'https://cm.example' };
 
     const c1 = newId();
-    await run(pool, "INSERT INTO training_courses (id, org_id, area, topic, level, title) VALUES (?,?, 'space', 'Jagd', 1, 'Grundlagen')", [c1, org.id]);
+    const space = newId();
+    await run(pool, "INSERT INTO training_areas (id, org_id, name) VALUES (?,?, 'Raumkampf')", [space, org.id]);
+    await run(pool, "INSERT INTO training_courses (id, org_id, area_id, topic, level, title) VALUES (?,?,?, 'Jagd', 1, 'Grundlagen')", [c1, org.id, space]);
     const soon = nowDb(new Date(Date.now() + 2 * 3600_000));
     const ev = newId();
     await run(pool, "INSERT INTO events (id, org_id, title, starts_at, status, created_by_id, course_id) VALUES (?,?,?,?, 'PLANNED', ?, ?)", [ev, org.id, 'Jagdflug', soon, anna, c1]);

@@ -2,7 +2,7 @@
 // als Optionen gewählt, Titel, Zeiten, Ort und Beschreibung danach in einem Fenster eingetragen.
 import { MessageFlags } from 'discord.js';
 import { memberContext, userByDiscordId } from '../lib/access.js';
-import { AREAS, eventDetail } from '../lib/events.js';
+import { eventDetail } from '../lib/events.js';
 import { createEvent, searchCourses, searchDepartments } from '../lib/eventadmin.js';
 import { OrgError } from '../lib/errors.js';
 import { cut } from '../lib/text.js';
@@ -39,7 +39,7 @@ export async function autocomplete(interaction, { pool }) {
   const term = String(focused.value ?? '').trim();
   if (focused.name === 'ausbildung') {
     const rows = await searchCourses(pool, org.id, term);
-    await interaction.respond(rows.map((c) => ({ name: cut(`${AREAS[c.area] ?? c.area} · ${c.topic} · Stufe ${c.level} („${c.title}“)`, 100), value: c.id })));
+    await interaction.respond(rows.map((c) => ({ name: cut(`${c.area_name} · ${c.topic} · Stufe ${c.level} („${c.title}“)`, 100), value: c.id })));
   } else {
     const rows = await searchDepartments(pool, org.id, term);
     await interaction.respond(rows.map((d) => ({ name: cut(d.name, 100), value: d.id })));

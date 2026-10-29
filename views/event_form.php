@@ -29,11 +29,10 @@ $small = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
           <option value="">Keine Ausbildung, normaler Termin</option>
           <?php
           $byArea = [];
-          foreach ($courses as $c) { $byArea[$c['area']][] = $c; }
-          foreach (\Hangar\Training::AREAS as $areaKey => [$areaName]):
-              if (empty($byArea[$areaKey])) { continue; } ?>
-            <optgroup label="<?= e($areaName) ?>">
-              <?php foreach ($byArea[$areaKey] as $c): ?>
+          foreach ($courses as $c) { $byArea[$c['areaName']][] = $c; }
+          foreach ($byArea as $areaName => $areaCourses): ?>
+            <optgroup label="<?= e((string) $areaName) ?>">
+              <?php foreach ($areaCourses as $c): ?>
                 <option value="<?= e($c['id']) ?>"<?= ($initial['courseId'] ?? '') === $c['id'] ? ' selected' : '' ?>><?= e($c['topic'] . ' · Stufe ' . $c['level'] . ': ' . $c['title']) ?></option>
               <?php endforeach; ?>
             </optgroup>

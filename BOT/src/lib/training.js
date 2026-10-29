@@ -2,26 +2,21 @@
 // (wie Training::qualifications(), participants() und confirm() der Web-App).
 import { all, nowDb, one, run, transaction, val } from '../db.js';
 import { OrgError } from './errors.js';
-import { AREAS } from './events.js';
 
 /** Bestandene Ausbildungen einer Person in einer Orga, nach Bereich, Thema und Stufe. */
 export async function qualifications(db, orgId, userId) {
   const rows = await all(
     db,
-    `SELECT d.id, COALESCE(t.area, d.area) AS area, COALESCE(t.topic, d.topic) AS topic, COALESCE(t.level, d.level) AS level,
+    `SELECT d.id, t.area_id, COALESCE(a.name, d.area_name) AS area_label, COALESCE(t.topic, d.topic) AS topic, COALESCE(t.level, d.level) AS level,
             COALESCE(t.title, d.title) AS title, d.completed_at, (d.course_id IS NULL) AS retired
-       FROM training_completions d LEFT JOIN training_courses t ON t.id = d.course_id
-      WHERE d.user_id = ? AND d.org_id = ? ORDER BY topic ASC, level ASC`,
+       FROM training_completions d LEFT JOIN training_courses t ON t.id = d.course_id LEFT JOIN training_areas a ON a.id = t.area_id
+      WHERE d.user_id = ? AND d.org_id = ? ORDER BY area_label ASC, topic ASC, level ASC`,
     [userId, orgId],
   );
-  const order = Object.keys(AREAS);
-  const pos = (a) => (order.includes(a) ? order.indexOf(a) : 99);
-  return rows
-    .map((r) => ({
-      area: r.area, areaName: AREAS[r.area] ?? r.area, topic: r.topic, level: Number(r.level), title: r.title,
-      completedAt: r.completed_at, retired: Boolean(Number(r.retired)),
-    }))
-    .sort((a, b) => pos(a.area) - pos(b.area));
+  return rows.map((r) => ({
+    area: r.area_id ?? '', areaName: r.area_label, topic: r.topic, level: Number(r.level), title: r.title,
+    completedAt: r.completed_at, retired: Boolean(Number(r.retired)),
+  }));
 }
 
 /** Teilnehmer eines Ausbildungstermins (Zusage "Dabei") und ob sie die Ausbildung schon bestanden haben. */
@@ -50,7 +45,7 @@ export async function participants(db, orgId, eventId, courseId) {
 export async function confirm(pool, orgId, eventId, confirmerId, passed, onlyUserIds) {
   const courseId = await val(pool, 'SELECT course_id FROM events WHERE id = ? AND org_id = ?', [eventId, orgId]);
   if (courseId === null) throw new OrgError('Zu diesem Termin gehört keine Ausbildung.');
-  const c = await one(pool, 'SELECT area, topic, level, title FROM training_courses WHERE org_id = ? AND id = ?', [orgId, courseId]);
+  const c = await one(pool, 'SELECT a.name AS area_name, t.topic, t.level, t.title FROM training_courses t JOIN training_areas a ON a.id = t.area_id WHERE t.org_id = ? AND t.id = ?', [orgId, courseId]);
   if (c === null) throw new OrgError('Ausbildung nicht gefunden.');
   const yes = new Set(passed);
   const shown = new Set(onlyUserIds);
@@ -61,9 +56,9 @@ export async function confirm(pool, orgId, eventId, confirmerId, passed, onlyUse
         // Orga, Bereich, Thema, Stufe und Titel werden mitgespeichert: der Eintrag überlebt das Löschen der Ausbildung
         await run(
           conn,
-          `INSERT INTO training_completions (user_id, course_id, org_id, area, topic, level, title, confirmed_by, completed_at) VALUES (?,?,?,?,?,?,?,?,?)
+          `INSERT INTO training_completions (user_id, course_id, org_id, area_name, topic, level, title, confirmed_by, completed_at) VALUES (?,?,?,?,?,?,?,?,?)
            ON DUPLICATE KEY UPDATE user_id = user_id`,
-          [p.userId, courseId, orgId, c.area, c.topic, Number(c.level), c.title, confirmerId, nowDb()],
+          [p.userId, courseId, orgId, c.area_name, c.topic, Number(c.level), c.title, confirmerId, nowDb()],
         );
       } else {
         await run(conn, 'DELETE FROM training_completions WHERE user_id = ? AND course_id = ?', [p.userId, courseId]);
