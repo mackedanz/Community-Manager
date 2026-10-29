@@ -125,7 +125,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
             ['logo', 'Logo', $brand['logoCustom'] ? 'eigenes' : 'Standard', $brand['logoUrl'], 'h-24 w-24'],
             ['background', 'Hintergrund', $brand['backgroundCustom'] ? 'eigener' : 'Standard', $brand['backgroundUrl'], 'h-24 w-40 object-cover'],
         ] as [$name, $title, $state, $src, $size]): ?>
-          <div class="space-y-2" data-pick>
+          <div class="relative space-y-2" data-pick>
             <span class="block text-sm text-zinc-400"><?= e($title) ?> (<?= e($state) ?>)</span>
             <input type="file" id="brand-<?= e($name) ?>" name="<?= e($name) ?>" accept="image/png,image/jpeg,image/webp" class="sr-only peer">
             <label for="brand-<?= e($name) ?>" title="Klicken, um ein Bild auszuwählen" class="block w-fit cursor-pointer peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-500">
@@ -169,7 +169,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
       <input type="hidden" name="orgId" value="<?= e($full['id']) ?>">
       <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         <?php foreach (\Hangar\Training::AREAS as $key => [$areaName]): $custom = $areaImages[$key] ?? null; ?>
-          <div class="space-y-2" data-pick>
+          <div class="relative space-y-2" data-pick>
             <span class="block text-sm text-zinc-300"><?= e($areaName) ?> <span class="text-zinc-500">(<?= $custom !== null ? 'eigenes Bild' : 'Standard' ?>)</span></span>
             <input type="file" id="area-<?= e($key) ?>" name="img_<?= e($key) ?>" accept="image/png,image/jpeg,image/webp" class="sr-only peer">
             <label for="area-<?= e($key) ?>" title="Klicken, um ein Bild auszuwählen" class="flex h-24 w-24 cursor-pointer items-center justify-center rounded border border-zinc-800 bg-teal-950/50 text-cyan-300 transition hover:border-cyan-500/80 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-500">
