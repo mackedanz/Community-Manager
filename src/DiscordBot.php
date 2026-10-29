@@ -395,6 +395,21 @@ final class DiscordBot
     }
 
     /**
+     * Aktuelle Icon-Adresse des Servers; null, wenn er keins hat.
+     * @throws DiscordUnavailableError
+     * Bei animierten Icons (Hash a_…) liefert .png das erste Bild, das die Seite darstellen kann.
+     */
+    public static function guildIconUrl(string $guildId): ?string
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId));
+        if ($res['status'] !== 200) {
+            throw new DiscordUnavailableError("Discord antwortet mit Status {$res['status']}.");
+        }
+        $g = json_decode($res['body'], true);
+        return is_array($g) && !empty($g['icon']) ? 'https://cdn.discordapp.com/icons/' . $guildId . '/' . $g['icon'] . '.png' : null;
+    }
+
+    /**
      * Mitglied mit Rollen und Timeout; null, wenn die Person nicht auf dem Server ist.
      * @return ?array{id:string,name:string,roles:list<string>,until:?string,bot:bool}
      * @throws DiscordAuthError|DiscordUnavailableError

@@ -95,9 +95,10 @@ export async function setHandleStyle(pool, orgId, style) {
  * Gleicht die Zugangsliste mit Discord ab: wer eine der Rollen der Orga hat, steht drin.
  * Wer dadurch auf keiner Zugangsliste mehr steht, verliert sein Konto samt Hangar (nur mit LOGIN_REQUIRES_ALLOWLIST).
  * @param {(guildId: string) => Promise<Array<{id: string, name: string, nick: ?string, accountName: string, avatar: ?string, roles: string[]}>>} fetchMembers
+ * @param {(guildId: string) => Promise<?string>} [fetchIcon] Adresse des aktuellen Server-Icons (null = kein Icon); fehlt sie, bleibt das Icon unberührt
  * @returns {Promise<{total: number, added: number, removed: number, deleted: number, skipped: number}>}
  */
-export async function syncAllowlist(pool, config, orgId, fetchMembers) {
+export async function syncAllowlist(pool, config, orgId, fetchMembers, fetchIcon) {
   const org = await findOrg(pool, orgId);
   if (org === null) throw new OrgError('Orga nicht gefunden.');
   if (parseRoleIds(org.member_role_ids).length === 0) {
@@ -106,6 +107,7 @@ export async function syncAllowlist(pool, config, orgId, fetchMembers) {
   const wanted = new Set(allAccessRoleIds(org));
   const guildMembers = await fetchMembers(String(org.discord_guild_id));
   await refreshNames(pool, orgId, guildMembers);
+  await refreshIcon(pool, org, fetchIcon);
   const members = guildMembers.filter((m) => m.roles.some((r) => wanted.has(r)));
   const now = nowDb();
 
@@ -160,10 +162,23 @@ async function refreshNames(pool, orgId, guildMembers) {
   for (const m of guildMembers) {
     await run(
       pool,
-      'UPDATE org_memberships m JOIN users u ON u.id = m.user_id SET m.nick = ?, u.name = ? WHERE m.org_id = ? AND u.discord_id = ?',
-      [m.nick !== null ? cut(m.nick, 190) : null, cut(m.accountName, 190), orgId, m.id],
+      'UPDATE org_memberships m JOIN users u ON u.id = m.user_id SET m.nick = ?, u.name = ?, u.image = COALESCE(?, u.image) WHERE m.org_id = ? AND u.discord_id = ?',
+      [m.nick !== null ? cut(m.nick, 190) : null, cut(m.accountName, 190), m.avatar ?? null, orgId, m.id],
     );
   }
+}
+
+/** Übernimmt das aktuelle Server-Icon; ein Fehler beim Abruf lässt das gespeicherte Icon stehen. */
+async function refreshIcon(pool, org, fetchIcon) {
+  if (typeof fetchIcon !== 'function') return;
+  let icon;
+  try {
+    icon = await fetchIcon(String(org.discord_guild_id));
+  } catch {
+    return;
+  }
+  if (icon === undefined) return;
+  await run(pool, 'UPDATE organizations SET icon_url = ? WHERE id = ?', [icon, org.id]);
 }
 
 /** Konten (Benutzer-IDs) von Personen, die auf keiner Zugangsliste mehr stehen. Server-Admins sind ausgenommen. */

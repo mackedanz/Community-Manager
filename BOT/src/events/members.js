@@ -7,7 +7,7 @@
 import { Events } from 'discord.js';
 import { orgForGuild, run } from '../db.js';
 import { OrgError } from '../lib/errors.js';
-import { guildMembers } from '../lib/guild.js';
+import { currentGuildIconUrl, guildMembers } from '../lib/guild.js';
 import { syncAllowlist, syncNote } from '../lib/onboarding.js';
 import { allAccessRoleIds, parseRoleIds } from '../lib/roles.js';
 
@@ -92,7 +92,7 @@ export function registerMemberEvents(client, { pool, config, log }) {
     try {
       org = await orgForGuild(pool, guildId);
       if (org === null || parseRoleIds(org.member_role_ids).length === 0) return;
-      const r = await syncAllowlist(pool, config, org.id, (id) => guildMembers(client, id));
+      const r = await syncAllowlist(pool, config, org.id, (id) => guildMembers(client, id), (id) => currentGuildIconUrl(client, id));
       log.info(`Automatischer Abgleich ${org.name}: ${syncNote(r)}`);
     } catch (err) {
       const name = org?.name ?? `Server ${guildId}`;

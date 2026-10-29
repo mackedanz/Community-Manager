@@ -41,6 +41,12 @@ export function guildIconUrl(guildId, icon) {
   return icon ? `https://cdn.discordapp.com/icons/${guildId}/${icon}.png` : null;
 }
 
+/** Aktuelle Icon-Adresse des Servers (null = kein Icon), undefined wenn der Server nicht erreichbar ist. */
+export async function currentGuildIconUrl(client, guildId) {
+  const info = await guildInfo(client, guildId);
+  return info ? guildIconUrl(guildId, info.icon) : undefined;
+}
+
 /** Wandelt ein Mitglied aus der REST-Antwort in die Form der PHP-App um (null für Bots). */
 export function toMember(guildId, m) {
   const u = m.user;

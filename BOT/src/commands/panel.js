@@ -1,6 +1,6 @@
 // Einrichtungs-Panel von /einrichten: fünf Rollenauswahlen. Jede Änderung speichert die Rollen und gleicht danach
 // die Zugangsliste ab (wie DiscordController::component() der PHP-App).
-import { guildIconUrl, guildInfo, guildMembers, invokerName, isGuildAdmin } from '../lib/guild.js';
+import { currentGuildIconUrl, guildIconUrl, guildInfo, guildMembers, invokerName, isGuildAdmin } from '../lib/guild.js';
 import { OrgError } from '../lib/errors.js';
 import { ensureOrg, findOrg, setRoles, syncAllowlist, syncNote } from '../lib/onboarding.js';
 import { MAX_ROLES, parseRoleIds, parseRoleLabels, ROLE_KINDS } from '../lib/roles.js';
@@ -110,7 +110,7 @@ export async function handleComponent(interaction, { pool, config }) {
   if (!sync) return;
   let note;
   try {
-    note = syncNote(await syncAllowlist(pool, config, org.id, (guildId) => guildMembers(interaction.client, guildId)));
+    note = syncNote(await syncAllowlist(pool, config, org.id, (guildId) => guildMembers(interaction.client, guildId), (guildId) => currentGuildIconUrl(interaction.client, guildId)));
   } catch (err) {
     if (!(err instanceof OrgError)) throw err;
     note = `Abgleich nicht möglich: ${err.message}`;

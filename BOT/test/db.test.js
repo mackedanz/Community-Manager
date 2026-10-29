@@ -118,6 +118,19 @@ describe('Datenbank', { skip: !enabled && 'TEST_DB_HOST nicht gesetzt' }, () => 
     assert.deepEqual(ids, ['300000000000000001', '400000000000000001']);
     assert.notEqual(await val(pool, 'SELECT allowlist_synced_at FROM organizations WHERE id = ?', [org.id]), null);
 
+    // Avatar und Server-Icon werden mit abgeglichen; ein Fehler beim Icon lässt das gespeicherte stehen
+    const uid = 'u-avatar-test';
+    await pool.query('INSERT INTO users (id, name, discord_id, image) VALUES (?,?,?,?)', [uid, 'Alt', '400000000000000001', 'alt.png']);
+    await pool.query('INSERT INTO org_memberships (user_id, org_id) VALUES (?,?)', [uid, org.id]);
+    await syncAllowlist(pool, config, org.id, async () => [{ ...member('400000000000000001', [R_USE]), avatar: 'neu.png' }], async () => 'icon-neu.png');
+    assert.equal(await val(pool, 'SELECT image FROM users WHERE id = ?', [uid]), 'neu.png');
+    assert.equal(await val(pool, 'SELECT icon_url FROM organizations WHERE id = ?', [org.id]), 'icon-neu.png');
+    await syncAllowlist(pool, config, org.id, async () => [member('400000000000000001', [R_USE])], async () => { throw new Error('offline'); });
+    assert.equal(await val(pool, 'SELECT icon_url FROM organizations WHERE id = ?', [org.id]), 'icon-neu.png');
+    assert.equal(await val(pool, 'SELECT image FROM users WHERE id = ?', [uid]), 'neu.png', 'ohne Avatar bleibt das Bild');
+    await syncAllowlist(pool, config, org.id, async () => [member('400000000000000001', [R_USE])], async () => null);
+    assert.equal(await val(pool, 'SELECT icon_url FROM organizations WHERE id = ?', [org.id]), null);
+
     // Wer nur die Leitungsrolle hat, kommt ebenfalls auf die Zugangsliste
     const onlyBoss = await syncAllowlist(pool, config, org.id, async () => [member('400000000000000001', [R_USE]), member('400000000000000005', [R_BOSS])]);
     assert.equal(onlyBoss.added, 1);

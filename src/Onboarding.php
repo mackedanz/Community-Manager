@@ -59,6 +59,7 @@ final class Onboarding
         $wanted = array_values(array_unique([...$use, ...Orgs::parseRoleIds($org['planner_role_ids']), ...Orgs::parseRoleIds($org['recruiter_role_ids'] ?? null), ...Orgs::parseRoleIds($org['instructor_role_ids'] ?? null), ...Orgs::parseRoleIds($org['lead_role_ids'] ?? null), ...Orgs::parseRoleIds($org['admin_role_ids'] ?? null)]));
         $guildMembers = DiscordBot::members((string) $org['discord_guild_id']);
         self::refreshNames($orgId, $guildMembers);
+        self::refreshIcon($orgId, (string) $org['discord_guild_id']);
         $members = array_values(array_filter(
             $guildMembers,
             static fn (array $m): bool => array_intersect($wanted, $m['roles']) !== [],
@@ -103,17 +104,28 @@ final class Onboarding
     /**
      * Übernimmt Server-Nickname und Kontoname aller Mitglieder, die schon ein Konto im Tool haben, damit Namensänderungen
      * ohne neue Anmeldung ankommen.
-     * @param list<array{id:string,nick:?string,accountName:string}> $guildMembers
+     * @param list<array{id:string,nick:?string,accountName:string,avatar:?string}> $guildMembers
      */
     private static function refreshNames(string $orgId, array $guildMembers): void
     {
         foreach ($guildMembers as $m) {
             $nick = $m['nick'] !== null ? mb_substr($m['nick'], 0, 190) : null;
             Db::run(
-                'UPDATE org_memberships m JOIN users u ON u.id = m.user_id SET m.nick = ?, u.name = ? WHERE m.org_id = ? AND u.discord_id = ?',
-                [$nick, mb_substr($m['accountName'], 0, 190), $orgId, $m['id']],
+                'UPDATE org_memberships m JOIN users u ON u.id = m.user_id SET m.nick = ?, u.name = ?, u.image = COALESCE(?, u.image) WHERE m.org_id = ? AND u.discord_id = ?',
+                [$nick, mb_substr($m['accountName'], 0, 190), $m['avatar'] ?? null, $orgId, $m['id']],
             );
         }
+    }
+
+    /** Übernimmt das aktuelle Server-Icon; ein Fehler beim Abruf lässt das gespeicherte Icon stehen. */
+    private static function refreshIcon(string $orgId, string $guildId): void
+    {
+        try {
+            $icon = DiscordBot::guildIconUrl($guildId);
+        } catch (\Throwable) {
+            return;
+        }
+        Db::run('UPDATE organizations SET icon_url = ? WHERE id = ?', [$icon, $orgId]);
     }
 
     /** Kurztext zum Löschen für Meldungen (leer, wenn nichts gelöscht oder übersprungen wurde). @param array{deleted:int,skipped:int} $r */

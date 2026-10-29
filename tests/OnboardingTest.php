@@ -148,6 +148,36 @@ final class OnboardingTest extends DbTestCase
         $this->assertNull(Db::val('SELECT nick FROM org_memberships WHERE user_id = ?', [$uid]));
     }
 
+    public function testSyncRefreshesAvatarAndServerIcon(): void
+    {
+        $orgId = $this->setUpOrgWithUseRole();
+        Db::run("UPDATE organizations SET icon_url = 'https://cdn.discordapp.com/icons/old/alt.png' WHERE id = ?", [$orgId]);
+        $uid = new_id();
+        Db::insert('users', ['id' => $uid, 'name' => 'Pilot', 'discord_id' => '700000000000000002', 'image' => 'https://cdn.discordapp.com/avatars/700000000000000002/alt.png']);
+        Db::insert('org_memberships', ['user_id' => $uid, 'org_id' => $orgId]);
+        $guild = ['icon' => 'a_neu'];
+        Client::fake(function (string $method, string $url) use (&$guild): array {
+            if (str_contains($url, '/members?')) {
+                return ['status' => 200, 'body' => json_encode($this->members), 'headers' => []];
+            }
+            return $guild === null ? ['status' => 500, 'body' => '[]', 'headers' => []] : ['status' => 200, 'body' => json_encode($guild), 'headers' => []];
+        });
+
+        Onboarding::syncAllowlist($orgId);
+        $this->assertSame('https://cdn.discordapp.com/avatars/700000000000000002/av700000000000000002.png', Db::val('SELECT image FROM users WHERE id = ?', [$uid]));
+        $this->assertSame('https://cdn.discordapp.com/icons/' . self::GUILD . '/a_neu.png', Db::val('SELECT icon_url FROM organizations WHERE id = ?', [$orgId]));
+
+        // Discord nicht erreichbar: das gespeicherte Icon bleibt
+        $guild = null;
+        Onboarding::syncAllowlist($orgId);
+        $this->assertSame('https://cdn.discordapp.com/icons/' . self::GUILD . '/a_neu.png', Db::val('SELECT icon_url FROM organizations WHERE id = ?', [$orgId]));
+
+        // Server ohne Icon
+        $guild = ['icon' => null];
+        Onboarding::syncAllowlist($orgId);
+        $this->assertNull(Db::val('SELECT icon_url FROM organizations WHERE id = ?', [$orgId]));
+    }
+
     public function testFormerMemberAccountIsDeletedWhenGateIsOn(): void
     {
         Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');

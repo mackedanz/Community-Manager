@@ -3,7 +3,7 @@
 import { MessageFlags } from 'discord.js';
 import { orgForGuild } from '../db.js';
 import { OrgError } from '../lib/errors.js';
-import { guildMembers, isGuildAdmin, memberRoleIds } from '../lib/guild.js';
+import { currentGuildIconUrl, guildMembers, isGuildAdmin, memberRoleIds } from '../lib/guild.js';
 import { guildAllowed, syncAllowlist, syncNote } from '../lib/onboarding.js';
 import { parseRoleIds } from '../lib/roles.js';
 
@@ -53,7 +53,7 @@ export async function execute(interaction, { pool, config }) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   let note;
   try {
-    note = syncNote(await syncAllowlist(pool, config, org.id, (guildId) => guildMembers(interaction.client, guildId)));
+    note = syncNote(await syncAllowlist(pool, config, org.id, (guildId) => guildMembers(interaction.client, guildId), (guildId) => currentGuildIconUrl(interaction.client, guildId)));
   } catch (err) {
     if (!(err instanceof OrgError)) throw err;
     note = `Abgleich nicht möglich: ${err.message}`;
