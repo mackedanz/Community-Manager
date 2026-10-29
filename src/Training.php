@@ -23,6 +23,81 @@ final class Training
 
     public const MAX_LEVEL = 50;
 
+    private const AREA_IMAGE_FILE = '/^area-[a-f0-9]{16}\.png$/';
+
+    private static function areaImageDir(): string
+    {
+        return Config::imageDir() . '/training';
+    }
+
+    /** Pfad einer gespeicherten Bereichsbild-Datei (nur gültige Namen, nur vorhandene). */
+    public static function areaImagePath(string $file): ?string
+    {
+        if (preg_match(self::AREA_IMAGE_FILE, $file) !== 1) {
+            return null;
+        }
+        $p = self::areaImageDir() . '/' . $file;
+        return is_file($p) ? $p : null;
+    }
+
+    /**
+     * Eigene Bilder der Orga: Bereich => Bildadresse. Bereiche ohne Eintrag zeigen das Standard-Symbol.
+     * @return array<string,string>
+     */
+    public static function areaImages(string $orgId): array
+    {
+        $out = [];
+        foreach (Db::all('SELECT area, image FROM training_area_images WHERE org_id = ?', [$orgId]) as $r) {
+            if (isset(self::AREAS[$r['area']])) {
+                $out[$r['area']] = '/img/area/' . $r['image'];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Setzt das Bild eines Bereichs (Inhalt einer hochgeladenen Datei) oder entfernt es ($bytes = null).
+     * Das Bild wird geprüft und als PNG (höchstens 256 Pixel) neu kodiert; der Dateiname ist der Hash des Inhalts.
+     * @throws OrgError
+     */
+    public static function setAreaImage(string $orgId, string $area, ?string $bytes): void
+    {
+        if (self::cleanArea($area) === null) {
+            throw new OrgError('Diesen Bereich gibt es nicht.');
+        }
+        $old = Db::val('SELECT image FROM training_area_images WHERE org_id = ? AND area = ?', [$orgId, $area]);
+        $old = is_string($old) ? $old : null;
+        if ($bytes === null) {
+            Db::run('DELETE FROM training_area_images WHERE org_id = ? AND area = ?', [$orgId, $area]);
+            self::dropAreaImage($old);
+            return;
+        }
+        $img = Branding::process('logo', $bytes);
+        $name = 'area-' . substr(sha1($img['body']), 0, 16);
+        $dir = self::areaImageDir();
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            throw new OrgError('Der Bildordner ist nicht beschreibbar.');
+        }
+        if (Images\ShipImages::storeIn($dir, $name, $img['body'], 'png') === null) {
+            throw new OrgError('Das Bild konnte nicht gespeichert werden.');
+        }
+        Db::run(
+            'INSERT INTO training_area_images (org_id, area, image) VALUES (?,?,?) ON DUPLICATE KEY UPDATE image = VALUES(image)',
+            [$orgId, $area, $name . '.png'],
+        );
+        if ($old !== $name . '.png') {
+            self::dropAreaImage($old);
+        }
+    }
+
+    /** Löscht die Datei, wenn keine Orga sie mehr braucht. */
+    private static function dropAreaImage(?string $file): void
+    {
+        if ($file !== null && Db::val('SELECT 1 FROM training_area_images WHERE image = ?', [$file]) === null && ($p = self::areaImagePath($file)) !== null) {
+            @unlink($p);
+        }
+    }
+
     public static function cleanArea(?string $area): ?string
     {
         return $area !== null && isset(self::AREAS[$area]) ? $area : null;

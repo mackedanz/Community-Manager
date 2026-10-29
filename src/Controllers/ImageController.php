@@ -51,6 +51,24 @@ final class ImageController extends Controller
         return new Response(200, (string) file_get_contents($path), $headers);
     }
 
+    /** GET /img/area/{file}: eigenes Bild eines Ausbildungsbereichs, nur für Mitglieder der Orga, die es gesetzt hat. */
+    public static function trainingArea(Request $req, array $p): Response
+    {
+        $viewer = Auth::requireViewer($req);
+        $file = (string) ($p['file'] ?? '');
+        $path = \Hangar\Training::areaImagePath($file);
+        $orgs = $path === null ? [] : array_column(\Hangar\Db::all('SELECT org_id FROM training_area_images WHERE image = ?', [$file]), 'org_id');
+        if ($path === null || array_intersect($orgs, $viewer->orgIds()) === []) {
+            throw HttpException::notFound();
+        }
+        $etag = '"' . pathinfo($file, PATHINFO_FILENAME) . '"';   // der Dateiname enthält den Inhalts-Hash
+        $headers = ['Content-Type' => 'image/png', 'Cache-Control' => 'private, max-age=31536000, immutable', 'ETag' => $etag];
+        if ($req->header('if-none-match') === $etag) {
+            return new Response(304, '', $headers);
+        }
+        return new Response(200, (string) file_get_contents($path), $headers);
+    }
+
     /** GET /img/dept/{file}: Abteilungsbild, nur für Mitglieder der Orga, zu der die Abteilung gehört. */
     public static function department(Request $req, array $p): Response
     {

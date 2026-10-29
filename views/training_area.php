@@ -17,7 +17,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm';
   <div class="space-y-2">
     <a href="<?= e($base) ?>" class="text-sm text-indigo-400 hover:underline">← Ausbildung</a>
     <div class="flex items-center gap-4">
-      <span class="text-cyan-300"><?= View::partial('partials/training_icon', ['area' => $area, 'size' => '48']) ?></span>
+      <span class="text-cyan-300"><?= View::partial('partials/training_icon', ['area' => $area, 'size' => '48', 'image' => $images[$area] ?? null]) ?></span>
       <div>
         <h1 class="text-2xl font-bold"><?= e($name) ?></h1>
         <p class="text-sm text-zinc-400"><?= e($about) ?></p>

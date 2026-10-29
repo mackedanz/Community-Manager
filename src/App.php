@@ -52,6 +52,7 @@ final class App
         $r->get('/img/info/{key}', [ImageController::class, 'info']);
         $r->get('/brand/{file}', [ImageController::class, 'brand']);
         $r->get('/img/dept/{file}', [ImageController::class, 'department']);
+        $r->get('/img/area/{file}', [ImageController::class, 'trainingArea']);
 
         // Mein Hangar
         $r->get('/hangar', [HangarController::class, 'index']);
@@ -83,6 +84,7 @@ final class App
         $r->post('/orgs/rsi', [OrgController::class, 'saveRsi']);
         $r->post('/orgs/handle-style', [OrgController::class, 'saveHandleStyle']);
         $r->post('/orgs/branding', [OrgController::class, 'saveBranding']);
+        $r->post('/orgs/training-images', [OrgController::class, 'saveTrainingImages']);
         $r->post('/orgs/discord-events', [OrgController::class, 'saveDiscordEvents']);
         $r->get('/o/{slug}', [OrgController::class, 'home']);
         $r->get('/o/{slug}/members', [OrgController::class, 'members']);

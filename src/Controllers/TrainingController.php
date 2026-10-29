@@ -30,6 +30,7 @@ final class TrainingController extends Controller
         [, $org] = self::member($req, $p);
         return OrgController::orgPage($org, 'training_index', [
             'counts' => Training::countsByArea($org['id']),
+            'images' => Training::areaImages($org['id']),
             'active' => Training::activeCountsByArea($org['id'], new \DateTimeImmutable('now', new \DateTimeZone('UTC'))),
         ], 'Ausbildung', 'training');
     }
@@ -46,6 +47,7 @@ final class TrainingController extends Controller
         $topics = Training::listByArea($org['id'], $area, $viewer->id);
         return OrgController::orgPage($org, 'training_area', [
             'area' => $area,
+            'images' => Training::areaImages($org['id']),
             'topics' => $topics,
             'manage' => $manage,
             'edit' => $edit,

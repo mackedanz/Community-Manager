@@ -86,6 +86,7 @@ final class OrgController extends Controller
             'gate' => Onboarding::gateEnabled(),
             'rsiRoster' => (int) Db::val('SELECT COUNT(*) FROM org_rsi_members WHERE org_id = ?', [$org['id']]),
             'brand' => \Hangar\Branding::current(),
+            'areaImages' => \Hangar\Training::areaImages($org['id']),
         ], 'Orga verwalten', 'settings');
     }
 
@@ -202,6 +203,38 @@ final class OrgController extends Controller
             return Flash::error($to, self::errorMessage($e));
         }
         return Flash::ok($to, 'Design gespeichert.');
+    }
+
+    /** Eigene Bilder der Ausbildungsbereiche: Orga-Admins laden je Bereich ein Bild hoch (img_<Bereich>) oder setzen es zurück (reset_<Bereich>). */
+    public static function saveTrainingImages(Request $req): Response
+    {
+        $viewer = Auth::requireViewer($req);
+        $orgId = (string) $req->input('orgId', '');
+        $slug = (string) Db::val('SELECT slug FROM organizations WHERE id = ?', [$orgId]);
+        $to = "/o/$slug/settings#ausbildung-bilder";
+        $changed = 0;
+        try {
+            Orgs::requireOrgAdmin($viewer->id, $orgId);
+            foreach (array_keys(\Hangar\Training::AREAS) as $area) {
+                if ($req->input('reset_' . $area) === '1') {
+                    \Hangar\Training::setAreaImage($orgId, $area, null);
+                    $changed++;
+                    continue;
+                }
+                $f = $req->files['img_' . $area] ?? null;
+                if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                    continue;
+                }
+                if ($f['error'] !== UPLOAD_ERR_OK) {
+                    throw new OrgError('Der Upload ist fehlgeschlagen (Datei zu groß?).');
+                }
+                \Hangar\Training::setAreaImage($orgId, $area, (string) file_get_contents((string) $f['tmp_name']));
+                $changed++;
+            }
+        } catch (\Throwable $e) {
+            return Flash::error($to, self::errorMessage($e));
+        }
+        return Flash::ok($to, $changed === 0 ? 'Nichts geändert.' : 'Bilder gespeichert.');
     }
 
     public static function saveRsi(Request $req): Response
